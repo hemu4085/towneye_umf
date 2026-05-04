@@ -420,12 +420,33 @@ class RealtorAgent:
 
         return "\n".join(lines)
 
-    def _render_climate(self, df: pd.DataFrame) -> str:
-        lines = [self._section_header("Flood Risk  ·  FEMA NFHL  [REAL DATA]")]
+    def _render_climate(self, df: pd.DataFrame, address: str = "", zipcode: str = "") -> str:
+        lines = [self._section_header(
+            "Flood Risk  ·  FEMA NFHL  [VERIFY ADDRESS AT msc.fema.gov]"
+        )]
         if df.empty:
             lines.append("  No FEMA flood zone data available.")
             return "\n".join(lines)
 
+        # ── Property-specific lookup prompt ───────────────────────────
+        # We store town-wide polygon data, not parcel-level geometry.
+        # A point-in-polygon check requires geocoding the address —
+        # until that is implemented, direct agents to the official tool.
+        fema_url = ""
+        if address:
+            import urllib.parse
+            query = urllib.parse.quote(f"{address}, {self._town_name}, {self._state} {zipcode}".strip(", "))
+            fema_url = f"https://msc.fema.gov/portal/search#searchresultsanchor?addressquery={query}"
+
+        lines.append("  ⚠  PROPERTY-SPECIFIC FLOOD STATUS: Not determined by TownEye.")
+        lines.append("     Flood zone varies parcel-by-parcel — verify this address directly:")
+        if fema_url:
+            lines.append(f"     FEMA MSC Lookup → {fema_url}")
+        else:
+            lines.append("     FEMA MSC Lookup → https://msc.fema.gov/portal/search")
+        lines.append("")
+
+        # ── Town-wide context (background education) ──────────────────
         total = len(df)
         counts: Dict[str, int] = {}
         if "risk_level" in df.columns:
@@ -434,40 +455,30 @@ class RealtorAgent:
         moderate = counts.get("MODERATE", 0)
         low      = counts.get("LOW", 0)
 
-        # Zone-type breakdown
-        zone_counts: Dict[str, int] = {}
-        if "zone_type" in df.columns:
-            zone_counts = df["zone_type"].value_counts().to_dict()
-
         fema_zone_detail = ""
         if "metadata" in df.columns:
             fema_zones = (
                 df["metadata"]
                 .apply(lambda m: m.get("fema_zone") if isinstance(m, dict) else None)
-                .dropna()
-                .unique()
-                .tolist()
+                .dropna().unique().tolist()
             )
             if fema_zones:
                 fema_zone_detail = ", ".join(sorted(set(str(z) for z in fema_zones if z)))
 
-        lines.append(f"  Total FEMA flood zone polygons in {self._town_name}:  {total}")
-        lines.append("")
-        lines.append(f"  {'HIGH risk (Zone AE / floodway)':<42}  {high:>4} polygons")
-        lines.append(f"  {'MODERATE risk (Zone X — 500-yr flood)':<42}  {moderate:>4} polygons")
+        lines.append(f"  TOWN-WIDE CONTEXT  ·  {self._town_name} flood zone polygons: {total} total")
+        lines.append(f"  {'  Zone AE / Floodway (HIGH):':<42}  {high:>4} polygons")
+        lines.append(f"  {'  Zone X — 500-yr (MODERATE):':<42}  {moderate:>4} polygons")
         if low:
-            lines.append(f"  {'LOW risk':<42}  {low:>4} polygons")
-
+            lines.append(f"  {'  Low risk:':<42}  {low:>4} polygons")
         if fema_zone_detail:
-            lines.append(f"\n  FEMA zone codes present:  {fema_zone_detail}")
+            lines.append(f"  Zone codes in {self._town_name}: {fema_zone_detail}")
 
         lines.append("")
-        lines.append("  HIGH risk (Zone AE) properties are in the 100-year floodplain.")
-        lines.append("  Federally-backed mortgages require flood insurance in Zone AE.")
-        lines.append("  Zone X properties face moderate risk; flood insurance is optional.")
+        lines.append("  Zone AE = 100-yr floodplain. Federally-backed mortgages require flood insurance.")
+        lines.append("  Zone X  = moderate risk; flood insurance is optional but recommended.")
 
         src = df["te_source"].iloc[0] if "te_source" in df.columns else "fema-flood-maps"
-        lines.append(f"\n  Source: {src}  (live — FEMA NFHL MapServer layer 28)")
+        lines.append(f"\n  Source: {src}  (town-wide FEMA NFHL MapServer layer 28)")
         return "\n".join(lines)
 
     def _render_transit(self, df: pd.DataFrame) -> str:
@@ -553,7 +564,8 @@ class RealtorAgent:
         df: pd.DataFrame,
         raw_zone_code: str = "",
     ) -> str:
-        lines = [self._section_header("Zoning Summary  ·  Arlington Bylaw 2024  [ACCURATE]")]
+        bylaw_year = self._cfg.get("zoning", {}).get("bylaw_year", "2024")
+        lines = [self._section_header(f"Zoning Summary  ·  {self._town_name} Bylaw {bylaw_year}  [ACCURATE]")]
         if df.empty:
             lines.append("  No zoning data available.")
             return "\n".join(lines)
@@ -599,13 +611,27 @@ class RealtorAgent:
     # Helpers shared by pro-forma + compliance
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _resolve_zone_row(df_zoning: pd.DataFrame, raw_zone_code: str) -> Optional[pd.Series]:
-        """Return the zoning row that best matches the assessor zone_code."""
+    def _resolve_zone_row(self, df_zoning: pd.DataFrame, raw_zone_code: str) -> Optional[pd.Series]:
+        """Return the zoning row that best matches the assessor zone_code.
+
+        First checks the town config's ``assessor_to_zoning_map`` to translate
+        Patriot Properties internal codes (e.g. "1", "CG") to bylaw zone codes
+        (e.g. "R2", "B2").  Falls back to heuristic transformations only when
+        no explicit mapping exists.
+        """
         if df_zoning.empty or "zone_code" not in df_zoning.columns:
             return None
         code = str(raw_zone_code).strip()
-        # Try exact match first, then common transformations
+
+        # Config-level explicit mapping takes precedence (most accurate)
+        zone_map: Dict[str, str] = self._cfg.get("assessor_to_zoning_map", {})
+        mapped_code = zone_map.get(code) or zone_map.get(code.upper())
+        if mapped_code:
+            hit = df_zoning[df_zoning["zone_code"] == mapped_code]
+            if not hit.empty:
+                return hit.iloc[0]
+
+        # Heuristic fallback: try exact match then common prefix transformations
         for candidate in [code, f"R{code}", f"R-{code}", f"B{code}", code.upper()]:
             hit = df_zoning[df_zoning["zone_code"] == candidate]
             if not hit.empty:
@@ -864,7 +890,7 @@ class RealtorAgent:
 
         if tl is None:
             lines.append("  Insufficient ZHVI market data to compute timeline.")
-            lines.append("  Re-run: python3 scripts/download_zillow_cache.py --town arlington-ma --months 60")
+            lines.append(f"  Re-run: python3 scripts/download_zillow_cache.py --town {self._town_slug} --months 60")
             return "\n".join(lines)
 
         col = (12, 18, 14, 10)
@@ -1351,7 +1377,7 @@ class RealtorAgent:
             self._render_value_timeline(df_property, df_market, address, zipcode),
             self._render_compliance_grid(df_property, df_zoning, address),
             self._render_investment_proforma(df_property, df_zoning, address),
-            self._render_climate(df_climate),
+            self._render_climate(df_climate, address=address, zipcode=zipcode),
             self._render_transit(df_transit),
             self._render_market(df_market),
             self._render_profile(df_profile),
@@ -1648,8 +1674,8 @@ class RealtorAgent:
             tl_body = hist_html + proj_html + tl_footer
         else:
             tl_body = (
-                '<p style="font-size:13px;">Insufficient ZHVI data for timeline. '
-                'Re-run: <code>python3 scripts/download_zillow_cache.py --town arlington-ma --months 60</code></p>'
+                f'<p style="font-size:13px;">Insufficient ZHVI data for timeline. '
+                f'Re-run: <code>python3 scripts/download_zillow_cache.py --town {self._town_slug} --months 60</code></p>'
             )
         s02b = self._h_section(
             3, "VALUE TIMELINE &nbsp;·&nbsp; 5-Yr History + 3-Yr Projection",
@@ -1744,6 +1770,10 @@ class RealtorAgent:
                                '<span class="ba">REAL ZONING + INDUSTRY COSTS</span>', pf_body)
 
         # ── 05 FLOOD RISK ─────────────────────────────────────────────
+        import urllib.parse as _urlparse
+        _fema_query = _urlparse.quote(f"{address}, {self._town_name}, {self._state} {zipcode}".strip(", "))
+        _fema_url   = f"https://msc.fema.gov/portal/search#searchresultsanchor?addressquery={_fema_query}"
+
         if not df_climate.empty and "risk_level" in df_climate.columns:
             rc    = df_climate["risk_level"].value_counts().to_dict()
             high  = rc.get("HIGH", 0); mod = rc.get("MODERATE", 0); total = len(df_climate)
@@ -1755,25 +1785,40 @@ class RealtorAgent:
                           .apply(lambda m: m.get("fema_zone") if isinstance(m, dict) else None)
                           .dropna().unique().tolist())
                 fzc = ", ".join(sorted(set(str(z) for z in fzones if z)))
+
             flood_body = (
-                f'<p style="font-size:13px;margin:0 0 12px 0;">Total FEMA flood zone polygons in '
-                f'{self._town_name}: <strong>{total}</strong></p>'
-                f'<div class="rbar"><span class="rl">🔴 HIGH risk (Zone AE / floodway)</span>'
-                f'<div class="rbw"><div class="rbh" style="width:{hp}%"></div></div>'
-                f'<span class="rc">{high} polygons</span></div>'
-                f'<div class="rbar"><span class="rl">🟡 MODERATE risk (Zone X — 500-yr)</span>'
-                f'<div class="rbw"><div class="rbm" style="width:{mp}%"></div></div>'
-                f'<span class="rc">{mod} polygons</span></div>'
-                + (f'<p style="font-size:13px;margin:12px 0 4px 0;"><strong>FEMA zone codes present:</strong> {fzc}</p>' if fzc else "")
-                + '<p style="font-size:13px;margin:8px 0;">Zone AE = 100-year floodplain. '
-                  'Federally-backed mortgages <strong>require flood insurance</strong> in Zone AE. '
-                  'Zone X = moderate risk; insurance optional.</p>'
-                + '<div class="sn">Source: fema-flood-maps — live FEMA NFHL MapServer layer 28</div>'
+                # Property-specific warning box
+                f'<div style="background:#fff3cd;border-left:4px solid #e0a020;padding:10px 14px;'
+                f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                f'<strong>⚠ PROPERTY-SPECIFIC FLOOD STATUS: Not determined by TownEye</strong><br>'
+                f'<span style="font-size:13px;">Flood zone varies parcel-by-parcel. '
+                f'Verify this address at the official FEMA tool:<br>'
+                f'<a href="{_fema_url}" style="color:#1a73e8;">'
+                f'FEMA Flood Map Service Center — {address}, {self._town_name}</a></span></div>'
+                # Town-wide context
+                + f'<p style="font-size:12px;font-weight:bold;color:#555;margin:0 0 8px 0;">'
+                  f'TOWN-WIDE CONTEXT — {self._town_name} flood zone polygons: {total} total</p>'
+                + f'<div class="rbar"><span class="rl">🔴 Zone AE / Floodway (HIGH)</span>'
+                  f'<div class="rbw"><div class="rbh" style="width:{hp}%"></div></div>'
+                  f'<span class="rc">{high} polygons</span></div>'
+                + f'<div class="rbar"><span class="rl">🟡 Zone X — 500-yr (MODERATE)</span>'
+                  f'<div class="rbw"><div class="rbm" style="width:{mp}%"></div></div>'
+                  f'<span class="rc">{mod} polygons</span></div>'
+                + (f'<p style="font-size:13px;margin:10px 0 4px 0;">'
+                   f'<strong>Zone codes in {self._town_name}:</strong> {fzc}</p>' if fzc else "")
+                + '<p style="font-size:12px;color:#666;margin:8px 0;">Zone AE = 100-yr floodplain — '
+                  'federally-backed mortgages <strong>require</strong> flood insurance. '
+                  'Zone X = moderate risk; optional.</p>'
+                + '<div class="sn">Source: FEMA NFHL MapServer layer 28 (town-wide polygon data). '
+                  'Property-specific determination requires parcel geocoding.</div>'
             )
         else:
-            flood_body = "<p>FEMA data not available.</p>"
+            flood_body = (
+                f'<div class="aw"><strong>⚠ FEMA data not loaded</strong><br>'
+                f'<a href="{_fema_url}">Check this address at FEMA MSC →</a></div>'
+            )
         s05 = self._h_section(5, "FLOOD RISK &nbsp;·&nbsp; FEMA NFHL",
-                               '<span class="br">REAL DATA</span>', flood_body)
+                               '<span class="be">VERIFY AT msc.fema.gov</span>', flood_body)
 
         # ── 06 TRANSIT ────────────────────────────────────────────────
         if not df_transit.empty and "event_name" in df_transit.columns:
@@ -1930,7 +1975,8 @@ class RealtorAgent:
             zon_body = "<p>Property zone not resolved — assessor zone code not matched to bylaw.</p>"
         else:
             zon_body = "<p>Zoning data not available.</p>"
-        s11 = self._h_section(11, "ZONING SUMMARY &nbsp;·&nbsp; Arlington Bylaw 2024",
+        _bylaw_year = self._cfg.get("zoning", {}).get("bylaw_year", "2024")
+        s11 = self._h_section(11, f"ZONING SUMMARY &nbsp;·&nbsp; {self._town_name} Bylaw {_bylaw_year}",
                                '<span class="ba">ACCURATE</span>', zon_body)
 
         # ── Assemble ──────────────────────────────────────────────────

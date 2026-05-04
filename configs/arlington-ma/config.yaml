@@ -120,6 +120,21 @@ scraper_urls:
 # unavailable.  Derived from Arlington MA Zoning Bylaw Article 5 (2024 edition).
 # Replace with a live API fetch once the town publishes a machine-readable feed.
 # Zero-Hardcoding: district definitions live here, not in scraper logic.
+# Maps Patriot Properties assessor zone_code values → Arlington bylaw zone codes.
+# Patriot Properties uses numeric/short codes that do NOT directly match bylaw district names.
+# Verified by cross-referencing the Arlington GIS zoning layer (MassGIS) and agent field reports.
+# "1"  = predominant residential class in most of Arlington → Two-Family districts (R2)
+# "11" = higher-density residential → Multi-Family (R3)
+# "CG" = commercial/general → General Business (B2)
+assessor_to_zoning_map:
+  "1":  "R2"
+  "11": "R3"
+  "CG": "B2"
+
+# Bylaw year — used in report section header
+zoning:
+  bylaw_year: "2024"
+
 zoning_bylaws_mock_data:
   - zone_code: "R0"
     zone_description: "Single Residence District (Large Lots)"
