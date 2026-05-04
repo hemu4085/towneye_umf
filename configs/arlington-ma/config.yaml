@@ -1,0 +1,1105 @@
+# configs/arlington-ma/config.yaml
+# Town-specific context injected into MedallionFactory at runtime.
+# The factory reads ONLY from this file — no town data is hardcoded in core/.
+#
+# To onboard a new municipality, copy this file to configs/{new-town-slug}/config.yaml
+# and update the values below. Zero changes to core/ are required.
+
+town_slug: arlington-ma
+town_name: Arlington
+state: MA
+
+# Geohash of the town centroid — precision 6 (~1.2 km cell).
+# Generate for any town: python -c "import geohash2; print(geohash2.encode(42.4154, -71.1565, 6))"
+geo_hash: "drt2zh"
+
+# Source-system identifier written into te_source when the caller omits it.
+default_source: "arlington-ma-opengov"
+
+# Pipeline schema version stamped on every Gold record produced for this town.
+version: "1.0.0"
+
+# Agent name written into te_updated_by for records produced by the UMF.
+updated_by: "UMF_System"
+
+# Default confidence score applied when the raw record carries no quality signal.
+default_confidence: 1.0
+
+# Controlled vocabulary mapping logical source labels to their actual system IDs.
+# Used by ingestors to resolve a source name → te_source value at Bronze ingestion.
+source_mappings:
+  census:           "census_api_2026"
+  tax-assessor:     "arlington-ma-tax-assessor"
+  permits:          "arlington-ma-permits"
+  voters:           "arlington-ma-elections"
+  property_tax:     "invoice-cloud"
+  # Town Pulse — civic engagement layer
+  civic-meetings:   "arlington-ma-civic-meetings"
+  community-events: "arlington-ma-community-events"
+  311-seeclickfix:  "arlington-ma-311-seeclickfix"
+  # Town Pulse — transit layer
+  mbta-alerts:      "arlington-ma-mbta-alerts"
+  # Domain 09 — Economic Pulse / School Calendar
+  school_calendar:  "arlington-public-schools-ics"
+  # --- 10-Domain Master Plan Sources ---
+  # Land Use & Zoning — town-published bylaw JSON
+  zoning_bylaws:      "arlington-ma-zoning-json"
+  # Market Dynamics — MLS trend aggregates via BigQuery (private feed)
+  market_dynamics:    "mls-trends-bq"
+  # Infrastructure Friction — DPW capital plan PDFs / project tracker
+  infra_friction:     "arlington-ma-dpw-capital-plans"
+  # Digital Connectivity — FCC Broadband Fabric (national dataset)
+  connectivity:       "fcc-broadband-fabric"
+  # Climate Resilience — FEMA National Flood Hazard Layer GIS
+  climate_resilience: "fema-flood-maps"
+  # Social Equity — MA EJ burden-score indices (state dataset)
+  social_equity:      "ej-burden-indices"
+  # Domain 11 — Town Profile (LLM Synthesis)
+  town_profile:       "arlington-ma-town-profile"
+  # Domain 12 — STR Dynamics (LLM Synthesis)
+  str_dynamics:       "arlington-ma-str-dynamics"
+
+# Public portal URLs used by Bronze-layer scrapers.
+# All scraper code must read URLs exclusively from this block —
+# never hardcode an endpoint in scrapers/ or core/.
+scraper_urls:
+  # Arlington MA property assessment portal is Patriot Properties, not VGSI.
+  # Source verified from https://www.arlingtonma.gov (Property Assessments link).
+  property_assessor: "https://arlington.patriotproperties.com/SearchResults.asp"
+  # Town Pulse — civic engagement layer
+  civic_meetings:    "https://arlington.ma.us/calendar/"
+  community_events:  "https://arlington.ma.us/events/"
+  seeclickfix_311:   "https://seeclickfix.com/api/v2/issues"
+  # Town Pulse — transit layer
+  mbta_alerts:       "https://api-v3.mbta.com/alerts"
+  # Domain 09 — APS school calendar ICS feed.
+  # Replace with the real published URL when available.
+  # The scraper falls back to the school_calendar_mock_ics fixture below.
+  school_calendar_ics: "https://www.arlington.k12.ma.us/calendar/calendar.ics"
+  # --- 10-Domain Master Plan URLs (public endpoints only) ---
+  # market_dynamics, connectivity, climate_resilience, social_equity are
+  # ingested from BigQuery / licensed feeds and carry no scraper URL here.
+  # Placeholder — replace with the real endpoint when the town publishes it.
+  # The scraper falls back to the inline zoning_bylaws_mock_data fixture below
+  # when this URL returns a non-200 or the body is not valid JSON.
+  zoning_bylaws_json:    "https://www.arlingtonma.gov/zoning-bylaws.json"
+  # Placeholder — replace with the real PDF URL when the town publishes CIP docs.
+  # The scraper falls back to the dpw_mock_projects fixture below when this
+  # URL is unreachable or PDF parsing is not yet implemented.
+  dpw_capital_plans_pdf: "https://www.arlingtonma.gov/dpw-capital-plans.pdf"
+
+  # Domain 08 — EPA EJScreen REST API (ArcGIS MapServer).
+  # DEAD SINCE 2025-02-05: EPA removed ejscreen.epa.gov when the Trump
+  # administration eliminated EJ programs.  Data is now loaded from a local
+  # cache via scripts/download_ejscreen_csv.py.
+  ejscreen_api: "DEAD_SINCE_2025-02-05"
+
+  # Domain 07 — FEMA National Flood Hazard Layer WFS endpoint.
+  # Returns GeoJSON features when queried with a bounding box or GEOID filter.
+  # The scraper falls back to the climate_mock_geojson fixture when the API
+  # is unavailable or returns no features.
+  fema_nfhl_wfs: "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
+
+  # Domain 06 — FCC Broadband Fabric CSV download endpoint.
+  # The full national Fabric is licensed; the BDC availability file is public.
+  # URL pattern: https://broadbandmap.fcc.gov/api/public/map/listAvailability
+  # The scraper falls back to the broadband_mock_csv_rows fixture when the
+  # API is unavailable or no API key is configured.
+  fcc_broadband_api: "https://broadbandmap.fcc.gov/api/public/map/listAvailability"
+
+  # Domain 05 — Building Permit portal (OpenGov / ViewPoint ISD).
+  # Replace with the live endpoint when the town exposes a public API.
+  permits_api: "https://permits.arlingtonma.gov/api/v1/permits"
+
+  # Domain 03 — Zillow ZHVI (Home Value Index) by zip code — free public CSV.
+  # Contains median home value estimates by zip code, monthly from 2000-present.
+  # Scraped via download_zillow_cache.py; stored at data/cache/{town_slug}/zillow_zhvi.csv.
+  zillow_zhvi_csv: "https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
+
+# Inline zoning fixture used when zoning_bylaws_json URL is a placeholder or
+# unavailable.  Derived from Arlington MA Zoning Bylaw Article 5 (2024 edition).
+# Replace with a live API fetch once the town publishes a machine-readable feed.
+# Zero-Hardcoding: district definitions live here, not in scraper logic.
+zoning_bylaws_mock_data:
+  - zone_code: "R0"
+    zone_description: "Single Residence District (Large Lots)"
+    allowed_uses:
+      - "Single-Family Dwelling"
+      - "Agricultural Use"
+      - "Place of Worship"
+    max_height_ft: 30
+    metadata:
+      min_lot_sqft: 20000
+      min_frontage_ft: 100
+      max_far: 0.35
+      setback_front_ft: 30
+
+  - zone_code: "R1"
+    zone_description: "Single Residence District"
+    allowed_uses:
+      - "Single-Family Dwelling"
+      - "Home Occupation"
+      - "Accessory Dwelling Unit"
+      - "Place of Worship"
+    max_height_ft: 30
+    metadata:
+      min_lot_sqft: 6000
+      min_frontage_ft: 50
+      max_far: 0.40
+      setback_front_ft: 20
+
+  - zone_code: "R2"
+    zone_description: "Two-Family Residence District"
+    allowed_uses:
+      - "Single-Family Dwelling"
+      - "Two-Family Dwelling"
+      - "Home Occupation"
+      - "Accessory Dwelling Unit"
+    max_height_ft: 35
+    metadata:
+      min_lot_sqft: 6000
+      min_frontage_ft: 50
+      max_far: 0.50
+      setback_front_ft: 15
+
+  - zone_code: "R3"
+    zone_description: "Multi-Family Residence District"
+    allowed_uses:
+      - "Multi-Family Dwelling"
+      - "Two-Family Dwelling"
+      - "Home Occupation"
+      - "Congregate Housing"
+    max_height_ft: 40
+    metadata:
+      min_lot_sqft: 5000
+      min_frontage_ft: 40
+      max_far: 0.70
+      setback_front_ft: 10
+
+  - zone_code: "B1"
+    zone_description: "Neighbourhood Business District"
+    allowed_uses:
+      - "Retail Store"
+      - "Personal Service"
+      - "Restaurant"
+      - "Professional Office"
+    max_height_ft: 35
+    metadata:
+      min_lot_sqft: 3000
+      min_frontage_ft: 30
+      max_far: 1.0
+      parking_spaces_per_1000sqft: 3
+
+  - zone_code: "B2"
+    zone_description: "General Business District"
+    allowed_uses:
+      - "Retail Store"
+      - "Restaurant"
+      - "Hotel"
+      - "Professional Office"
+      - "Auto Service"
+    max_height_ft: 45
+    metadata:
+      min_lot_sqft: 5000
+      min_frontage_ft: 50
+      max_far: 1.5
+      parking_spaces_per_1000sqft: 4
+
+  - zone_code: "B4"
+    zone_description: "Business Mixed-Use Corridor District"
+    allowed_uses:
+      - "Retail Store"
+      - "Restaurant"
+      - "Multi-Family Dwelling (upper floors)"
+      - "Professional Office"
+      - "Arts / Cultural Use"
+    max_height_ft: 55
+    metadata:
+      min_lot_sqft: 3000
+      min_frontage_ft: 25
+      max_far: 2.0
+      ground_floor_retail_required: true
+
+  - zone_code: "IO"
+    zone_description: "Industrial / Office District"
+    allowed_uses:
+      - "Light Manufacturing"
+      - "Warehouse"
+      - "Research & Development"
+      - "Professional Office"
+    max_height_ft: 50
+    metadata:
+      min_lot_sqft: 10000
+      min_frontage_ft: 75
+      max_far: 0.80
+      truck_loading_required: true
+
+# HTTP client settings applied to every requests.Session created by scrapers
+# in this town context.  ssl_verify mirrors requests' verify= parameter:
+#   true  → enforce SSL certificate validation (production default)
+#   false → skip verification (WSL / corp-proxy dev environments only)
+http:
+  ssl_verify: false
+
+# Column name mapping from raw HTML headers (after normalisation to snake_case)
+# to the UMF Party model fields.  Scrapers read this block — never hardcode
+# column names inside scraper logic.
+scraper_column_map:
+  source_id_col: "parcel_id"   # value used as source_id in te_identity_map
+  legal_name_col: "owner"      # value mapped to TeParty.legal_name
+
+  # Patriot Properties HTML structure quirks (portal-specific, not scraper logic).
+  #
+  # data_table_idx:    which <table> on the page holds property rows (0-based).
+  #                    Patriot Properties renders a pagination table first (idx 0),
+  #                    then the property data table (idx 1).
+  # header_col_offset: number of leading header cells to discard before aligning
+  #                    headers to data cells.  Patriot Properties' header row cell 0
+  #                    is "Click on the Column Headings…" — BUT the Parcel ID link
+  #                    is embedded inside that same cell (not a separate TD), so
+  #                    header row and data row both have 11 cells.  No offset needed.
+  # source_id_col_idx: 0-based index of the data column that holds the source
+  #                    identifier (parcel ID).  Patriot Properties puts the parcel
+  #                    ID link in data cell 0, which maps to the ugly "click_on_…"
+  #                    header key.  The scraper renames that header slot to
+  #                    source_id_col ("parcel_id") so the normal column-name lookup
+  #                    works correctly.
+  data_table_idx:     1
+  header_col_offset:  0
+  source_id_col_idx:  0
+
+# Static query-string params sent on every search request (portal-specific).
+# The scraper merges these with the dynamic page number before each GET.
+# Patriot Properties requires at least one search field to be present;
+# SearchOwner="" triggers an "all properties" listing.
+scraper_search_params:
+  SearchOwner: ""
+
+# Name of the query-string parameter used for pagination (portal-specific).
+# Patriot Properties uses lowercase "page"; other portals may use "Page" or "p".
+scraper_page_param: "page"
+
+# Legal-name suffixes / tokens that identify an ORGANIZATION party type.
+# If any token (case-insensitive, whole-word) appears in legal_name, the record
+# is classified as ORGANIZATION instead of INDIVIDUAL.
+# Extend this list to cover any entity types present in the local assessor data.
+party_type_org_keywords:
+  - "LLC"
+  - "LLP"
+  - "INC"
+  - "CORP"
+  - "TRUST"
+  - "TRS"          # assessor abbreviation for TRUSTEE (e.g. "MURPHY J/TRS")
+  - "TR"           # assessor abbreviation for TRUST  (e.g. "REVOCABLE TR")
+  - "TRUS"         # Patriot Properties truncates "TRUST" to "TRUS" at 50-char limit
+  - "REALTY"
+  - "PROPERTIES"
+  - "INVESTMENTS"
+  - "ASSOCIATES"
+  - "ASSOCIATION"
+  - "NOMINEE"
+  - "ESTATE"       # covers "REAL ESTATE" and "NOMINEE TRUST" patterns
+  - "COMMISSION"
+  - "BOARD"
+  - "AUTHORITY"
+  - "FOUNDATION"
+  - "PARTNERS"
+  - "GROUP"
+
+# School Calendar — Domain 09 (Economic Pulse) fixture.
+# Synthetic ICS events for Arlington Public Schools FY2025-2026.
+# Each entry maps directly to an ICS VEVENT component field.
+# uid  — stable natural key for identity resolution (one Gold row per uid).
+# dtstart / dtend — ISO date strings (all-day events use date only; no time component).
+# event_type  — TeEvent.event_type vocabulary value.
+# foot_traffic_impact — qualitative signal for Economic Pulse scoring ("HIGH" / "MODERATE" / "LOW").
+school_calendar_mock_events:
+  - uid:         "APS-2025-FIRST-DAY@arlington.k12.ma.us"
+    summary:     "First Day of School — APS FY2026"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2025-09-03"
+    dtend:       "2025-09-04"
+    description: "First day of school for Arlington Public Schools. High foot-traffic expected near school zones and breakfast spots."
+    foot_traffic_impact: "HIGH"
+
+  - uid:         "APS-2025-COLUMBUS-DAY@arlington.k12.ma.us"
+    summary:     "Columbus Day / Indigenous Peoples Day — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2025-10-13"
+    dtend:       "2025-10-14"
+    description: "No school. Families likely to visit Spy Pond Park, local restaurants, and Arlington Center shops."
+    foot_traffic_impact: "MODERATE"
+
+  - uid:         "APS-2025-VETERANS-DAY@arlington.k12.ma.us"
+    summary:     "Veterans Day — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2025-11-11"
+    dtend:       "2025-11-12"
+    description: "No school. Town parade on Mass Ave; high foot-traffic corridor."
+    foot_traffic_impact: "HIGH"
+
+  - uid:         "APS-2025-THANKSGIVING@arlington.k12.ma.us"
+    summary:     "Thanksgiving Recess — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2025-11-26"
+    dtend:       "2025-12-01"
+    description: "Thanksgiving break. Reduced foot-traffic; most businesses closed Wed–Fri."
+    foot_traffic_impact: "LOW"
+
+  - uid:         "APS-2025-WINTER-BREAK@arlington.k12.ma.us"
+    summary:     "Winter Break — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2025-12-24"
+    dtend:       "2026-01-02"
+    description: "Winter recess. Shopping surge expected at Arlington Center and Broadway retail."
+    foot_traffic_impact: "HIGH"
+
+  - uid:         "APS-2026-MLK-DAY@arlington.k12.ma.us"
+    summary:     "MLK Day — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2026-01-19"
+    dtend:       "2026-01-20"
+    description: "Martin Luther King Jr. Day. Town-wide community events."
+    foot_traffic_impact: "MODERATE"
+
+  - uid:         "APS-2026-FEBRUARY-BREAK@arlington.k12.ma.us"
+    summary:     "February Vacation — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2026-02-16"
+    dtend:       "2026-02-20"
+    description: "Winter break week. Families travel; local gyms and cafes see mid-week surges."
+    foot_traffic_impact: "MODERATE"
+
+  - uid:         "APS-2026-EARLY-RELEASE-MAR@arlington.k12.ma.us"
+    summary:     "Early Release Day — March"
+    event_type:  "SCHOOL_EARLY_RELEASE"
+    dtstart:     "2026-03-13T13:00:00"
+    dtend:       "2026-03-13T15:00:00"
+    description: "Early release at 1:00 PM. Afternoon foot-traffic surge near Mass Ave and Broadway."
+    foot_traffic_impact: "MODERATE"
+
+  - uid:         "APS-2026-SPRING-BREAK@arlington.k12.ma.us"
+    summary:     "Spring Vacation — No School"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2026-04-20"
+    dtend:       "2026-04-24"
+    description: "Spring recess. Families travel; Minuteman Bikeway usage spikes."
+    foot_traffic_impact: "MODERATE"
+
+  - uid:         "APS-2026-LAST-DAY@arlington.k12.ma.us"
+    summary:     "Last Day of School — APS FY2026"
+    event_type:  "SCHOOL_HOLIDAY"
+    dtstart:     "2026-06-18"
+    dtend:       "2026-06-19"
+    description: "Last day of school. Summer foot-traffic season begins."
+    foot_traffic_impact: "HIGH"
+
+# Social Equity / Environmental Justice — Domain 08 configuration.
+# Census tracts covering Arlington MA (Middlesex County, MA, FIPS 25017).
+equity_census_tracts:
+  - "25017352100"   # East Arlington — Mystic Valley Pkwy corridor
+  - "25017352200"   # East Arlington — Mass Ave / Broadway
+  - "25017352300"   # Arlington Center — Mass Ave commercial corridor
+  - "25017352400"   # Arlington Center — Mystic River / Swan Place
+  - "25017352500"   # Arlington Heights / Upper Mass Ave
+  - "25017353100"   # Northwest Arlington — Spy Pond / Lake St
+
+# EJScreen indicators included in the Bronze Parquet.
+# Each entry defines the column name, a realistic baseline mean for Arlington,
+# and the standard deviation used by the synthetic generator.
+# All values are national percentiles (0–100) unless noted otherwise.
+equity_indicators:
+  CANCER_RISK_PERCENTILE:     {mean: 42.0, std: 8.0}
+  PM25_PERCENTILE:            {mean: 55.0, std: 6.0}
+  LEAD_PAINT_PERCENTILE:      {mean: 68.0, std: 10.0}
+  TRAFFIC_PROXIMITY_PERCENTILE: {mean: 72.0, std: 12.0}
+  SUPERFUND_PERCENTILE:       {mean: 38.0, std: 9.0}
+  WASTEWATER_PERCENTILE:      {mean: 44.0, std: 7.0}
+  LOW_INCOME_PERCENTILE:      {mean: 35.0, std: 14.0}
+  LINGUISTIC_ISOLATION_PERCENTILE: {mean: 18.0, std: 8.0}
+  LESS_HS_ED_PERCENTILE:      {mean: 22.0, std: 9.0}
+  UNEMPLOYMENT_PERCENTILE:    {mean: 31.0, std: 11.0}
+
+# Composite EJScreen score = mean of all indicator percentiles.
+# A tract is classified as "disadvantaged" when its composite score
+# meets or exceeds this threshold (national 65th percentile default).
+equity_disadvantaged_threshold: 65.0
+
+# Index names to generate for each tract.
+# Multiple indices can be layered on the same tract (one row per index).
+equity_index_names:
+  - "EPA_EJSCREEN"
+  - "MASS_EJ"
+
+# Random seed for reproducible synthetic data generation.
+equity_random_seed: 99
+
+# Climate Resilience — Domain 07 configuration.
+# FEMA WFS query parameters — town-specific bounding box and community identifier.
+# bbox format: "lon_min,lat_min,lon_max,lat_max" in WGS-84 decimal degrees.
+# community_id: FEMA CID for the town — find at https://msc.fema.gov/portal/home
+climate_fema_wfs_params:
+  where:      "STATE_CD='MA' AND COMMUNITY_ID='250173'"
+  out_fields: "FLD_ZONE,SFHA_TF,DFIRM_ID,ZONE_SUBTY"
+  bbox:       "-71.17,42.39,-71.13,42.44"
+
+# Risk-level lookup table: maps FEMA flood zone codes → (zone_type, risk_level).
+# Key = FEMA FLD_ZONE code (string).  Used by the scraper to classify features
+# without hardcoding zone codes in the Python module.
+climate_flood_zone_map:
+  "AE":    {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "AH":    {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "AO":    {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "A":     {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "VE":    {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "X":     {zone_type: "FLOOD_500YR",    risk_level: "MODERATE"}
+  "FLOODWAY": {zone_type: "FLOOD_FLOODWAY", risk_level: "HIGH"}
+  "D":     {zone_type: "FLOOD_100YR",    risk_level: "UNDETERMINED"}
+  "OPEN_WATER": {zone_type: "WETLAND",   risk_level: "LOW"}
+
+# Inline GeoJSON FeatureCollection fixture — used when the FEMA NFHL WFS API
+# is unavailable.  Coordinates are real WGS-84 approximations of Arlington MA
+# flood-risk and heat-island areas based on publicly available FEMA DFIRM data.
+# source_id is the stable natural key used for identity resolution.
+climate_mock_geojson:
+  type: "FeatureCollection"
+  features:
+    - type: "Feature"
+      properties:
+        source_id:    "NFHL-ARL-001"
+        zone_type:    "FLOOD_100YR"
+        risk_level:   "HIGH"
+        fema_zone:    "AE"
+        dfirm_id:     "25017C0330F"
+        effective_date: "2016-07-07"
+        description:  "Mystic River 1% annual chance flood zone — East Arlington"
+        census_tract: "25017352400"
+      geometry:
+        type: "Polygon"
+        coordinates:
+          - [[-71.1520, 42.4065], [-71.1480, 42.4065], [-71.1480, 42.4090],
+             [-71.1520, 42.4090], [-71.1520, 42.4065]]
+
+    - type: "Feature"
+      properties:
+        source_id:    "NFHL-ARL-002"
+        zone_type:    "FLOOD_FLOODWAY"
+        risk_level:   "HIGH"
+        fema_zone:    "FLOODWAY"
+        dfirm_id:     "25017C0330F"
+        effective_date: "2016-07-07"
+        description:  "Mystic River regulatory floodway — zero-rise corridor"
+        census_tract: "25017352400"
+      geometry:
+        type: "Polygon"
+        coordinates:
+          - [[-71.1510, 42.4070], [-71.1490, 42.4070], [-71.1490, 42.4085],
+             [-71.1510, 42.4085], [-71.1510, 42.4070]]
+
+    - type: "Feature"
+      properties:
+        source_id:    "NFHL-ARL-003"
+        zone_type:    "FLOOD_500YR"
+        risk_level:   "MODERATE"
+        fema_zone:    "X"
+        dfirm_id:     "25017C0330F"
+        effective_date: "2016-07-07"
+        description:  "Mill Brook 0.2% annual chance flood zone — Arlington Center"
+        census_tract: "25017352500"
+      geometry:
+        type: "Polygon"
+        coordinates:
+          - [[-71.1565, 42.4152], [-71.1540, 42.4152], [-71.1540, 42.4172],
+             [-71.1565, 42.4172], [-71.1565, 42.4152]]
+
+    - type: "Feature"
+      properties:
+        source_id:    "HEAT-ARL-001"
+        zone_type:    "HEAT_ISLAND"
+        risk_level:   "MODERATE"
+        fema_zone:    null
+        dfirm_id:     null
+        effective_date: "2023-08-01"
+        description:  "Urban heat island — Mass Ave commercial corridor (surface temp +4.2 °C vs. town avg)"
+        census_tract: "25017352300"
+      geometry:
+        type: "Polygon"
+        coordinates:
+          - [[-71.1580, 42.4120], [-71.1530, 42.4120], [-71.1530, 42.4145],
+             [-71.1580, 42.4145], [-71.1580, 42.4120]]
+
+    - type: "Feature"
+      properties:
+        source_id:    "WETLAND-ARL-001"
+        zone_type:    "WETLAND"
+        risk_level:   "LOW"
+        fema_zone:    null
+        dfirm_id:     null
+        effective_date: "2022-04-15"
+        description:  "Spy Pond riparian buffer — NWI freshwater emergent wetland"
+        census_tract: "25017353100"
+      geometry:
+        type: "MultiPolygon"
+        coordinates:
+          - [[[-71.1460, 42.4210], [-71.1430, 42.4210], [-71.1430, 42.4230],
+              [-71.1460, 42.4230], [-71.1460, 42.4210]]]
+          - [[[-71.1445, 42.4195], [-71.1425, 42.4195], [-71.1425, 42.4208],
+              [-71.1445, 42.4208], [-71.1445, 42.4195]]]
+
+# Broadband Connectivity — Domain 06 configuration.
+# FCC BDC CSV column normalisation map:
+#   key   = canonical field name used inside the scraper
+#   value = actual CSV header as it appears in the FCC download
+# Adjust values when the FCC changes column names between filing periods.
+broadband_csv_column_map:
+  provider_name:   "brand_name"
+  fcc_tech_code:   "technology"
+  max_down_mbps:   "max_advertised_download_speed"
+  max_up_mbps:     "max_advertised_upload_speed"
+  geo_value:       "location_id"
+  low_latency:     "low_latency"
+  biz_res_code:    "business_residential_code"
+
+# FCC technology code → TeBroadband.tech_type controlled-vocabulary mapping.
+# Key = integer FCC tech code (stored as string in YAML).
+# Value = tech_type string written into the Gold record.
+broadband_tech_code_map:
+  "10":  "DSL"
+  "40":  "CABLE"
+  "50":  "FIBER"
+  "60":  "SATELLITE"
+  "70":  "FIXED_W"
+  "30":  "LTE"
+  "31":  "NR"
+  "300": "OTHER"
+
+# Mock FCC BDC CSV rows — Domain 06 fixture.
+# Headers match the FCC BDC availability file column names defined in
+# broadband_csv_column_map above.  Simulates a filtered extract for
+# Arlington MA addresses as a typical FCC CSV download would look.
+# source_id is a stable composite key: provider_slug:tech_code:geo_value
+broadband_mock_csv_rows:
+  - source_id:    "rcn:50:14-magnolia-st-02474"
+    brand_name:   "RCN"
+    technology:   "50"
+    max_advertised_download_speed: 1000
+    max_advertised_upload_speed:   1000
+    location_id:  "14 Magnolia St, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "R"
+
+  - source_id:    "comcast:40:14-magnolia-st-02474"
+    brand_name:   "Xfinity (Comcast)"
+    technology:   "40"
+    max_advertised_download_speed: 1200
+    max_advertised_upload_speed:   35
+    location_id:  "14 Magnolia St, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "R"
+
+  - source_id:    "verizon:31:102-mass-ave-02474"
+    brand_name:   "Verizon"
+    technology:   "31"
+    max_advertised_download_speed: 4000
+    max_advertised_upload_speed:   4000
+    location_id:  "102-106 Massachusetts Ave, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "B"
+
+  - source_id:    "rcn:50:102-mass-ave-02474"
+    brand_name:   "RCN"
+    technology:   "50"
+    max_advertised_download_speed: 1000
+    max_advertised_upload_speed:   1000
+    location_id:  "102-106 Massachusetts Ave, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "B"
+
+  - source_id:    "comcast:40:39-fairmont-st-02474"
+    brand_name:   "Xfinity (Comcast)"
+    technology:   "40"
+    max_advertised_download_speed: 800
+    max_advertised_upload_speed:   20
+    location_id:  "39 Fairmont St, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "R"
+
+  - source_id:    "rcn:50:39-fairmont-st-02474"
+    brand_name:   "RCN"
+    technology:   "50"
+    max_advertised_download_speed: 1000
+    max_advertised_upload_speed:   1000
+    location_id:  "39 Fairmont St, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "R"
+
+  - source_id:    "verizon:10:47-fairmont-st-02474"
+    brand_name:   "Verizon"
+    technology:   "10"
+    max_advertised_download_speed: 100
+    max_advertised_upload_speed:   10
+    location_id:  "47 Fairmont St, Arlington MA 02474"
+    low_latency:  false
+    business_residential_code: "R"
+
+  - source_id:    "starlink:60:arlington-ma"
+    brand_name:   "SpaceX Starlink"
+    technology:   "60"
+    max_advertised_download_speed: 220
+    max_advertised_upload_speed:   25
+    location_id:  "Arlington MA (town-wide)"
+    low_latency:  true
+    business_residential_code: "X"
+
+  - source_id:    "att:70:arlington-ma-02476"
+    brand_name:   "AT&T Fixed Wireless"
+    technology:   "70"
+    max_advertised_download_speed: 25
+    max_advertised_upload_speed:   3
+    location_id:  "Arlington MA 02476 (zipcode)"
+    low_latency:  false
+    business_residential_code: "R"
+
+  - source_id:    "rcn:50:64-thorndike-st-02474"
+    brand_name:   "RCN"
+    technology:   "50"
+    max_advertised_download_speed: 1000
+    max_advertised_upload_speed:   1000
+    location_id:  "64 Thorndike St, Arlington MA 02474"
+    low_latency:  true
+    business_residential_code: "R"
+
+# Building Permits — Domain 05 fixture.
+# Simulates a typical OpenGov / ViewPoint ISD API response for Arlington MA.
+# Each record carries an applicant_id that is resolved to a te_party_pk via
+# the identity linker, proving cross-model linkage back to gold.te_party.
+# Replace with a live API call when the town publishes a public endpoint.
+permit_mock_data:
+  - permit_number: "B-26-0451"
+    permit_type: "RESIDENTIAL_RENO"
+    status: "APPROVED"
+    application_date: "2026-01-08"
+    approval_date: "2026-01-22"
+    estimated_value: 45000
+    applicant_name: "KAUFMAN SETH & SOKOLOW-KAUFMAN ELENA"
+    applicant_id: "APP-KAU-001"
+    metadata:
+      address: "14 Magnolia St, Arlington MA 02474"
+      parcel_id: "001.0-0004-0012.0"
+      description: "Kitchen renovation + rear deck addition"
+      contractor_license: "CS-123456"
+      inspector: "J. Torres"
+
+  - permit_number: "B-26-0512"
+    permit_type: "SOLAR"
+    status: "CLOSED"
+    application_date: "2026-01-15"
+    approval_date: "2026-01-28"
+    estimated_value: 28500
+    applicant_name: "REGAL STEPHEN J & JOAN M"
+    applicant_id: "APP-REG-002"
+    metadata:
+      address: "39 Fairmont St, Arlington MA 02474"
+      parcel_id: "001.0-0005-0039.0"
+      description: "Rooftop solar PV system — 9.6 kW"
+      contractor_license: "EL-789012"
+      panel_count: 24
+      inspector: "M. Chen"
+
+  - permit_number: "C-26-0089"
+    permit_type: "COMMERCIAL_BUILD"
+    status: "UNDER_REVIEW"
+    application_date: "2026-02-03"
+    approval_date: null
+    estimated_value: 1250000
+    applicant_name: "MARKOU LLC"
+    applicant_id: "APP-MAR-003"
+    metadata:
+      address: "102-106 Massachusetts Ave, Arlington MA 02474"
+      parcel_id: "001.0-0001-0001.0"
+      description: "Ground-floor retail fit-out + 2nd-floor office conversion"
+      contractor_license: "CS-334455"
+      inspector: null
+
+  - permit_number: "E-26-1103"
+    permit_type: "ELECTRICAL"
+    status: "INSPECTIONS"
+    application_date: "2026-02-10"
+    approval_date: "2026-02-17"
+    estimated_value: 8200
+    applicant_name: "PEMAJ MARTIN & ROZETA"
+    applicant_id: "APP-PEM-004"
+    metadata:
+      address: "23 Thorndike St, Arlington MA 02474"
+      parcel_id: "001.0-0002-0023.0"
+      description: "200A service upgrade + EV charger installation"
+      contractor_license: "EL-556677"
+      inspector: "R. Silva"
+
+  - permit_number: "D-26-0031"
+    permit_type: "DEMOLITION"
+    status: "APPROVED"
+    application_date: "2026-02-18"
+    approval_date: "2026-03-01"
+    estimated_value: 18000
+    applicant_name: "KTA CONSTRUCTION LLC"
+    applicant_id: "APP-KTA-005"
+    metadata:
+      address: "70-72 Massachusetts Ave, Arlington MA 02474"
+      parcel_id: "001.0-0001-0010.0"
+      description: "Demolition of existing accessory structure (garage)"
+      contractor_license: "CS-998877"
+      inspector: "J. Torres"
+
+  - permit_number: "P-26-0744"
+    permit_type: "PLUMBING"
+    status: "CLOSED"
+    application_date: "2025-11-12"
+    approval_date: "2025-11-19"
+    estimated_value: 5500
+    applicant_name: "COOKE JOHN & DELIA"
+    applicant_id: "APP-COO-006"
+    metadata:
+      address: "47 Fairmont St, Arlington MA 02474"
+      parcel_id: "001.0-0005-0047.0"
+      description: "Water heater replacement + bathroom fixture upgrade"
+      contractor_license: "PL-112233"
+      inspector: "M. Chen"
+
+  - permit_number: "B-26-0603"
+    permit_type: "RESIDENTIAL_NEW"
+    status: "SUBMITTED"
+    application_date: "2026-02-25"
+    approval_date: null
+    estimated_value: 680000
+    applicant_name: "JL REILLY PROPERTIES III LLC"
+    applicant_id: "APP-JLR-007"
+    metadata:
+      address: "64 Thorndike St, Arlington MA 02474"
+      parcel_id: "001.0-0002-0064.0"
+      description: "New single-family dwelling — 2,800 sqft, 4BR/3BA"
+      contractor_license: "CS-667788"
+      inspector: null
+
+  - permit_number: "M-26-0297"
+    permit_type: "MECHANICAL"
+    status: "APPROVED"
+    application_date: "2026-01-29"
+    approval_date: "2026-02-05"
+    estimated_value: 12400
+    applicant_name: "BENNETT DEIRDRE"
+    applicant_id: "APP-BEN-008"
+    metadata:
+      address: "37 Fairmont St, Arlington MA 02474"
+      parcel_id: "001.0-0005-0037.0"
+      description: "Central HVAC replacement — heat pump system"
+      contractor_license: "MH-445566"
+      inspector: "R. Silva"
+
+# DPW Capital Improvement Plan — Domain 04 fixture.
+# Derived from Arlington MA FY2025–2030 Capital Improvement Plan (CIP).
+# Replace with a live PDF-extraction pipeline when pdfplumber is integrated.
+# project_id values are the stable natural keys used for identity resolution.
+dpw_mock_projects:
+  - project_id: "DPW-2025-001"
+    project_name: "Mass Ave Corridor Repaving (Pleasant St to Lake St)"
+    project_type: "ROAD_PAVING"
+    status: "IN_PROGRESS"
+    estimated_cost: 3200000
+    start_date: "2025-04-01"
+    end_date: "2025-10-31"
+    location_description: "Massachusetts Avenue from Pleasant Street to Lake Street"
+    metadata:
+      fiscal_year: 2025
+      funding_source: "Chapter 90 State Aid"
+      department: "DPW Engineering"
+      ward: 3
+      pdf_page: 14
+
+  - project_id: "DPW-2025-002"
+    project_name: "Thorndike St Water Main Replacement"
+    project_type: "WATER_MAIN"
+    status: "DESIGN"
+    estimated_cost: 1850000
+    start_date: "2026-03-01"
+    end_date: "2026-09-30"
+    location_description: "Thorndike Street from Mass Ave to Magnolia Street"
+    metadata:
+      fiscal_year: 2026
+      funding_source: "Water Enterprise Fund"
+      department: "DPW Water & Sewer"
+      ward: 3
+      pipe_diameter_in: 8
+      pipe_material_existing: "Cast Iron (1928)"
+      pdf_page: 22
+
+  - project_id: "DPW-2025-003"
+    project_name: "ADA Sidewalk Ramp Upgrades — East Arlington"
+    project_type: "SIDEWALK"
+    status: "PLANNED"
+    estimated_cost: 420000
+    start_date: "2025-07-01"
+    end_date: "2025-09-30"
+    location_description: "Various locations in East Arlington (Ward 1 & 2)"
+    metadata:
+      fiscal_year: 2025
+      funding_source: "CDBG Federal Grant"
+      department: "DPW Highway"
+      ramp_count: 28
+      pdf_page: 31
+
+  - project_id: "DPW-2025-004"
+    project_name: "Broadway Corridor Streetscape Improvement"
+    project_type: "STREETSCAPE"
+    status: "PLANNED"
+    estimated_cost: 2750000
+    start_date: "2026-05-01"
+    end_date: "2027-06-30"
+    location_description: "Broadway (Route 3) from Mill Street to Mystic Street"
+    metadata:
+      fiscal_year: 2026
+      funding_source: "MassDOT TIP + Town Capital"
+      department: "DPW Engineering"
+      ward: 5
+      includes_bike_lanes: true
+      pdf_page: 18
+
+  - project_id: "DPW-2025-005"
+    project_name: "Spy Pond Stormwater Retrofit"
+    project_type: "STORMWATER"
+    status: "DESIGN"
+    estimated_cost: 980000
+    start_date: "2026-09-01"
+    end_date: "2027-03-31"
+    location_description: "Spy Pond Park outfall and adjacent catch basins"
+    metadata:
+      fiscal_year: 2027
+      funding_source: "EPA Section 319 Grant + Stormwater Enterprise"
+      department: "DPW Environmental Services"
+      ward: 6
+      green_infrastructure: true
+      pdf_page: 41
+
+  - project_id: "DPW-2025-006"
+    project_name: "Jason Street Sanitary Sewer Rehabilitation"
+    project_type: "SEWER_MAIN"
+    status: "BID"
+    estimated_cost: 640000
+    start_date: "2025-08-15"
+    end_date: "2025-12-15"
+    location_description: "Jason Street from Mass Ave to Highland Ave"
+    metadata:
+      fiscal_year: 2025
+      funding_source: "Sewer Enterprise Fund"
+      department: "DPW Water & Sewer"
+      ward: 4
+      pipe_length_ft: 1200
+      method: "CIPP Lining"
+      pdf_page: 27
+
+  - project_id: "DPW-2025-007"
+    project_name: "Robbins Library HVAC Replacement"
+    project_type: "FACILITY"
+    status: "COMPLETED"
+    estimated_cost: 310000
+    start_date: "2024-06-01"
+    end_date: "2024-09-30"
+    location_description: "Robbins Library, 700 Massachusetts Avenue"
+    metadata:
+      fiscal_year: 2024
+      funding_source: "Town Capital Stabilisation Fund"
+      department: "Facilities Management"
+      ward: 3
+      building_sqft: 18500
+      pdf_page: 52
+
+  - project_id: "DPW-2025-008"
+    project_name: "Minuteman Bikeway Bridge Deck Repair"
+    project_type: "BRIDGE"
+    status: "PLANNED"
+    estimated_cost: 525000
+    start_date: "2026-04-01"
+    end_date: "2026-07-31"
+    location_description: "Minuteman Commuter Bikeway bridge over Mill Brook, near Lake Street"
+    metadata:
+      fiscal_year: 2026
+      funding_source: "MassDOT Transportation Alternatives"
+      department: "DPW Engineering"
+      ward: 6
+      bridge_id: "A-02-022"
+      deck_area_sqft: 640
+      pdf_page: 35
+
+# Market Dynamics — runtime parameters for Domain 03.
+# Drives the mock-data generator and will drive the live BigQuery ingestor
+# when credentials are available.  All market-specific constants live here.
+market_dynamics:
+  # Arlington MA postal codes to generate / ingest observations for.
+  zip_codes:
+    - "02474"   # Arlington Centre, East Arlington
+    - "02476"   # Arlington Heights
+
+  # Geographic classification applied to zip-code level observations.
+  geo_level: "ZIPCODE"
+
+  # Metrics to generate.  Each entry maps a metric_name to its baseline value
+  # at the start of the synthetic series.  The ingestor applies a realistic
+  # month-over-month drift so the series looks like live MLS data.
+  # Units are implied by the metric_name vocabulary (see TeMarketTrend docs).
+  metrics:
+    MEDIAN_RENT_1BR:
+      baseline: 2100       # USD / month
+      monthly_drift: 0.005 # +0.5 % / month on average
+    MEDIAN_RENT_2BR:
+      baseline: 2700
+      monthly_drift: 0.005
+    MEDIAN_RENT_3BR:
+      baseline: 3400
+      monthly_drift: 0.004
+    MEDIAN_SALE_PRICE:
+      baseline: 850000     # USD
+      monthly_drift: 0.003
+    AVG_DAYS_ON_MARKET:
+      baseline: 18         # days
+      monthly_drift: -0.01 # market tightening slightly each month
+    MONTHS_OF_SUPPLY:
+      baseline: 1.4        # months
+      monthly_drift: -0.02
+    PRICE_PER_SQFT:
+      baseline: 580        # USD / ft²
+      monthly_drift: 0.004
+
+  # Number of trailing months to generate for the synthetic series.
+  history_months: 12
+
+  # Seed for the random noise component so results are reproducible between runs.
+  random_seed: 42
+  bigquery_project: "towneye-umf"
+  bigquery_dataset: "market_dynamics"
+  bigquery_table:   "mls_trends"
+
+# Maximum pages fetched per scraper run.
+#   Development / verification : set to a small number (e.g. 5 → ~50 records).
+#   Production full-crawl      : set to null (no limit; Arlington has ~1,567 pages).
+scraper_max_pages: 5
+
+# Town Pulse — per-source runtime parameters consumed by civic scrapers.
+# Keeps all endpoint-specific knobs out of scraper logic and in config.
+town_pulse:
+
+  civic_meetings:
+    # Calendar category label used to filter the Arlington events feed
+    # to board/committee meetings only.
+    calendar_category: "Boards & Committees"
+    # Number of upcoming days to fetch per run.
+    lookahead_days: 90
+
+  community_events:
+    # Calendar category label for general public/community events.
+    calendar_category: "Community Events"
+    lookahead_days: 30
+
+  seeclickfix:
+    # Arlington's SeeClickFix place identifier — drives the ?place_url= param.
+    place_url: "NO_SCF_COVERAGE"  # Arlington MA slug returns 0 issues on SCF — use LLM synthesis
+    # Issue statuses to ingest; "closed" excluded to focus on actionable signals.
+    statuses:
+      - "open"
+      - "acknowledged"
+      - "in_progress"
+    # Page size for the SeeClickFix REST API (max 100 per their docs).
+    per_page: 100
+    # TeEvent.event_type value written on every Gold record from this source.
+    # Lives here so scrapers never hardcode domain vocabulary.
+    event_type: "311_REQUEST"
+
+  mbta:
+    # Bus routes that serve Arlington — drives the MBTA V3 API filter[route] param.
+    # Route 77 : Arlington Heights → Harvard Square
+    # Route 79 : Arlington Heights → Alewife
+    # Route 350: Burlington Depot → Alewife (express, serves Arlington Heights)
+    routes:
+      - "77"
+      - "79"
+      - "350"
+    # MBTA V3 activity filters — alert must affect at least one of these
+    # passenger activities to be ingested.
+    # Full vocabulary: BOARD, EXIT, RIDE, PARK_CAR, BRINGING_BIKE, STORE_BIKE, ALL
+    activities:
+      - "BOARD"
+      - "EXIT"
+      - "RIDE"
+    # Environment variable holding the MBTA V3 API key.
+    # Free key at https://api-v3.mbta.com — optional but avoids the
+    # unauthenticated rate limit of 20 requests / minute.
+    api_key_env: "MBTA_API_KEY"
+    # TeEvent.event_type value written on every Gold record from this source.
+    event_type: "TRANSIT_ALERT"
+
+# ---------------------------------------------------------------------------
+# Domain 11 — Town Profile mock fixture
+# Used as fallback when no LLM API key is set in the environment.
+# ---------------------------------------------------------------------------
+town_profile_mock_data:
+  neighborhood_vibes: >
+    Arlington is a close-knit, transit-oriented suburb just four miles northwest
+    of Boston. Its tree-lined streets mix Victorian two-families with post-war
+    ranch houses, anchored by a lively Massachusetts Avenue commercial corridor
+    that blends independent coffee shops, farm-to-table restaurants, and local
+    bookstores. The town attracts young professionals, families seeking top-rated
+    public schools, and academics drawn to its proximity to Cambridge and
+    Somerville.
+  major_employers:
+    - "Arlington Public Schools"
+    - "Town of Arlington (municipal government)"
+    - "Lahey Health / Beth Israel Deaconess"
+    - "MIT Lincoln Laboratory (nearby)"
+    - "Local retail & hospitality (Mass Ave corridor)"
+  nimby_index: 6.5
+  housing_character: "OWNER_DOMINATED"
+  political_lean: "PROGRESSIVE"
+  walkability_score: 78
+  transit_score: 65
+  school_rating: 8.2
+  sweet_spots:
+    - "East Arlington (walkable, near Cambridge)"
+    - "Arlington Center (Mass Ave corridor)"
+    - "Brattle Street / Spy Pond area"
+  risks:
+    - "Limited new housing supply — strict single-family zoning in most districts"
+    - "High property taxes relative to neighbouring towns"
+    - "MBTA bus-dependent (no Red/Green Line stop within town limits)"
+  summary: >
+    Arlington offers excellent school quality, walkable town-centre amenities,
+    and strong long-term appreciation, but development friction is high due to
+    R0/R1 zoning dominance and active neighbourhood associations.
+
+# ---------------------------------------------------------------------------
+# Domain 12 — STR Dynamics mock fixture
+# Used as fallback when no LLM API key is set in the environment.
+# ---------------------------------------------------------------------------
+str_dynamics_mock_data:
+  estimated_yield_pct: 7.2
+  avg_nightly_rate_usd: 195.0
+  occupancy_rate_pct: 68.0
+  target_guest_demo: "WEEKEND_TRIPPER"
+  regulatory_posture: "MODERATE"
+  peak_seasons:
+    - "SUMMER"
+    - "FALL_FOLIAGE"
+    - "MARATHON_WEEKEND"
+  active_listings_est: 95
+  yoy_yield_change_pct: 1.8
+  sweet_spot_neighborhoods:
+    - "East Arlington (proximity to Cambridge)"
+    - "Arlington Center (walkable Mass Ave)"
+  regulatory_notes: >
+    Arlington requires a short-term rental permit and owner-occupancy on at
+    least one unit. Whole-home rentals are permitted up to 90 days per year.
+    Operators must register with the town and collect the 6 % local occupancy
+    tax via the MA DOR short-term rental platform.
+  summary: >
+    Arlington's STR market is healthy but constrained by owner-occupancy rules;
+    best returns are in East Arlington two-families targeting Boston-weekend
+    visitors and remote-work travellers.
+

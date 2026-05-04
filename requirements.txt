@@ -1,0 +1,33 @@
+# Core pipeline
+pydantic>=2.0
+PyYAML>=6.0
+
+# Identity Linker — PostgreSQL / Supabase connectivity
+psycopg2-binary>=2.9
+
+# Bronze-layer scrapers
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.1
+icalendar>=5.0
+
+# Parquet I/O
+pandas>=2.0
+pyarrow>=14.0
+duckdb>=0.10
+
+# Expansion Agent + LLM Synthesis — geohash encoding and multi-provider LLM clients
+geohash2>=1.1
+openai>=1.0
+anthropic>=0.25        # optional — used when ANTHROPIC_API_KEY is set
+google-genai>=1.0      # optional — used when GEMINI_API_KEY is set
+
+# Discovery Agent — web search (optional; LLM-only fallback when absent)
+tavily-python>=0.3     # optional — used when TAVILY_API_KEY is set
+
+# Realtor Agent chatbot UI
+streamlit>=1.32
+
+# Test suite
+pytest>=7.4
+pytest-mock>=3.12

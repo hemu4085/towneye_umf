@@ -1,0 +1,65 @@
+{
+  "onboarded": [
+    {
+      "town_slug": "somerville-ma",
+      "town_name": "Somerville",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/somerville-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    },
+    {
+      "town_slug": "woburn-ma",
+      "town_name": "Woburn",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/woburn-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    },
+    {
+      "town_slug": "burlington-ma",
+      "town_name": "Burlington",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/burlington-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    },
+    {
+      "town_slug": "winchester-ma",
+      "town_name": "Winchester",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/winchester-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    },
+    {
+      "town_slug": "lexington-ma",
+      "town_name": "Lexington",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/lexington-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    },
+    {
+      "town_slug": "arlington-ma",
+      "town_name": "Arlington",
+      "state": "MA",
+      "lat": 0.0,
+      "lon": 0.0,
+      "geo_hash": "7zzzzz",
+      "config_path": "/home/myunix/projects/fine_tuned_models/towneye_umf/configs/arlington-ma/config.yaml",
+      "rationale": "Direct-onboarded via --towns flag (Patch #187)"
+    }
+  ],
+  "rounds": []
+}

@@ -1,0 +1,47 @@
+# Secure Environment Variables / GCP credentials — NEVER commit
+.env
+.env.*
+gcp-key.json
+gcp-key.json:Zone.Identifier
+*.Identifier
+
+# Pip install artifacts (botched == install)
+=*
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Data — large binary / generated files, never commit to git
+data/bronze/
+data/silver/
+data/gold/
+data/cache/
+
+# Runtime state files in data/ root
+data/*.json
+data/*.jsonl
+data/*.log
+
+# Report outputs — generated on-demand, not source code
+reports/output/
+
+# IDE and OS
+.vscode/
+.cursor/
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temp probe/audit scripts (one-offs)
+/tmp/
