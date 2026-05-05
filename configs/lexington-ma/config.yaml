@@ -61,6 +61,7 @@ scraper_urls:
   fema_nfhl_wfs:       "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
   fcc_broadband_api:   "https://broadbandmap.fcc.gov/api/public/map/listAvailability"
   permits_api:         "https://www.lexingtonma.gov/building-department"
+  zillow_zhvi_csv:     "https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
 
 http:
   ssl_verify: true

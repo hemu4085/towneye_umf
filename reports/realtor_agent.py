@@ -48,7 +48,17 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # Ensure project root is importable when run as __main__
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_ROOT))
+
+# Load .env so GEMINI_API_KEY and other secrets are available
+_env_file = _ROOT / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 import pandas as pd
 
@@ -231,8 +241,17 @@ class RealtorAgent:
         - Write from the agent's perspective: "This property...", "Your buyer..."
         - Do NOT use generic phrases like "great opportunity" or "desirable location".
         - Do NOT invent data not present in the input.
-        - Never use $ followed by a number — write dollar amounts as "USD X" or "X dollars".
+        - Always use the $ symbol for dollar amounts (e.g. $1,401,100 not "USD 1,401,100").
         - Do not use markdown headers or horizontal rules — numbered list only.
+
+        CRITICAL DATA INTERPRETATION RULES:
+        - The field "bylaw_zone_code" is the official zoning district (e.g. "R2").
+          NEVER use "assessor_zone_code_raw" as the zone name — it is an internal
+          assessor classification number, not a zoning district.
+        - The field "property_flood_note" describes THIS property's specific flood status.
+          Use ONLY this for the flood risk talking point.
+          The "town_wide_fema_context" fields are background context for the whole town —
+          do NOT say the property is in those flood zones.
     """).strip()
 
     def _render_agent_brief(
@@ -268,8 +287,13 @@ class RealtorAgent:
                 ctx["year_built"]   = int(r["year_built"]) if r.get("year_built") else None
                 ctx["beds"]         = int(r["beds"]) if r.get("beds") else None
                 ctx["baths"]        = float(r["baths"]) if r.get("baths") else None
-                ctx["zone_code"]    = str(r.get("zone_code", ""))
                 ctx["parcel_id"]    = str(r.get("parcel_id", ""))
+                # Resolve assessor code → bylaw zone before passing to Gemini
+                _raw_zc = str(r.get("zone_code", ""))
+                _zone_map = self._cfg.get("assessor_to_zoning_map", {})
+                _resolved_zone = _zone_map.get(_raw_zc) or _zone_map.get(_raw_zc.upper()) or _raw_zc
+                ctx["bylaw_zone_code"] = _resolved_zone   # e.g. "R2"  ← use this in the brief
+                ctx["assessor_zone_code_raw"] = _raw_zc   # internal ref only, not the zoning district
 
         # Market trend: latest value + 3-yr appreciation
         if not df_market.empty and "metric_value" in df_market.columns:
@@ -295,18 +319,40 @@ class RealtorAgent:
                 ctx["estimated_mkt_appreciation_1yr_pct"] = avm["appreciation_1yr_pct"]
                 ctx["estimated_mkt_as_of"]         = avm["as_of"]
 
-        # FEMA flood zones
+        # FEMA flood zones — property-specific first, then town-wide context
+        fema_result = self._fema_lookup_address(address, self._town_name, self._state, zipcode)
+        if fema_result["found"]:
+            ctx["property_fema_zone"]        = fema_result["fema_zone"]   # e.g. "X"
+            ctx["property_sfha"]             = fema_result["sfha"]        # True = in flood zone
+            ctx["property_flood_risk_level"] = fema_result["risk_level"]  # "NONE","MODERATE","HIGH"
+            if not fema_result["sfha"]:
+                ctx["property_flood_insurance_required"] = False
+                ctx["property_flood_note"] = (
+                    "This property is NOT in a Special Flood Hazard Area. "
+                    "Flood insurance is NOT required by federally-backed lenders."
+                )
+            else:
+                ctx["property_flood_insurance_required"] = True
+                ctx["property_flood_note"] = (
+                    f"This property IS in a Special Flood Hazard Area (Zone {fema_result['fema_zone']}). "
+                    "Flood insurance IS required for federally-backed mortgages."
+                )
         if not df_climate.empty and "risk_level" in df_climate.columns:
             counts = df_climate["risk_level"].value_counts().to_dict()
-            ctx["fema_high_risk_polygons"]     = counts.get("HIGH", 0)
-            ctx["fema_moderate_risk_polygons"] = counts.get("MODERATE", 0)
+            ctx["town_wide_fema_context"] = {
+                "note": "These are TOWN-WIDE polygon counts, NOT specific to this property.",
+                "high_risk_polygons_in_town":     counts.get("HIGH", 0),
+                "moderate_risk_polygons_in_town": counts.get("MODERATE", 0),
+            }
             if "metadata" in df_climate.columns:
                 zones = (
                     df_climate["metadata"]
                     .apply(lambda m: m.get("fema_zone") if isinstance(m, dict) else None)
                     .dropna().unique().tolist()
                 )
-                ctx["fema_zone_codes"] = sorted(set(str(z) for z in zones if z))
+                ctx["town_wide_fema_context"]["zone_codes_present_in_town"] = sorted(
+                    set(str(z) for z in zones if z)
+                )
 
         # MBTA live alerts
         if not df_transit.empty and "event_name" in df_transit.columns:
@@ -314,9 +360,9 @@ class RealtorAgent:
         mbta_cfg = self._cfg.get("town_pulse", {}).get("mbta", {})
         ctx["mbta_routes_serving_town"] = mbta_cfg.get("routes", [])
 
-        # Zoning — find the zone matching this property
-        if not df_zoning.empty and ctx.get("zone_code"):
-            zrow = df_zoning[df_zoning["zone_code"] == ctx["zone_code"]]
+        # Zoning — look up by resolved bylaw zone code (e.g. "R2"), not raw assessor code ("1")
+        if not df_zoning.empty and ctx.get("bylaw_zone_code"):
+            zrow = df_zoning[df_zoning["zone_code"] == ctx["bylaw_zone_code"]]
             if not zrow.empty:
                 r = zrow.iloc[0]
                 ctx["zone_description"] = str(r.get("zone_description", ""))
@@ -393,7 +439,11 @@ class RealtorAgent:
                 lines.append(f"  {'Year Built':<22} {int(yb)}")
             zone = row.get("zone_code")
             if zone:
-                lines.append(f"  {'Zone Code':<22} {zone}")
+                # Show the resolved bylaw zone code, not the raw assessor code
+                zone_map = self._cfg.get("assessor_to_zoning_map", {})
+                resolved = zone_map.get(str(zone)) or zone_map.get(str(zone).upper())
+                zone_display = f"{resolved}  (assessor code: {zone})" if resolved and resolved != zone else zone
+                lines.append(f"  {'Zone (Bylaw)':<22} {zone_display}")
             beds  = row.get("beds")
             baths = row.get("baths")
             if beds or baths:
@@ -421,30 +471,44 @@ class RealtorAgent:
         return "\n".join(lines)
 
     def _render_climate(self, df: pd.DataFrame, address: str = "", zipcode: str = "") -> str:
-        lines = [self._section_header(
-            "Flood Risk  ·  FEMA NFHL  [VERIFY ADDRESS AT msc.fema.gov]"
-        )]
+        lines = [self._section_header("Flood Risk  ·  FEMA NFHL  [REAL DATA]")]
         if df.empty:
             lines.append("  No FEMA flood zone data available.")
             return "\n".join(lines)
 
-        # ── Property-specific lookup prompt ───────────────────────────
-        # We store town-wide polygon data, not parcel-level geometry.
-        # A point-in-polygon check requires geocoding the address —
-        # until that is implemented, direct agents to the official tool.
-        fema_url = ""
-        if address:
-            import urllib.parse
-            query = urllib.parse.quote(f"{address}, {self._town_name}, {self._state} {zipcode}".strip(", "))
-            fema_url = f"https://msc.fema.gov/portal/search#searchresultsanchor?addressquery={query}"
+        import urllib.parse
+        fema_query = urllib.parse.quote(
+            f"{address}, {self._town_name}, {self._state} {zipcode}".strip(", ")
+        )
+        fema_url = f"https://msc.fema.gov/portal/search#searchresultsanchor?addressquery={fema_query}"
 
-        lines.append("  ⚠  PROPERTY-SPECIFIC FLOOD STATUS: Not determined by TownEye.")
-        lines.append("     Flood zone varies parcel-by-parcel — verify this address directly:")
-        if fema_url:
-            lines.append(f"     FEMA MSC Lookup → {fema_url}")
-        else:
-            lines.append("     FEMA MSC Lookup → https://msc.fema.gov/portal/search")
-        lines.append("")
+        # ── Property-specific live lookup ──────────────────────────────
+        if address:
+            lookup = self._fema_lookup_address(address, self._town_name, self._state, zipcode)
+            if lookup["found"]:
+                zone      = lookup["fema_zone"] or "X"
+                risk      = lookup["risk_level"]
+                sfha      = lookup["sfha"]
+                if risk == "NONE" or zone == "X":
+                    status_icon = "✅"
+                    status_text = f"NOT in a Special Flood Hazard Area  (Zone {zone} — minimal/moderate risk)"
+                    ins_note    = "Flood insurance is NOT required by federally-backed lenders."
+                elif risk == "HIGH":
+                    status_icon = "🔴"
+                    status_text = f"HIGH FLOOD RISK — Zone {zone} (Special Flood Hazard Area)"
+                    ins_note    = "⚠ Flood insurance IS REQUIRED for federally-backed mortgages."
+                else:
+                    status_icon = "🟡"
+                    status_text = f"MODERATE FLOOD RISK — Zone {zone}"
+                    ins_note    = "Flood insurance is recommended but not required."
+                lines.append(f"  {status_icon}  THIS PROPERTY: {status_text}")
+                lines.append(f"     {ins_note}")
+                if lookup.get("lat"):
+                    lines.append(f"     Coordinates: {lookup['lat']:.5f}, {lookup['lon']:.5f}  (Census geocoded)")
+            else:
+                lines.append(f"  ⚠  Could not determine property flood zone: {lookup['error']}")
+                lines.append(f"     Manual lookup: {fema_url}")
+            lines.append("")
 
         # ── Town-wide context (background education) ──────────────────
         total = len(df)
@@ -648,6 +712,92 @@ class RealtorAgent:
         else:
             verdict = "✅ COMPLIANT" if actual >= required else "❌ NON-CONFORMING (pre-existing)"
         return verdict
+
+    # ------------------------------------------------------------------
+    # FEMA address-level flood zone lookup
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fema_lookup_address(address: str, city: str, state: str, zipcode: str) -> Dict[str, Any]:
+        """
+        Determine the FEMA flood zone for a specific address.
+
+        Steps
+        -----
+        1. Geocode the address using the US Census Geocoder (free, no key).
+        2. Query the FEMA NFHL MapServer layer 28 with the returned coordinates
+           to find which flood zone polygon (if any) contains the point.
+
+        Returns
+        -------
+        dict with keys:
+            found        – bool   (True if geocoding + FEMA query succeeded)
+            fema_zone    – str    (e.g. "X", "AE", "NONE")
+            risk_level   – str    ("NONE" | "MODERATE" | "HIGH")
+            sfha         – bool   (Special Flood Hazard Area flag)
+            lat, lon     – float  (geocoded coordinates)
+            error        – str    (description if found=False)
+        """
+        import requests as _req
+
+        result: Dict[str, Any] = {
+            "found": False, "fema_zone": None, "risk_level": "UNKNOWN",
+            "sfha": None, "lat": None, "lon": None, "error": "",
+        }
+
+        # ── Step 1: Census geocoder ────────────────────────────────────
+        try:
+            geo_url = "https://geocoding.geo.census.gov/geocoder/locations/address"
+            geo_params = {
+                "street": address, "city": city, "state": state,
+                "zip": zipcode, "benchmark": "2020", "format": "json",
+            }
+            geo_resp = _req.get(geo_url, params=geo_params, timeout=10)
+            geo_resp.raise_for_status()
+            matches = geo_resp.json().get("result", {}).get("addressMatches", [])
+            if not matches:
+                result["error"] = "Address not found by Census geocoder"
+                return result
+            coords = matches[0]["coordinates"]
+            lon, lat = float(coords["x"]), float(coords["y"])
+            result["lat"], result["lon"] = lat, lon
+        except Exception as exc:
+            result["error"] = f"Geocoding failed: {exc}"
+            return result
+
+        # ── Step 2: FEMA NFHL point query ─────────────────────────────
+        try:
+            nfhl_url = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
+            nfhl_params = {
+                "geometry":     f"{lon},{lat}",
+                "geometryType": "esriGeometryPoint",
+                "inSR":         "4326",
+                "spatialRel":   "esriSpatialRelIntersects",
+                "outFields":    "FLD_ZONE,SFHA_TF,ZONE_SUBTY",
+                "returnGeometry": "false",
+                "f":            "json",
+            }
+            nfhl_resp = _req.get(nfhl_url, params=nfhl_params, timeout=15)
+            nfhl_resp.raise_for_status()
+            features = nfhl_resp.json().get("features", [])
+
+            if not features:
+                # No flood zone polygon at this point = Zone X / minimal hazard
+                result.update({"found": True, "fema_zone": "X", "risk_level": "NONE", "sfha": False})
+                return result
+
+            attrs     = features[0]["attributes"]
+            fld_zone  = str(attrs.get("FLD_ZONE") or "X").strip()
+            sfha      = str(attrs.get("SFHA_TF") or "F").upper() == "T"
+            risk      = "HIGH" if sfha else ("MODERATE" if fld_zone.startswith("X") else "LOW")
+            result.update({
+                "found": True, "fema_zone": fld_zone,
+                "risk_level": risk, "sfha": sfha,
+            })
+        except Exception as exc:
+            result["error"] = f"FEMA NFHL query failed: {exc}"
+
+        return result
 
     # ------------------------------------------------------------------
     # Estimated Current Market Value (AV × ZHVI appreciation)
@@ -1492,65 +1642,17 @@ class RealtorAgent:
             zone_row = self._resolve_zone_row(df_zoning, str(prop_row.get("zone_code", "")))
 
         # ── 01 AGENT BRIEF ────────────────────────────────────────────
-        brief_ctx: Dict[str, Any] = {"property_address": address, "zipcode": zipcode,
-                                      "town": f"{self._town_name}, {self._state}"}
-        if prop_row is not None:
-            brief_ctx.update({
-                "assessed_value_usd": float(prop_row["assessed_value"]) if prop_row.get("assessed_value") else None,
-                "year_built": int(prop_row["year_built"]) if prop_row.get("year_built") else None,
-                "beds": int(prop_row["beds"]) if prop_row.get("beds") else None,
-                "baths": float(prop_row["baths"]) if prop_row.get("baths") else None,
-                "zone_code": str(prop_row.get("zone_code", "")),
-            })
-        if not df_market.empty and "metric_name" in df_market.columns:
-            sp = df_market[df_market["metric_name"] == "MEDIAN_SALE_PRICE"].copy()
-            if not sp.empty:
-                sp["observation_date"] = pd.to_datetime(sp["observation_date"], utc=True, errors="coerce")
-                sp = sp.sort_values("observation_date")
-                brief_ctx["zip_median_home_value_usd"] = round(float(sp.iloc[-1]["metric_value"]), 0)
-                brief_ctx["zip_3yr_appreciation_pct"]  = round(
-                    100 * (float(sp.iloc[-1]["metric_value"]) / float(sp.iloc[0]["metric_value"]) - 1), 1)
-        # Estimated current market value for this property
-        if brief_ctx.get("assessed_value_usd") and not df_market.empty:
-            avm_b = self._estimate_market_value(brief_ctx["assessed_value_usd"], df_market, zipcode)
-            if avm_b:
-                brief_ctx["estimated_current_market_value_usd"] = avm_b["estimated_value"]
-                brief_ctx["estimated_mkt_1yr_appreciation_pct"] = avm_b["appreciation_1yr_pct"]
-                brief_ctx["estimated_mkt_as_of"]                = avm_b["as_of"]
-        if not df_climate.empty and "risk_level" in df_climate.columns:
-            c = df_climate["risk_level"].value_counts().to_dict()
-            brief_ctx["fema_high_risk_polygons"]     = c.get("HIGH", 0)
-            brief_ctx["fema_moderate_risk_polygons"] = c.get("MODERATE", 0)
-            if "metadata" in df_climate.columns:
-                zones = (df_climate["metadata"]
-                         .apply(lambda m: m.get("fema_zone") if isinstance(m, dict) else None)
-                         .dropna().unique().tolist())
-                brief_ctx["fema_zone_codes"] = sorted(set(str(z) for z in zones if z))
-        if not df_transit.empty and "event_name" in df_transit.columns:
-            brief_ctx["mbta_active_alerts"] = df_transit["event_name"].tolist()
-        brief_ctx["mbta_routes_serving_town"] = \
-            self._cfg.get("town_pulse", {}).get("mbta", {}).get("routes", [])
-        if zone_row is not None:
-            uses = zone_row.get("allowed_uses") or []
-            if isinstance(uses, str):
-                try: uses = json.loads(uses)
-                except: uses = []
-            brief_ctx["zone_allowed_uses"] = uses
-
-        brief_text = self._call_gemini(
-            self._BRIEF_SYSTEM,
-            f"PROPERTY DATA (JSON):\n{json.dumps(brief_ctx, indent=2, default=str)}\n\n"
-            f"Write the 5-point agent brief for {address}, {self._town_name}, {self._state} {zipcode}.",
-            max_tokens=2000,
+        # Reuse _render_agent_brief (has resolved zone code + property-level FEMA lookup)
+        brief_text_raw = self._render_agent_brief(
+            address, zipcode, df_property, df_market, df_climate, df_transit, df_zoning
         )
-        # Convert numbered list to HTML paragraphs
+        # Strip the section header line and convert text → HTML paragraphs
+        import re as _re
         brief_html = ""
-        for line in brief_text.strip().splitlines():
+        for line in brief_text_raw.splitlines():
             line = line.strip()
-            if not line:
+            if not line or line.startswith("─") or "AGENT BRIEF" in line.upper():
                 continue
-            # Bold the keyword after the number
-            import re as _re
             line = _re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", line)
             brief_html += f'<div class="bi">{line}</div>\n'
         s01 = self._h_section(1, "AGENT BRIEF &nbsp;·&nbsp; Gemini AI",
@@ -1561,7 +1663,11 @@ class RealtorAgent:
             av_float = float(prop_row["assessed_value"]) if prop_row.get("assessed_value") else None
             av   = _fmt_usd(av_float) if av_float else "—"
             yb   = str(int(prop_row["year_built"])) if prop_row.get("year_built") else "—"
-            zc   = str(prop_row.get("zone_code", "—"))
+            _raw_zc   = str(prop_row.get("zone_code", ""))
+            _zone_map = self._cfg.get("assessor_to_zoning_map", {})
+            _resolved = _zone_map.get(_raw_zc) or _zone_map.get(_raw_zc.upper())
+            zc = (f"{_resolved} <span style='font-size:11px;color:#888;'>(assessor: {_raw_zc})</span>"
+                  if _resolved and _resolved != _raw_zc else (_raw_zc or "—"))
             bd   = str(int(prop_row["beds"])) if prop_row.get("beds") else "—"
             ba   = str(float(prop_row["baths"])) if prop_row.get("baths") else "—"
             ls   = f"{int(prop_row['lot_size_sqft']):,} sq ft" if prop_row.get("lot_size_sqft") else "—"
@@ -1774,6 +1880,43 @@ class RealtorAgent:
         _fema_query = _urlparse.quote(f"{address}, {self._town_name}, {self._state} {zipcode}".strip(", "))
         _fema_url   = f"https://msc.fema.gov/portal/search#searchresultsanchor?addressquery={_fema_query}"
 
+        # Live property-level FEMA lookup
+        _lookup = self._fema_lookup_address(address, self._town_name, self._state, zipcode)
+        if _lookup["found"]:
+            _zone = _lookup["fema_zone"] or "X"
+            _risk = _lookup["risk_level"]
+            if _risk == "NONE" or _zone == "X":
+                _prop_flood_html = (
+                    f'<div style="background:#d4edda;border-left:4px solid #27ae60;padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>✅ THIS PROPERTY: NOT in a Special Flood Hazard Area</strong><br>'
+                    f'<span style="font-size:13px;">Zone <strong>{_zone}</strong> — minimal/moderate risk. '
+                    f'Flood insurance is <strong>NOT required</strong> by federally-backed lenders.</span></div>'
+                )
+            elif _risk == "HIGH":
+                _prop_flood_html = (
+                    f'<div style="background:#f8d7da;border-left:4px solid #cc2222;padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>🔴 THIS PROPERTY: HIGH FLOOD RISK — Zone {_zone} (SFHA)</strong><br>'
+                    f'<span style="font-size:13px;">Flood insurance is <strong>REQUIRED</strong> '
+                    f'for federally-backed mortgages.</span></div>'
+                )
+            else:
+                _prop_flood_html = (
+                    f'<div style="background:#fff3cd;border-left:4px solid #e0a020;padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>🟡 THIS PROPERTY: MODERATE FLOOD RISK — Zone {_zone}</strong><br>'
+                    f'<span style="font-size:13px;">Flood insurance is recommended but not required.</span></div>'
+                )
+        else:
+            _prop_flood_html = (
+                f'<div style="background:#fff3cd;border-left:4px solid #e0a020;padding:10px 14px;'
+                f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                f'<strong>⚠ Could not determine flood zone automatically</strong><br>'
+                f'<span style="font-size:13px;">{_lookup["error"]}<br>'
+                f'<a href="{_fema_url}" style="color:#1a73e8;">Verify at FEMA MSC →</a></span></div>'
+            )
+
         if not df_climate.empty and "risk_level" in df_climate.columns:
             rc    = df_climate["risk_level"].value_counts().to_dict()
             high  = rc.get("HIGH", 0); mod = rc.get("MODERATE", 0); total = len(df_climate)
@@ -1787,14 +1930,8 @@ class RealtorAgent:
                 fzc = ", ".join(sorted(set(str(z) for z in fzones if z)))
 
             flood_body = (
-                # Property-specific warning box
-                f'<div style="background:#fff3cd;border-left:4px solid #e0a020;padding:10px 14px;'
-                f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
-                f'<strong>⚠ PROPERTY-SPECIFIC FLOOD STATUS: Not determined by TownEye</strong><br>'
-                f'<span style="font-size:13px;">Flood zone varies parcel-by-parcel. '
-                f'Verify this address at the official FEMA tool:<br>'
-                f'<a href="{_fema_url}" style="color:#1a73e8;">'
-                f'FEMA Flood Map Service Center — {address}, {self._town_name}</a></span></div>'
+                # Property-level result (live lookup above)
+                _prop_flood_html
                 # Town-wide context
                 + f'<p style="font-size:12px;font-weight:bold;color:#555;margin:0 0 8px 0;">'
                   f'TOWN-WIDE CONTEXT — {self._town_name} flood zone polygons: {total} total</p>'
@@ -1809,16 +1946,16 @@ class RealtorAgent:
                 + '<p style="font-size:12px;color:#666;margin:8px 0;">Zone AE = 100-yr floodplain — '
                   'federally-backed mortgages <strong>require</strong> flood insurance. '
                   'Zone X = moderate risk; optional.</p>'
-                + '<div class="sn">Source: FEMA NFHL MapServer layer 28 (town-wide polygon data). '
-                  'Property-specific determination requires parcel geocoding.</div>'
+                + '<div class="sn">Source: FEMA NFHL MapServer layer 28 + Census geocoder. '
+                  'Property-specific zone determined via point-in-polygon query.</div>'
             )
         else:
             flood_body = (
-                f'<div class="aw"><strong>⚠ FEMA data not loaded</strong><br>'
-                f'<a href="{_fema_url}">Check this address at FEMA MSC →</a></div>'
+                _prop_flood_html
+                + f'<div class="sn">Town-wide FEMA polygon data not yet loaded for {self._town_name}.</div>'
             )
         s05 = self._h_section(5, "FLOOD RISK &nbsp;·&nbsp; FEMA NFHL",
-                               '<span class="be">VERIFY AT msc.fema.gov</span>', flood_body)
+                               '<span class="br">REAL DATA</span>', flood_body)
 
         # ── 06 TRANSIT ────────────────────────────────────────────────
         if not df_transit.empty and "event_name" in df_transit.columns:
