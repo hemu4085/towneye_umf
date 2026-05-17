@@ -202,6 +202,11 @@ class ArlingtonPropertyScraper:
 
     # Column names that are promoted to first-class Gold fields.
     # Any Bronze key in this set is NOT repeated inside metadata.
+    #
+    # Note: ``sale_date_sale_price`` and ``book_page`` are CONSUMED here
+    # (split + promoted into metadata under ``last_sale_date`` /
+    # ``last_sale_price`` / ``book_page``) so the raw merged strings do
+    # not end up duplicated alongside the parsed values.
     _FIRST_CLASS_COLS: frozenset = frozenset({
         "address", "location", "total_value", "assessed_value", "total_assessed_value",
         "year_built", "building_type", "built_type",
@@ -209,6 +214,7 @@ class ArlingtonPropertyScraper:
         "lot_size", "lot_size_sqft", "lot_size_fin_area",
         "beds", "baths", "beds_baths",
         "owner", "zone_code", "nhood",
+        "sale_date_sale_price", "book_page",
         "te_source", "te_geo_hash",
     })
 
@@ -239,6 +245,88 @@ class ArlingtonPropertyScraper:
         baths = parts[1] if len(parts) > 1 else None
         return beds, baths
 
+    @staticmethod
+    def _parse_lot_size_fin_area(raw: Optional[str]) -> tuple:
+        """
+        Patriot Properties packs lot size + finished area into one column,
+        e.g. '3,023 1,490'.  Returns (lot_size_sqft, finished_area_sqft) as
+        floats; either component may be ``None``.
+
+        Tolerates leading/trailing whitespace and embedded commas.
+        """
+        if not raw:
+            return None, None
+        parts = [p.strip() for p in str(raw).strip().split() if p.strip()]
+        def _f(v: Optional[str]) -> Optional[float]:
+            if v is None:
+                return None
+            try:
+                return float(v.replace(",", ""))
+            except (ValueError, TypeError):
+                return None
+        lot = _f(parts[0]) if parts else None
+        fin = _f(parts[1]) if len(parts) > 1 else None
+        return lot, fin
+
+    @staticmethod
+    def _parse_sale_date_price(raw: Optional[str]) -> tuple:
+        """
+        Patriot Properties packs the most recent sale into one column —
+        format ``"M/D/ YYYY $PRICE"`` (note the stray space after the second
+        slash; that is real upstream output).
+
+        Returns ``(sale_date_iso, sale_price_float)``.  The date is
+        normalised to ISO-8601 (``"YYYY-MM-DD"``) when parsable; the
+        price is returned as a float, with ``$``/`,` stripped.
+
+        Empty inputs return ``(None, None)``.  Unparseable dates fall
+        through with ``sale_date_iso = None`` while the price is still
+        attempted independently.
+        """
+        if not raw:
+            return None, None
+        import re
+        s = str(raw).strip()
+        date_iso: Optional[str] = None
+        price: Optional[float] = None
+        # Robust date capture: '6/13/ 2017', '06/13/2017', '6/13/17'
+        date_match = re.search(r"(\d{1,2})/(\d{1,2})/\s*(\d{2,4})", s)
+        if date_match:
+            mm = int(date_match.group(1))
+            dd = int(date_match.group(2))
+            yy_raw = date_match.group(3)
+            yyyy = int(yy_raw) if len(yy_raw) == 4 else (2000 + int(yy_raw)) if int(yy_raw) <= 50 else (1900 + int(yy_raw))
+            try:
+                from datetime import date as _date
+                date_iso = _date(yyyy, mm, dd).isoformat()
+            except (ValueError, TypeError):
+                date_iso = None
+        price_match = re.search(r"\$\s*([\d,]+(?:\.\d+)?)", s)
+        if price_match:
+            try:
+                price = float(price_match.group(1).replace(",", ""))
+            except (ValueError, TypeError):
+                price = None
+        return date_iso, price
+
+    @staticmethod
+    def _parse_luc_description(raw: Optional[str]) -> tuple:
+        """
+        Patriot Properties packs the land-use code with its description,
+        e.g. '101 One Family'.  Returns ``(luc, description)``.
+
+        If ``raw`` is just a description with no leading numeric code,
+        returns ``(None, raw_stripped)``.
+        """
+        if not raw:
+            return None, None
+        import re
+        s = str(raw).strip()
+        m = re.match(r"^(\d{2,4})\s+(.*)$", s)
+        if m:
+            return m.group(1), m.group(2).strip() or None
+        return None, s or None
+
     def _promote_to_gold(self, bronze: Dict[str, Any], linker: PartyLinker) -> Dict[str, Any]:
         source_id: str = bronze.get(self._source_id_col, "")
         te_property_pk: int = linker.resolve(self._te_source, source_id)
@@ -268,10 +356,34 @@ class ArlingtonPropertyScraper:
         if not beds_raw and bronze.get("beds_baths"):
             beds_raw, baths_raw = self._parse_beds_baths(bronze.get("beds_baths"))
 
-        # Lot size — Patriot Properties: 'lot_size_fin_area' contains 'lotSqft finAreaSqft'
+        # Lot size + finished area — Patriot's 'lot_size_fin_area' carries
+        # both as 'lotSqft finAreaSqft'.  We promote lot size to a column
+        # and stash the finished-area figure in metadata so the brief
+        # generator can render the GFA / FAR comparison without losing it.
         lot_size_raw = bronze.get("lot_size") or bronze.get("lot_size_sqft")
+        finished_area_sqft: Optional[float] = None
         if not lot_size_raw and bronze.get("lot_size_fin_area"):
-            lot_size_raw = str(bronze["lot_size_fin_area"]).split()[0]
+            lot_parsed, finished_area_sqft = self._parse_lot_size_fin_area(
+                bronze.get("lot_size_fin_area")
+            )
+            if lot_parsed is not None:
+                lot_size_raw = lot_parsed
+
+        # luc_description — Patriot stores the code+description merged
+        # ('101 One Family').  When the dedicated 'luc' column is absent,
+        # split here so analysts can filter on the numeric code.
+        luc_raw = bronze.get("luc")
+        luc_desc_raw = bronze.get("luc_description")
+        if not luc_raw and luc_desc_raw:
+            luc_parsed, luc_desc_parsed = self._parse_luc_description(luc_desc_raw)
+            if luc_parsed:
+                luc_raw = luc_parsed
+                luc_desc_raw = luc_desc_parsed or luc_desc_raw
+
+        # sale_date_sale_price — Patriot's '6/13/ 2017 $750,000'.
+        last_sale_date, last_sale_price = self._parse_sale_date_price(
+            bronze.get("sale_date_sale_price")
+        )
 
         # Columns consumed as named fields — not duplicated in metadata
         consumed = (
@@ -279,7 +391,19 @@ class ArlingtonPropertyScraper:
             | {self._source_id_col, self._legal_name_col}
         )
 
-        extra_meta = {k: v for k, v in bronze.items() if k not in consumed}
+        extra_meta: Dict[str, Any] = {k: v for k, v in bronze.items() if k not in consumed}
+        # Promote derived sub-fields into metadata so the brief generator
+        # (and any future SQL agent) can read them by stable keys.
+        if finished_area_sqft is not None:
+            extra_meta["finished_area_sqft"] = finished_area_sqft
+        if last_sale_date is not None:
+            extra_meta["last_sale_date"] = last_sale_date
+        if last_sale_price is not None:
+            extra_meta["last_sale_price"] = last_sale_price
+        if bronze.get("book_page"):
+            extra_meta["book_page"] = str(bronze["book_page"]).strip()
+        if bronze.get("nhood") is not None:
+            extra_meta["assessor_neighborhood"] = bronze["nhood"]
         # PyArrow cannot write an empty struct column — always include at least one key
         if not extra_meta:
             extra_meta = {"_source": self._te_source}
@@ -288,13 +412,13 @@ class ArlingtonPropertyScraper:
             "te_property_pk":  te_property_pk,
             "parcel_id":       source_id,
             "address":         address,
-            "zone_code":       bronze.get("zone_code") or bronze.get("nhood"),
+            "zone_code":       bronze.get("zone_code"),
             "assessed_value":  assessed_value,
             "year_built":      year_built_raw,
             "building_type":   building_type_raw,
             "lot_size_sqft":   lot_size_raw,
-            "luc":             bronze.get("luc"),
-            "luc_description": bronze.get("luc_description"),
+            "luc":             luc_raw,
+            "luc_description": luc_desc_raw,
             "beds":            beds_raw,
             "baths":           baths_raw,
             "owner_name":      owner_name,

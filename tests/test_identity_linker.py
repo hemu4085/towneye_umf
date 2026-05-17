@@ -1,17 +1,25 @@
 # [FILE PATH]: tests/test_identity_linker.py
-# Patch #160
-# Execution Mode: PartyLinker Unit Tests
-# Date: 2026-03-01
+# Patch #161
+# Execution Mode: PartyLinker + HashLinker + get_linker() Unit Tests
+# Date: 2026-05-07
 
 """
-Unit tests for core.identity_linker.PartyLinker.
+Unit tests for ``core.identity_linker``.
 
 All PostgreSQL I/O is fully mocked — no live database required.
-Test matrix:
-  - HIT:  (te_source, source_id) exists → existing pk returned, no INSERT
-  - MISS: pair is new → upsert CTE inserts a row, new pk returned
-  - ENV:  DATABASE_URL environment variable is used when no dsn kwarg supplied
-  - KEY:  KeyError raised when neither dsn nor DATABASE_URL is present
+
+Test matrix
+-----------
+  - HIT:      (te_source, source_id) exists → existing pk returned, no INSERT
+  - MISS:     pair is new → upsert CTE inserts a row, new pk returned
+  - ENV:      DATABASE_URL env var is used when no dsn kwarg supplied
+  - NO_DSN:   RuntimeError raised when neither dsn nor DATABASE_URL is present
+              (Patch #157 changed this from KeyError → RuntimeError so
+              callers get a self-describing message that points them at
+              ``get_linker()`` for offline mode.)
+  - HASH:     HashLinker.resolve is deterministic and DB-free
+  - FACTORY:  get_linker() returns HashLinker without DATABASE_URL,
+              and PartyLinker with one (or with an explicit dsn=).
 """
 
 import os
@@ -19,7 +27,13 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from core.identity_linker import PartyLinker, _DEFAULT_IDENTITY_TABLE, _DEFAULT_SCHEMA
+from core.identity_linker import (
+    HashLinker,
+    PartyLinker,
+    _DEFAULT_IDENTITY_TABLE,
+    _DEFAULT_SCHEMA,
+    get_linker,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -148,10 +162,17 @@ class TestDsnFromEnv:
         linker = PartyLinker()
         assert linker._dsn == TEST_DSN
 
-    def test_raises_key_error_without_dsn_or_env(self, monkeypatch):
-        """Missing DATABASE_URL and no dsn → KeyError."""
+    def test_raises_runtime_error_without_dsn_or_env(self, monkeypatch):
+        """
+        Missing DATABASE_URL and no dsn → RuntimeError.
+
+        Patch #157 swapped the old ``os.environ['DATABASE_URL']`` lookup
+        (which raised ``KeyError``) for ``os.environ.get(..., '')`` plus
+        an explicit ``RuntimeError`` whose message points the caller at
+        :func:`get_linker` for offline mode.
+        """
         monkeypatch.delenv("DATABASE_URL", raising=False)
-        with pytest.raises(KeyError):
+        with pytest.raises(RuntimeError, match="PartyLinker requires"):
             PartyLinker()
 
 
@@ -168,5 +189,81 @@ class TestUpsertNoneGuard:
             with pytest.raises(RuntimeError, match="Upsert returned no row"):
                 _make_linker().resolve(TE_SOURCE, SOURCE_ID)
 
+
+# ---------------------------------------------------------------------------
+# HashLinker — offline, deterministic, DB-free fallback
+# ---------------------------------------------------------------------------
+
+class TestHashLinker:
+    def test_resolve_returns_int(self):
+        """HashLinker.resolve always returns a plain ``int``."""
+        pk = HashLinker().resolve(TE_SOURCE, SOURCE_ID)
+        assert isinstance(pk, int)
+
+    def test_resolve_is_deterministic_within_process(self):
+        """
+        Same (te_source, source_id) → same pk for any single linker
+        instance and for repeated calls within the same process.
+
+        Note: Python's built-in ``hash()`` is salted per interpreter
+        process (``PYTHONHASHSEED``), so this guarantee holds within a
+        run, not across runs. That is the correct contract for the
+        offline fallback — pipeline runs that need cross-process stable
+        PKs are expected to set ``DATABASE_URL`` and use ``PartyLinker``.
+        """
+        a = HashLinker().resolve(TE_SOURCE, SOURCE_ID)
+        b = HashLinker().resolve(TE_SOURCE, SOURCE_ID)
+        assert a == b
+
+    def test_resolve_distinguishes_different_keys(self):
+        linker = HashLinker()
+        pk_a = linker.resolve(TE_SOURCE, "PARCEL-001")
+        pk_b = linker.resolve(TE_SOURCE, "PARCEL-002")
+        assert pk_a != pk_b
+
+    def test_resolve_within_bigint_range(self):
+        """PK must fit comfortably inside a PostgreSQL ``bigint``."""
+        pk = HashLinker().resolve(TE_SOURCE, SOURCE_ID)
+        assert 0 <= pk < 2_000_000_000
+
+
+# ---------------------------------------------------------------------------
+# get_linker() — fallback factory used by the pipeline orchestrator
+# ---------------------------------------------------------------------------
+
+class TestGetLinkerFactory:
+    def test_returns_hash_linker_without_database_url(self, monkeypatch):
+        """No DATABASE_URL and no explicit dsn → HashLinker (offline mode)."""
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        linker = get_linker()
+        assert isinstance(linker, HashLinker)
+
+    def test_returns_party_linker_with_database_url(self, monkeypatch):
+        """DATABASE_URL set → PartyLinker (online mode)."""
+        monkeypatch.setenv("DATABASE_URL", TEST_DSN)
+        linker = get_linker()
+        assert isinstance(linker, PartyLinker)
+        assert linker._dsn == TEST_DSN
+
+    def test_explicit_dsn_overrides_missing_env(self, monkeypatch):
+        """Explicit dsn= argument wins over a missing DATABASE_URL."""
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        linker = get_linker(dsn=TEST_DSN)
+        assert isinstance(linker, PartyLinker)
+        assert linker._dsn == TEST_DSN
+
+    def test_explicit_dsn_overrides_env(self, monkeypatch):
+        """Explicit dsn= argument wins over the DATABASE_URL env var."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://wrong/db")
+        linker = get_linker(dsn=TEST_DSN)
+        assert isinstance(linker, PartyLinker)
+        assert linker._dsn == TEST_DSN
+
+    def test_empty_database_url_treated_as_unset(self, monkeypatch):
+        """An empty DATABASE_URL string must NOT bypass the offline fallback."""
+        monkeypatch.setenv("DATABASE_URL", "")
+        linker = get_linker()
+        assert isinstance(linker, HashLinker)
+
 # tests/test_identity_linker.py
-# End of Patch #160
+# End of Patch #161

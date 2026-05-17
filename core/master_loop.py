@@ -110,6 +110,30 @@ from core.identity_linker import get_linker
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Skip-on-missing-source signal
+# ---------------------------------------------------------------------------
+class DomainNotApplicableError(Exception):
+    """
+    Raised by a scraper when a town does not publish any source for the
+    domain (e.g. Lexington has no land-use noncompliance layer).
+
+    The master loop catches this and classifies the domain as ``"skipped"``
+    in run results — distinct from a real failure.  Towns opt out by
+    leaving the relevant ``scraper_urls.<key>`` empty in their config.
+    """
+
+    def __init__(self, town_slug: str, domain: str, reason: str = "") -> None:
+        self.town_slug = town_slug
+        self.domain = domain
+        self.reason = reason
+        super().__init__(
+            f"[{town_slug}] domain '{domain}' not applicable for this town"
+            + (f": {reason}" if reason else "")
+        )
+
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -161,6 +185,24 @@ SCRAPER_REGISTRY: List[Dict[str, str]] = [
     # Domain 12 — STR Dynamics
     {"domain": "str-dynamics",    "module": "scrapers.universal_str",
      "class": "ArlingtonStrDynamicsIngestor",    "output_domain": "str-dynamics"},
+    # Domain 14 — Parcel Geometry (GIS polygons + computed lot dimensions)
+    {"domain": "parcel",          "module": "scrapers.universal_parcel",
+     "class": "ArlingtonParcelScraper",          "output_domain": "parcel"},
+    # Domain 15 — Zoning Overlay Polygons (spatial counterpart to TeZoning)
+    {"domain": "zoning-overlay",  "module": "scrapers.universal_zoning_overlay",
+     "class": "ArlingtonZoningOverlayScraper",   "output_domain": "zoning-overlay"},
+    # Domain 16 — MACRIS Historic Resources (statewide, town-filtered)
+    {"domain": "macris",          "module": "scrapers.universal_macris",
+     "class": "ArlingtonMacrisScraper",           "output_domain": "macris"},
+    # Domain 17 — Land-Use / Zoning Non-Compliance polygons (descriptive)
+    {"domain": "noncompliance",   "module": "scrapers.universal_noncompliance",
+     "class": "ArlingtonNonComplianceScraper",    "output_domain": "noncompliance"},
+    # Domain 18 — Local Historic Resources (multi-FS aggregator: LHD/NHD/Overlay/AHC)
+    {"domain": "local-historic",  "module": "scrapers.universal_local_historic",
+     "class": "ArlingtonLocalHistoricScraper",    "output_domain": "local-historic"},
+    # Domain 19 — Environmental Overlay (wetlands + flood-effective + flood-preliminary)
+    {"domain": "environmental-overlay", "module": "scrapers.universal_environmental_overlay",
+     "class": "ArlingtonEnvironmentalOverlayScraper", "output_domain": "environmental-overlay"},
 ]
 
 # Domains that run entirely from config fixtures / LLM and never need live URLs —
@@ -456,6 +498,21 @@ def _run_scrapers_for_town(
                 "error":   None,
             }
 
+        except DomainNotApplicableError as exc:
+            elapsed = time.perf_counter() - t0
+            logger.info(
+                "master_loop | [%s] domain=%s SKIPPED after %.2fs (%s)",
+                town_slug, domain, elapsed, exc.reason or "no source configured",
+            )
+            results[domain] = {
+                "status":  "skipped",
+                "rows":    0,
+                "path":    None,
+                "elapsed": round(elapsed, 2),
+                "error":   None,
+                "reason":  exc.reason or "no source configured for this town",
+            }
+
         except Exception:
             elapsed = time.perf_counter() - t0
             tb = traceback.format_exc()
@@ -704,32 +761,37 @@ def _scrape_one(
     domain_results = _run_scrapers_for_town(town_slug)
     elapsed = round(time.perf_counter() - t0, 2)
 
-    ok   = sum(1 for r in domain_results.values() if r["status"] == "ok")
-    fail = sum(1 for r in domain_results.values() if r["status"] == "fail")
+    ok      = sum(1 for r in domain_results.values() if r["status"] == "ok")
+    fail    = sum(1 for r in domain_results.values() if r["status"] == "fail")
+    skipped = sum(1 for r in domain_results.values() if r["status"] == "skipped")
 
-    session_stats["scraped"]     += 1
-    session_stats["domain_ok"]   += ok
-    session_stats["domain_fail"] += fail
+    session_stats["scraped"]        += 1
+    session_stats["domain_ok"]      += ok
+    session_stats["domain_fail"]    += fail
+    session_stats.setdefault("domain_skipped", 0)
+    session_stats["domain_skipped"] += skipped
 
     scrape_log[town_slug] = {
-        "scraped_at": datetime.now(tz=timezone.utc).isoformat(),
-        "elapsed_s":  elapsed,
-        "domains_ok": ok,
-        "domains_fail": fail,
-        "results": domain_results,
+        "scraped_at":      datetime.now(tz=timezone.utc).isoformat(),
+        "elapsed_s":       elapsed,
+        "domains_ok":      ok,
+        "domains_fail":    fail,
+        "domains_skipped": skipped,
+        "results":         domain_results,
     }
 
     logger.info(
-        "master_loop | %s scraped — %d ok / %d failed (%.2fs total)",
-        town_slug, ok, fail, elapsed,
+        "master_loop | %s scraped — %d ok / %d failed / %d skipped (%.2fs total)",
+        town_slug, ok, fail, skipped, elapsed,
     )
 
     _append_run_log({
-        "town_slug":    town_slug,
-        "scraped_at":   scrape_log[town_slug]["scraped_at"],
-        "elapsed_s":    elapsed,
-        "domains_ok":   ok,
-        "domains_fail": fail,
+        "town_slug":       town_slug,
+        "scraped_at":      scrape_log[town_slug]["scraped_at"],
+        "elapsed_s":       elapsed,
+        "domains_ok":      ok,
+        "domains_fail":    fail,
+        "domains_skipped": skipped,
     })
 
 
@@ -749,6 +811,7 @@ def _finish_session(stats: Dict[str, Any], started_at: str) -> None:
     print(f"  Towns scraped   :  {stats['scraped']}")
     print(f"  Domain runs OK  :  {stats['domain_ok']}")
     print(f"  Domain failures :  {stats['domain_fail']}")
+    print(f"  Domain skipped  :  {stats.get('domain_skipped', 0)}")
     print(f"{'═'*62}\n")
 
     _append_run_log({"session_summary": stats})

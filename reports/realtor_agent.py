@@ -175,6 +175,122 @@ class RealtorAgent:
     def _load_property(self) -> pd.DataFrame:
         return self._load("property")
 
+    def _load_parcel(self) -> pd.DataFrame:
+        """
+        Load Domain 14 — town-wide parcel polygons with computed dimensions.
+
+        ``geometry_coordinates``, ``edges_ft`` and ``metadata`` are persisted
+        as JSON strings (Parquet cannot hold raw lists of mixed types); we
+        round-trip through ``json.loads`` so downstream report code sees
+        native Python structures and can pass them straight to ``shapely``
+        or to envelope / setback math without further parsing.
+        """
+        df = self._load("parcel")
+        if not df.empty:
+            for col in ("geometry_coordinates", "edges_ft", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
+    def _load_zoning_overlay(self) -> pd.DataFrame:
+        """
+        Load Domain 15 — town-wide zoning + overlay polygons.
+
+        Each row is one polygon from the town's zoning FeatureServer
+        (base zone, overlay district, historic district, etc.); a parcel
+        can intersect multiple rows.  Report-side point-in-polygon code
+        joins these back to a parcel for the full applicable-rules stack
+        (e.g. base R2 + NMF / MBMF MBTA-Communities overlays in Arlington).
+        """
+        df = self._load("zoning-overlay")
+        if not df.empty:
+            for col in ("geometry_coordinates", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
+    def _load_macris(self) -> pd.DataFrame:
+        """
+        Load Domain 16 — town-filtered MACRIS historic resources
+        (points + district polygons).
+
+        Source is the MAPC-hosted statewide ``MHC_Inventory_GDB`` service
+        filtered by ``TOWN_NAME``.  Each row is either an individual
+        historic resource (geometry_type = ``Point``) or a historic
+        district polygon (``Polygon`` / ``MultiPolygon``).  Report-side
+        code uses the points for "is THIS address listed?" lookups
+        (string match on ``address``) and the polygons for "is THIS
+        address inside any historic district?" point-in-polygon checks.
+        """
+        df = self._load("macris")
+        if not df.empty:
+            for col in ("geometry_coordinates", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
+    def _load_noncompliance(self) -> pd.DataFrame:
+        """
+        Load Domain 17 — descriptive Land-Use / Zoning Non-Compliance polygons.
+
+        These are NOT enforcement cases — they flag every parcel whose
+        recorded land-use code diverges from current zoning (a legal
+        pre-existing non-conforming use, etc.).  Report-side code resolves
+        a parcel to its non-compliance rows via point-in-polygon and uses
+        the result to flag expansion-restricted parcels in the brief.
+        """
+        df = self._load("noncompliance")
+        if not df.empty:
+            for col in ("geometry_coordinates", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
+    def _load_local_historic(self) -> pd.DataFrame:
+        """
+        Load Domain 18 — town-level historic resources (LHD/NHD/Overlay/AHC).
+
+        Town counterpart to Domain 16 (statewide MACRIS).  Aggregates four
+        Arlington-hosted FeatureServers into one DataFrame whose rows
+        share the ``TeHistoricResource`` schema.  Geometry can be Point,
+        Polygon, MultiPolygon, or LineString (the NHD boundary is published
+        as a single polyline).
+        """
+        df = self._load("local-historic")
+        if not df.empty:
+            for col in ("geometry_coordinates", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
+    def _load_environmental_overlay(self) -> pd.DataFrame:
+        """
+        Load Domain 19 — wetlands + FEMA flood (effective + preliminary 2023)
+        in one table.
+
+        The ``category`` column distinguishes the three subtypes; the
+        report uses it to label any spatial hit ("Wetland CLASSIF: BVW",
+        "Flood Zone AE", "Preliminary Flood Zone X (2023)").
+        """
+        df = self._load("environmental-overlay")
+        if not df.empty:
+            for col in ("geometry_coordinates", "metadata"):
+                if col in df.columns:
+                    df[col] = df[col].apply(
+                        lambda v: json.loads(v) if isinstance(v, str) else v
+                    )
+        return df
+
     def _load_climate(self) -> pd.DataFrame:
         df = self._load("climate-zones")
         if not df.empty and "metadata" in df.columns:
@@ -185,6 +301,198 @@ class RealtorAgent:
 
     def _load_transit(self) -> pd.DataFrame:
         return self._load("transit")
+
+    # ------------------------------------------------------------------
+    # On-demand live property fetch (used when address is not in cache)
+    # ------------------------------------------------------------------
+
+    def _fetch_property_live(self, address: str) -> Optional[pd.DataFrame]:
+        """
+        Fetch a single property record live from the assessor portal when the
+        address is not present in the cached Parquet.
+
+        Reads URL and search-param names from config:
+            scraper_urls.property_assessor
+            scraper_search_by_address.street_number_param
+            scraper_search_by_address.street_name_param
+
+        Returns a 1-row DataFrame in the same schema as the cached parquet,
+        or None if the fetch / parse fails.
+        """
+        import re as _re
+        import requests as _req
+
+        m = _re.match(r"^\s*(\d+[A-Za-z]?)\s+(.+?)\s*$", address)
+        if not m:
+            return None
+        street_num  = m.group(1)
+        street_name = m.group(2)
+
+        addr_cfg = self._cfg.get("scraper_search_by_address", {}) or {}
+        num_param  = addr_cfg.get("street_number_param", "SearchStreetNumber")
+        name_param = addr_cfg.get("street_name_param",  "SearchStreetName")
+        base_url   = (self._cfg.get("scraper_urls", {}) or {}).get("property_assessor", "")
+        if not base_url:
+            return None
+
+        ssl_verify = self._cfg.get("http", {}).get("ssl_verify", True)
+        if not ssl_verify:
+            import urllib3 as _u3
+            _u3.disable_warnings(_u3.exceptions.InsecureRequestWarning)
+
+        # Try with the full street name first; fallback by stripping the suffix
+        # (some Patriot Properties towns store "MAGNOLIA" rather than "MAGNOLIA ST").
+        candidates = [street_name]
+        no_suffix = _re.sub(
+            r"\s+(St|Rd|Ave|Avenue|Dr|Drive|Ln|Lane|Ct|Court|Way|Blvd|Pl|Place|"
+            r"Pkwy|Parkway|Cir|Circle|Ter|Terrace|Sq|Square|Hwy|Highway)\.?$",
+            "", street_name, flags=_re.IGNORECASE,
+        )
+        if no_suffix != street_name:
+            candidates.append(no_suffix)
+
+        records = []
+        for cand in candidates:
+            try:
+                resp = _req.get(
+                    base_url,
+                    params={num_param: street_num, name_param: cand, "SearchOwner": ""},
+                    timeout=15, verify=ssl_verify,
+                )
+                resp.raise_for_status()
+            except Exception as exc:
+                logger.warning("Live property fetch failed for '%s %s': %s", street_num, cand, exc)
+                continue
+
+            try:
+                from scrapers.property_scraper import ArlingtonPropertyScraper
+                scraper = ArlingtonPropertyScraper(self._cfg["town_slug"])
+                parsed = scraper.parse_records(resp.text)
+            except Exception as exc:
+                logger.warning("Property HTML parse failed: %s", exc)
+                continue
+
+            # Filter to records whose address actually matches the requested street number.
+            # Patriot Properties may return neighbouring parcels when the search is loose.
+            for rec in parsed:
+                rec_addr = (rec.get("location") or rec.get("address") or "").upper()
+                if rec_addr.startswith(f"{street_num} ") or rec_addr.startswith(f"{street_num}-"):
+                    records.append(rec)
+            if records:
+                break
+
+        if not records:
+            return None
+
+        # Promote to gold schema using the existing scraper logic
+        try:
+            from scrapers.property_scraper import ArlingtonPropertyScraper
+            from core.identity_linker import get_linker
+            scraper = ArlingtonPropertyScraper(self._cfg["town_slug"])
+            linker = get_linker()
+            gold = [scraper._promote_to_gold(r, linker) for r in records]
+            df = pd.DataFrame(gold)
+            logger.info("Live property fetch returned %d record(s) for '%s'", len(df), address)
+            return df
+        except Exception as exc:
+            logger.warning("Live property gold promotion failed: %s", exc)
+            return None
+
+    def _prefetch_property_apis(self, address: str, zipcode: str) -> Dict[str, float]:
+        """
+        Run all per-address external API calls in parallel and populate
+        the per-instance memo caches. Subsequent calls to the individual
+        lookup methods (_fema_lookup_address, _historic_lookup_address,
+        _zoning_lookup_address, _fetch_property_live) return cached results
+        instantly.
+
+        Returns a dict of {task_name: elapsed_seconds} for diagnostic logging.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        import time as _time
+
+        # Geocode first (single shared HTTP call). All downstream lookups
+        # need lat/lon, so doing this once up front saves 2 redundant calls.
+        t0 = _time.monotonic()
+        self._geocode_address(address, self._town_name, self._state, zipcode)
+        geo_elapsed = _time.monotonic() - t0
+
+        # Wrap each lookup in a small timing closure so we can report
+        # actual API runtime per task (rather than the dispatcher overhead).
+        def _timed(label: str, fn):
+            def _runner():
+                _start = _time.monotonic()
+                try:
+                    fn()
+                except Exception as exc:
+                    logger.warning("Prefetch '%s' failed: %s", label, exc)
+                    return label, -1.0
+                return label, round(_time.monotonic() - _start, 2)
+            return _runner
+
+        # Cache the live property fetch result so generate_report and
+        # generate_html_report don't repeat the Patriot Properties HTTP call.
+        live_cache = getattr(self, "_live_property_cache", None) or {}
+        live_key = address.strip().upper()
+        def _live_fetch():
+            if live_key not in live_cache:
+                live_cache[live_key] = self._fetch_property_live(address)
+        self._live_property_cache = live_cache
+
+        tasks = [
+            _timed("fema",     lambda: self._fema_lookup_address(address, self._town_name, self._state, zipcode)),
+            _timed("historic", lambda: self._historic_lookup_address(address, zipcode)),
+            _timed("zoning",   lambda: self._zoning_lookup_address(address, zipcode)),
+            _timed("property_live", _live_fetch),
+        ]
+
+        timings: Dict[str, float] = {"geocode": round(geo_elapsed, 2)}
+        parallel_t0 = _time.monotonic()
+        with ThreadPoolExecutor(max_workers=len(tasks)) as ex:
+            for label, secs in ex.map(lambda t: t(), tasks):
+                timings[label] = secs
+        timings["parallel_total"] = round(_time.monotonic() - parallel_t0, 2)
+
+        logger.info("Property API prefetch timings (seconds): %s", timings)
+        return timings
+
+    def _ensure_property_in_df(self, df: pd.DataFrame, address: str) -> pd.DataFrame:
+        """
+        Return df with a row matching `address`. If none is found, attempts
+        a live single-property fetch and concatenates the result.
+        Memoized: live fetch only happens once per address per process run.
+        """
+        cache_key = address.strip().upper()
+        cache = getattr(self, "_live_property_cache", None)
+        if cache is None:
+            cache = {}
+            self._live_property_cache = cache
+
+        if df.empty or "address" not in df.columns:
+            if cache_key not in cache:
+                cache[cache_key] = self._fetch_property_live(address)
+            live = cache[cache_key]
+            return live if live is not None else df
+
+        addr_up = address.strip().upper()
+        hit = df[df["address"].str.upper() == addr_up]
+        if not hit.empty:
+            return df
+
+        toks = addr_up.split()
+        if toks:
+            prefix_hit = df[df["address"].str.upper().str.startswith(toks[0])]
+            for _, r in prefix_hit.iterrows():
+                if all(t in str(r["address"]).upper() for t in toks[:2]):
+                    return df
+
+        if cache_key not in cache:
+            cache[cache_key] = self._fetch_property_live(address)
+        live = cache[cache_key]
+        if live is not None and not live.empty:
+            logger.info("Augmenting cached property data with live fetch for '%s'", address)
+            return pd.concat([df, live], ignore_index=True)
+        return df
 
     # ------------------------------------------------------------------
     # Section renderers
@@ -231,8 +539,10 @@ class RealtorAgent:
         You will receive structured property data (assessor, FEMA flood zones,
         Zillow market trends, MBTA transit, zoning).
 
-        Write EXACTLY 5 numbered talking points the agent can use in a buyer
+        Write EXACTLY 6 numbered talking points the agent can use in a buyer
         consultation or listing presentation for this specific property.
+        The 6 points should cover (in this order): Market Value, Property Features,
+        Zoning, Flood Risk, Historic Status, Transit Access.
 
         Rules:
         - Each point is 2–3 sentences, direct and confident.
@@ -252,6 +562,10 @@ class RealtorAgent:
           Use ONLY this for the flood risk talking point.
           The "town_wide_fema_context" fields are background context for the whole town —
           do NOT say the property is in those flood zones.
+        - The field "property_historic_note" describes THIS property's MACRIS / historic
+          district status. Use it for the historic-status talking point. If
+          "property_in_historic_district" is true, this is a MATERIAL talking point
+          (it constrains exterior renovations).
     """).strip()
 
     def _render_agent_brief(
@@ -264,6 +578,16 @@ class RealtorAgent:
         df_transit: pd.DataFrame,
         df_zoning: pd.DataFrame,
     ) -> str:
+        # Memoize per-address: text and HTML reports both call this method,
+        # so caching avoids a second Gemini round-trip (saves ~5-7 sec + halves quota).
+        cache_key = f"{address.strip().upper()}|{zipcode.strip()}"
+        cache = getattr(self, "_brief_cache", None)
+        if cache is None:
+            cache = {}
+            self._brief_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
         lines = [self._section_header("Agent Brief  ·  Gemini  [AI-SYNTHESIZED FROM REAL DATA]")]
 
         # ── Build compact data context ─────────────────────────────────
@@ -288,12 +612,31 @@ class RealtorAgent:
                 ctx["beds"]         = int(r["beds"]) if r.get("beds") else None
                 ctx["baths"]        = float(r["baths"]) if r.get("baths") else None
                 ctx["parcel_id"]    = str(r.get("parcel_id", ""))
-                # Resolve assessor code → bylaw zone before passing to Gemini
                 _raw_zc = str(r.get("zone_code", ""))
-                _zone_map = self._cfg.get("assessor_to_zoning_map", {})
-                _resolved_zone = _zone_map.get(_raw_zc) or _zone_map.get(_raw_zc.upper()) or _raw_zc
-                ctx["bylaw_zone_code"] = _resolved_zone   # e.g. "R2"  ← use this in the brief
-                ctx["assessor_zone_code_raw"] = _raw_zc   # internal ref only, not the zoning district
+                ctx["assessor_zone_code_raw"] = _raw_zc
+
+        # Property-specific zoning via official GIS (point-in-polygon). This is
+        # the authoritative source — falls back to assessor_to_zoning_map only
+        # when the GIS layer doesn't return a hit.
+        z = self._zoning_lookup_address(address, zipcode)
+        if z.get("ok") and z.get("zone_code"):
+            ctx["bylaw_zone_code"]        = z["zone_code"]      # e.g. "R2"
+            ctx["bylaw_zone_name"]        = z["zone_name"]      # e.g. "R2: Two Family"
+            ctx["bylaw_zone_description"] = z["zone_description"]
+            ctx["bylaw_zone_source"]      = "Arlington official Zoning GIS layer (point-in-polygon)"
+        elif ctx.get("assessor_zone_code_raw"):
+            _zone_map = self._cfg.get("assessor_to_zoning_map", {}) or {}
+            _raw = ctx["assessor_zone_code_raw"]
+            _resolved = _zone_map.get(_raw) or _zone_map.get(_raw.upper())
+            if _resolved:
+                ctx["bylaw_zone_code"]   = _resolved
+                ctx["bylaw_zone_source"] = "assessor_to_zoning_map (config fallback)"
+            else:
+                ctx["bylaw_zone_code"]   = ""
+                ctx["bylaw_zone_note"]   = (
+                    "Bylaw zone could not be determined automatically — "
+                    "agent should verify with Arlington Inspectional Services."
+                )
 
         # Market trend: latest value + 3-yr appreciation
         if not df_market.empty and "metric_value" in df_market.columns:
@@ -360,6 +703,37 @@ class RealtorAgent:
         mbta_cfg = self._cfg.get("town_pulse", {}).get("mbta", {})
         ctx["mbta_routes_serving_town"] = mbta_cfg.get("routes", [])
 
+        # Historic resources — MACRIS / Local Historic District / AHC inventory
+        h = self._historic_lookup_address(address, zipcode)
+        if h.get("found"):
+            ctx["property_in_macris"]          = True
+            ctx["property_in_historic_district"] = bool(h.get("in_district"))
+            ctx["property_macris_designations"]  = h.get("designations") or []
+            ctx["property_macris_id"]            = h.get("macris_id") or ""
+            ctx["property_historic_name"]        = h.get("historic_name") or ""
+            ctx["property_constructed"]          = h.get("constructed") or ""
+            ctx["property_architectural_style"]  = h.get("architectural_style") or ""
+            in_lhd = any("LHD" in d.upper() or "LOCAL HISTORIC" in d.upper() for d in h.get("designations", []))
+            if in_lhd:
+                ctx["property_historic_note"] = (
+                    "This property IS in a Local Historic District. Exterior alterations "
+                    "visible from a public way require an Arlington Historical Commission "
+                    "Certificate of Appropriateness BEFORE any building permit is issued."
+                )
+            else:
+                ctx["property_historic_note"] = (
+                    "This property is listed on the MACRIS state inventory but is NOT in a "
+                    "Local Historic District. No binding restrictions, but demolition may "
+                    "trigger Arlington's demolition-delay bylaw."
+                )
+        elif not h.get("error"):
+            ctx["property_in_macris"]            = False
+            ctx["property_in_historic_district"] = False
+            ctx["property_historic_note"] = (
+                "This property is NOT on the MACRIS inventory and NOT in a historic district. "
+                "No special historic-preservation review required."
+            )
+
         # Zoning — look up by resolved bylaw zone code (e.g. "R2"), not raw assessor code ("1")
         if not df_zoning.empty and ctx.get("bylaw_zone_code"):
             zrow = df_zoning[df_zoning["zone_code"] == ctx["bylaw_zone_code"]]
@@ -383,7 +757,7 @@ class RealtorAgent:
             f"PROPERTY DATA (JSON):\n{json.dumps(ctx, indent=2, default=str)}\n\n"
             f"Write the 5-point agent brief for {address}, {self._town_name}, {self._state} {zipcode}."
         )
-        brief = self._call_gemini(self._BRIEF_SYSTEM, user_msg, max_tokens=2000)
+        brief = self._call_gemini(self._BRIEF_SYSTEM, user_msg, max_tokens=4000)
 
         if brief.startswith("["):
             lines.append(f"  {brief}")
@@ -392,7 +766,9 @@ class RealtorAgent:
             for line in brief.strip().splitlines():
                 lines.append(f"  {line}" if line.strip() else "")
 
-        return "\n".join(lines)
+        result = "\n".join(lines)
+        cache[cache_key] = result
+        return result
 
     def _render_property(
         self,
@@ -438,11 +814,20 @@ class RealtorAgent:
             if yb:
                 lines.append(f"  {'Year Built':<22} {int(yb)}")
             zone = row.get("zone_code")
-            if zone:
-                # Show the resolved bylaw zone code, not the raw assessor code
+            zone_display = None
+            gis_zone = self._zoning_lookup_address(address, zipcode)
+            if gis_zone.get("ok") and gis_zone.get("zone_name"):
+                zone_display = gis_zone["zone_name"]
+                if gis_zone.get("zone_description"):
+                    zone_display += f"  —  {gis_zone['zone_description']}"
+            elif zone:
                 zone_map = self._cfg.get("assessor_to_zoning_map", {})
                 resolved = zone_map.get(str(zone)) or zone_map.get(str(zone).upper())
-                zone_display = f"{resolved}  (assessor code: {zone})" if resolved and resolved != zone else zone
+                if resolved:
+                    zone_display = f"{resolved}  (assessor code: {zone})"
+                else:
+                    zone_display = f"Verify with town  (assessor code: {zone})"
+            if zone_display:
                 lines.append(f"  {'Zone (Bylaw)':<22} {zone_display}")
             beds  = row.get("beds")
             baths = row.get("baths")
@@ -543,6 +928,76 @@ class RealtorAgent:
 
         src = df["te_source"].iloc[0] if "te_source" in df.columns else "fema-flood-maps"
         lines.append(f"\n  Source: {src}  (town-wide FEMA NFHL MapServer layer 28)")
+        return "\n".join(lines)
+
+    def _render_historic(self, address: str, zipcode: str) -> str:
+        """Live MACRIS / Local Historic District / AHC inventory lookup."""
+        lines = [self._section_header("Historic Status  ·  MACRIS / AHC  [REAL DATA]")]
+
+        cfg = self._cfg.get("historic_resources", {}) or {}
+        if not (cfg.get("macris_polygon_layer_url") or cfg.get("macris_point_layer_url")):
+            lines.append("  No historic_resources URLs configured for this town.")
+            return "\n".join(lines)
+
+        h = self._historic_lookup_address(address, zipcode)
+
+        if h.get("error") and not h["found"]:
+            lines.append(f"  ⚠  Historic lookup unavailable: {h['error']}")
+            if cfg.get("macris_search_url"):
+                lines.append(f"     Manual search: {cfg['macris_search_url']}")
+            return "\n".join(lines)
+
+        if not h["found"]:
+            lines.append("  ✅  THIS PROPERTY: NOT in MACRIS inventory and NOT in a historic district.")
+            lines.append("     No special historic-preservation review required for renovations.")
+        else:
+            tags = []
+            for d in h["designations"]:
+                d_norm = d.upper()
+                if d_norm in ("LHD", "LOCAL HISTORIC DISTRICT"):
+                    tags.append("Local Historic District (LHD)")
+                elif d_norm in ("NRHP", "NATIONAL REGISTER OF HISTORIC PLACES"):
+                    tags.append("National Register (NRHP)")
+                elif d_norm == "NRHP AND LHD":
+                    tags.append("NRHP + Local Historic District")
+                elif d_norm in ("MA/HL", "MASSACHUSETTS HISTORIC LANDMARK"):
+                    tags.append("MA Historic Landmark")
+                elif d_norm == "PR" or "PRESERVATION RESTRICTION" in d_norm:
+                    tags.append("Preservation Restriction")
+                elif d_norm in ("INVENTORIED PROPERTY", "INV"):
+                    tags.append("Inventoried (no formal designation)")
+                else:
+                    tags.append(d)
+
+            in_lhd = any("Local Historic District" in t or "NRHP + Local" in t for t in tags)
+            warn_icon = "🔴" if in_lhd else "🟡"
+            lines.append(f"  {warn_icon}  THIS PROPERTY: Listed on MACRIS  ·  {' | '.join(tags) or 'Designated'}")
+            if h["historic_name"]:
+                lines.append(f"     Historic Name:    {h['historic_name']}")
+            if h["common_name"] and h["common_name"] != h["historic_name"]:
+                lines.append(f"     Common Name:      {h['common_name']}")
+            if h["constructed"]:
+                lines.append(f"     Constructed:      {h['constructed']}")
+            if h["architectural_style"]:
+                lines.append(f"     Architectural:    {h['architectural_style']}")
+            if h["macris_id"]:
+                lines.append(f"     MACRIS ID:        {h['macris_id']}")
+            if in_lhd:
+                lines.append("")
+                lines.append("  ⚠  Exterior alterations visible from a public way require an")
+                lines.append("     Arlington Historical Commission Certificate of Appropriateness")
+                lines.append("     before any building permit can be issued.")
+            elif h["inventoried"] and not in_lhd:
+                lines.append("")
+                lines.append("  ℹ Inventoried-but-not-designated properties have no binding restrictions,")
+                lines.append("    but demolition may trigger Arlington's demolition-delay bylaw.")
+
+        if cfg.get("macris_search_url"):
+            lines.append("")
+            lines.append(f"  MACRIS lookup: {cfg['macris_search_url']}")
+        if cfg.get("ahc_inventory_url"):
+            lines.append(f"  Arlington Historical Commission: {cfg['ahc_inventory_url']}")
+        lines.append("\n  Source: MA Historical Commission MACRIS (point + polygon layers via Boston Planning).")
         return "\n".join(lines)
 
     def _render_transit(self, df: pd.DataFrame) -> str:
@@ -717,85 +1172,364 @@ class RealtorAgent:
     # FEMA address-level flood zone lookup
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _fema_lookup_address(address: str, city: str, state: str, zipcode: str) -> Dict[str, Any]:
+    def _geocode_address(self, address: str, city: str, state: str, zipcode: str) -> Dict[str, Any]:
+        """
+        Memoized US Census Geocoder lookup. Returns
+        {"ok": bool, "lat": float|None, "lon": float|None, "error": str}.
+        """
+        cache_key = f"{address.strip().upper()}|{city}|{state}|{zipcode}"
+        cache = getattr(self, "_geocode_cache", None)
+        if cache is None:
+            cache = {}
+            self._geocode_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        import requests as _req
+        out: Dict[str, Any] = {"ok": False, "lat": None, "lon": None, "error": ""}
+        try:
+            geo_resp = _req.get(
+                "https://geocoding.geo.census.gov/geocoder/locations/address",
+                params={
+                    "street": address, "city": city, "state": state,
+                    "zip": zipcode, "benchmark": "2020", "format": "json",
+                },
+                timeout=10,
+            )
+            geo_resp.raise_for_status()
+            matches = geo_resp.json().get("result", {}).get("addressMatches", [])
+            if matches:
+                coords = matches[0]["coordinates"]
+                out.update({"ok": True, "lat": float(coords["y"]), "lon": float(coords["x"])})
+            else:
+                out["error"] = "Address not found by Census geocoder"
+        except Exception as exc:
+            out["error"] = f"Geocoding failed: {exc}"
+
+        cache[cache_key] = out
+        return out
+
+    def _fema_lookup_address(self, address: str, city: str, state: str, zipcode: str) -> Dict[str, Any]:
         """
         Determine the FEMA flood zone for a specific address.
-
-        Steps
-        -----
-        1. Geocode the address using the US Census Geocoder (free, no key).
-        2. Query the FEMA NFHL MapServer layer 28 with the returned coordinates
-           to find which flood zone polygon (if any) contains the point.
-
-        Returns
-        -------
-        dict with keys:
-            found        – bool   (True if geocoding + FEMA query succeeded)
-            fema_zone    – str    (e.g. "X", "AE", "NONE")
-            risk_level   – str    ("NONE" | "MODERATE" | "HIGH")
-            sfha         – bool   (Special Flood Hazard Area flag)
-            lat, lon     – float  (geocoded coordinates)
-            error        – str    (description if found=False)
+        Memoized: subsequent calls with the same address return the cached result.
         """
-        import requests as _req
+        cache_key = f"{address.strip().upper()}|{city}|{state}|{zipcode}"
+        cache = getattr(self, "_fema_cache", None)
+        if cache is None:
+            cache = {}
+            self._fema_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
 
+        import requests as _req
         result: Dict[str, Any] = {
             "found": False, "fema_zone": None, "risk_level": "UNKNOWN",
             "sfha": None, "lat": None, "lon": None, "error": "",
         }
 
-        # ── Step 1: Census geocoder ────────────────────────────────────
-        try:
-            geo_url = "https://geocoding.geo.census.gov/geocoder/locations/address"
-            geo_params = {
-                "street": address, "city": city, "state": state,
-                "zip": zipcode, "benchmark": "2020", "format": "json",
-            }
-            geo_resp = _req.get(geo_url, params=geo_params, timeout=10)
-            geo_resp.raise_for_status()
-            matches = geo_resp.json().get("result", {}).get("addressMatches", [])
-            if not matches:
-                result["error"] = "Address not found by Census geocoder"
-                return result
-            coords = matches[0]["coordinates"]
-            lon, lat = float(coords["x"]), float(coords["y"])
-            result["lat"], result["lon"] = lat, lon
-        except Exception as exc:
-            result["error"] = f"Geocoding failed: {exc}"
+        coords = self._geocode_address(address, city, state, zipcode)
+        if not coords.get("ok"):
+            result["error"] = coords.get("error") or "Geocoding failed"
+            cache[cache_key] = result
             return result
+        lat = coords["lat"]
+        lon = coords["lon"]
+        result["lat"], result["lon"] = lat, lon
 
-        # ── Step 2: FEMA NFHL point query ─────────────────────────────
         try:
-            nfhl_url = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
-            nfhl_params = {
-                "geometry":     f"{lon},{lat}",
-                "geometryType": "esriGeometryPoint",
-                "inSR":         "4326",
-                "spatialRel":   "esriSpatialRelIntersects",
-                "outFields":    "FLD_ZONE,SFHA_TF,ZONE_SUBTY",
-                "returnGeometry": "false",
-                "f":            "json",
-            }
-            nfhl_resp = _req.get(nfhl_url, params=nfhl_params, timeout=15)
+            nfhl_resp = _req.get(
+                "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query",
+                params={
+                    "geometry":       f"{lon},{lat}",
+                    "geometryType":   "esriGeometryPoint",
+                    "inSR":           "4326",
+                    "spatialRel":     "esriSpatialRelIntersects",
+                    "outFields":      "FLD_ZONE,SFHA_TF,ZONE_SUBTY",
+                    "returnGeometry": "false",
+                    "f":              "json",
+                },
+                timeout=15,
+            )
             nfhl_resp.raise_for_status()
             features = nfhl_resp.json().get("features", [])
 
             if not features:
                 # No flood zone polygon at this point = Zone X / minimal hazard
                 result.update({"found": True, "fema_zone": "X", "risk_level": "NONE", "sfha": False})
-                return result
-
-            attrs     = features[0]["attributes"]
-            fld_zone  = str(attrs.get("FLD_ZONE") or "X").strip()
-            sfha      = str(attrs.get("SFHA_TF") or "F").upper() == "T"
-            risk      = "HIGH" if sfha else ("MODERATE" if fld_zone.startswith("X") else "LOW")
-            result.update({
-                "found": True, "fema_zone": fld_zone,
-                "risk_level": risk, "sfha": sfha,
-            })
+            else:
+                attrs    = features[0]["attributes"]
+                fld_zone = str(attrs.get("FLD_ZONE") or "X").strip()
+                sfha     = str(attrs.get("SFHA_TF") or "F").upper() == "T"
+                risk     = "HIGH" if sfha else ("MODERATE" if fld_zone.startswith("X") else "LOW")
+                result.update({
+                    "found": True, "fema_zone": fld_zone,
+                    "risk_level": risk, "sfha": sfha,
+                })
         except Exception as exc:
             result["error"] = f"FEMA NFHL query failed: {exc}"
+
+        cache[cache_key] = result
+        return result
+
+    # ------------------------------------------------------------------
+    # Historic Resources lookup (MACRIS / Local Historic District / AHC)
+    # ------------------------------------------------------------------
+
+    def _historic_lookup_address(self, address: str, zipcode: str) -> Dict[str, Any]:
+        """
+        Determine historic-resource status for a specific address.
+
+        Steps
+        -----
+        1. Geocode the address (Census, free).
+        2. Query the MACRIS Polygon layer with point-in-polygon — catches
+           Local Historic Districts, NRHP districts, and large parcels.
+        3. Query the MACRIS Point layer with a small distance buffer —
+           catches inventoried-but-not-designated single buildings.
+
+        Configuration
+        -------------
+        URLs and town code come exclusively from the `historic_resources`
+        block in the town's config.yaml (zero hardcoding).
+
+        Returns
+        -------
+        dict with keys:
+            found         – bool   (True if at least one MACRIS hit)
+            in_district   – bool   (point falls inside a polygon)
+            inventoried   – bool   (point hit within buffer)
+            designations  – list[str] (e.g. ["LHD", "NRHP"])
+            district_name – str    (e.g. "Pleasant Street Historic District")
+            historic_name – str    (e.g. "Magnolia Street School")
+            common_name   – str
+            constructed   – str
+            architectural_style – str
+            macris_id     – str    (MHCN, e.g. "ARL.123")
+            macris_search_url – str
+            ahc_inventory_url – str
+            error         – str
+        """
+        cache_key = f"{address.strip().upper()}|{zipcode.strip()}"
+        cache = getattr(self, "_historic_cache", None)
+        if cache is None:
+            cache = {}
+            self._historic_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+
+        import requests as _req
+
+        cfg = self._cfg.get("historic_resources", {}) or {}
+        result: Dict[str, Any] = {
+            "found": False, "in_district": False, "inventoried": False,
+            "designations": [], "district_name": "", "historic_name": "",
+            "common_name": "", "constructed": "", "architectural_style": "",
+            "macris_id": "", "macris_search_url": cfg.get("macris_search_url", ""),
+            "ahc_inventory_url": cfg.get("ahc_inventory_url", ""), "error": "",
+        }
+
+        poly_url   = cfg.get("macris_polygon_layer_url", "")
+        point_url  = cfg.get("macris_point_layer_url", "")
+        buffer_m   = int(cfg.get("macris_point_buffer_meters", 30))
+        if not (poly_url or point_url):
+            result["error"] = "No historic_resources URLs configured for this town."
+            cache[cache_key] = result
+            return result
+
+        coords = self._geocode_address(address, self._town_name, self._state, zipcode)
+        if not coords.get("ok"):
+            result["error"] = coords.get("error") or "Geocoding failed"
+            cache[cache_key] = result
+            return result
+        lat = coords["lat"]
+        lon = coords["lon"]
+
+        out_fields = "MHCN,DESIGNATIO,LEGEND,HISTORIC_N,COMMON_NAM,ADDRESS,CONSTRUCTI,ARCH,ARCHITECTU,USE_TYPE,SIGNIFICAN"
+
+        # ── Step 2: polygon point-in-polygon query ─────────────────────
+        if poly_url:
+            try:
+                params = {
+                    "geometry":     f"{lon},{lat}",
+                    "geometryType": "esriGeometryPoint",
+                    "inSR":         "4326",
+                    "spatialRel":   "esriSpatialRelIntersects",
+                    "outFields":    out_fields,
+                    "returnGeometry": "false",
+                    "f":            "json",
+                }
+                resp = _req.get(poly_url, params=params, timeout=15)
+                resp.raise_for_status()
+                feats = resp.json().get("features", [])
+                if feats:
+                    attrs = feats[0]["attributes"]
+                    result["found"]         = True
+                    result["in_district"]   = True
+                    result["macris_id"]     = str(attrs.get("MHCN") or "").strip()
+                    result["historic_name"] = str(attrs.get("HISTORIC_N") or "").strip()
+                    result["common_name"]   = str(attrs.get("COMMON_NAM") or "").strip()
+                    result["constructed"]   = str(attrs.get("CONSTRUCTI") or "").strip()
+                    result["architectural_style"] = str(
+                        attrs.get("ARCHITECTU") or attrs.get("ARCH") or ""
+                    ).strip()
+                    legend = str(attrs.get("LEGEND") or "").strip()
+                    desig  = str(attrs.get("DESIGNATIO") or "").strip()
+                    if legend: result["designations"].append(legend)
+                    if desig and desig != legend: result["designations"].append(desig)
+                    # The polygon usually represents the district itself
+                    name = result["historic_name"] or result["common_name"]
+                    if name:
+                        result["district_name"] = name
+            except Exception as exc:
+                result["error"] = f"MACRIS polygon query failed: {exc}"
+
+        # ── Step 3: point query with buffer ────────────────────────────
+        if point_url:
+            try:
+                params = {
+                    "geometry":     f"{lon},{lat}",
+                    "geometryType": "esriGeometryPoint",
+                    "inSR":         "4326",
+                    "spatialRel":   "esriSpatialRelIntersects",
+                    "distance":     str(buffer_m),
+                    "units":        "esriSRUnit_Meter",
+                    "outFields":    out_fields,
+                    "returnGeometry": "false",
+                    "f":            "json",
+                }
+                resp = _req.get(point_url, params=params, timeout=15)
+                resp.raise_for_status()
+                feats = resp.json().get("features", [])
+                if feats:
+                    attrs = feats[0]["attributes"]
+                    result["found"]       = True
+                    result["inventoried"] = True
+                    if not result["macris_id"]:
+                        result["macris_id"] = str(attrs.get("MHCN") or "").strip()
+                    if not result["historic_name"]:
+                        result["historic_name"] = str(attrs.get("HISTORIC_N") or "").strip()
+                    if not result["common_name"]:
+                        result["common_name"] = str(attrs.get("COMMON_NAM") or "").strip()
+                    if not result["constructed"]:
+                        result["constructed"] = str(attrs.get("CONSTRUCTI") or "").strip()
+                    if not result["architectural_style"]:
+                        result["architectural_style"] = str(
+                            attrs.get("ARCHITECTU") or attrs.get("ARCH") or ""
+                        ).strip()
+                    legend = str(attrs.get("LEGEND") or "").strip()
+                    desig  = str(attrs.get("DESIGNATIO") or "").strip()
+                    if legend and legend not in result["designations"]:
+                        result["designations"].append(legend)
+                    if desig and desig not in result["designations"] and desig != legend:
+                        result["designations"].append(desig)
+            except Exception as exc:
+                if not result["error"]:
+                    result["error"] = f"MACRIS point query failed: {exc}"
+
+        cache[cache_key] = result
+        return result
+
+    # ------------------------------------------------------------------
+    # Property-specific Zoning lookup (point-in-polygon, official GIS)
+    # ------------------------------------------------------------------
+
+    def _zoning_lookup_address(self, address: str, zipcode: str) -> Dict[str, Any]:
+        """
+        Memoized wrapper. See ``_zoning_lookup_address_uncached`` for the
+        actual point-in-polygon query.
+        """
+        cache_key = f"{address.strip().upper()}|{zipcode.strip()}"
+        cache = getattr(self, "_zoning_lookup_cache", None)
+        if cache is None:
+            cache = {}
+            self._zoning_lookup_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+        result = self._zoning_lookup_address_uncached(address, zipcode)
+        cache[cache_key] = result
+        return result
+
+    def _zoning_lookup_address_uncached(self, address: str, zipcode: str) -> Dict[str, Any]:
+        """
+        Run a point-in-polygon query against the town's official zoning GIS
+        layer and return the actual zoning district for this parcel.
+
+        Returns dict with:
+          ok                : bool — query succeeded with a hit
+          zone_code         : str  — short code ("R2", "B5", "MU", ...)
+          zone_name         : str  — full name ("R2: Two Family")
+          zone_description  : str  — long description
+          notes             : str  — bylaw notes / overlay flags
+          source            : str  — REST URL hit
+          error             : str  — populated when ok=False
+        """
+        result = {
+            "ok":               False,
+            "zone_code":        "",
+            "zone_name":        "",
+            "zone_description": "",
+            "notes":            "",
+            "source":           "",
+            "error":            "",
+        }
+
+        zoning_cfg = (self._cfg.get("zoning") or {})
+        url = zoning_cfg.get("arcgis_layer_url")
+        if not url:
+            result["error"] = "No zoning.arcgis_layer_url configured"
+            return result
+
+        coords = self._geocode_address(address, self._town_name, self._state, zipcode)
+        lat = coords.get("lat")
+        lon = coords.get("lon")
+        if lat is None or lon is None:
+            result["error"] = coords.get("error") or "Geocoding failed"
+            return result
+
+        try:
+            import requests as _req
+            params = {
+                "f":              "json",
+                "geometry":       json.dumps({
+                    "x":                lon,
+                    "y":                lat,
+                    "spatialReference": {"wkid": 4326},
+                }),
+                "geometryType":   "esriGeometryPoint",
+                "inSR":           4326,
+                "spatialRel":     "esriSpatialRelIntersects",
+                "outFields":      "ZoneCode,ZoneName,ZoneDesc,Notes",
+                "returnGeometry": False,
+            }
+            resp = _req.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+
+            features = data.get("features", []) or []
+            if not features:
+                result["error"] = "Point not within any zoning polygon"
+                return result
+
+            attrs = features[0].get("attributes", {}) or {}
+            zc = (attrs.get("ZoneCode") or "").strip()
+            zn = (attrs.get("ZoneName") or "").strip()
+            zd = (attrs.get("ZoneDesc") or "").strip()
+            nt = (attrs.get("Notes") or "").strip()
+
+            if not zc and zn and ":" in zn:
+                zc = zn.split(":", 1)[0].strip()
+
+            result.update({
+                "ok":               bool(zc or zn),
+                "zone_code":        zc,
+                "zone_name":        zn or zc,
+                "zone_description": zd,
+                "notes":            nt,
+                "source":           url,
+            })
+        except Exception as exc:
+            result["error"] = f"Zoning point-in-polygon query failed: {exc}"
 
         return result
 
@@ -1097,12 +1831,18 @@ class RealtorAgent:
             if not match.empty:
                 prop_row = match.iloc[0]
 
-        # Resolve zoning
         zone_row = None
         zone_code_display = "Unknown"
         if prop_row is not None:
-            zone_code_display = str(prop_row.get("zone_code", ""))
-            zone_row = self._resolve_zone_row(df_zoning, zone_code_display)
+            gis_z = self._zoning_lookup_address(address, "")
+            if gis_z.get("ok") and gis_z.get("zone_code"):
+                zone_code_display = gis_z["zone_code"]
+                zone_row = self._resolve_zone_row(df_zoning, zone_code_display)
+                if zone_row is None and gis_z.get("zone_name"):
+                    zone_code_display = gis_z["zone_name"]
+            else:
+                zone_code_display = str(prop_row.get("zone_code", ""))
+                zone_row = self._resolve_zone_row(df_zoning, zone_code_display)
 
         # Determine which by-right options apply
         adu_permitted   = False
@@ -1218,6 +1958,9 @@ class RealtorAgent:
             return "\n".join(lines)
 
         raw_zone  = str(prop_row.get("zone_code", ""))
+        gis_z     = self._zoning_lookup_address(address, "")
+        if gis_z.get("ok") and gis_z.get("zone_code"):
+            raw_zone = gis_z["zone_code"]
         zone_row  = self._resolve_zone_row(df_zoning, raw_zone)
         lot_sqft  = float(prop_row["lot_size_sqft"]) if prop_row.get("lot_size_sqft") else None
         year_built = int(prop_row["year_built"]) if prop_row.get("year_built") else None
@@ -1474,6 +2217,7 @@ class RealtorAgent:
         # ── Load all domains ───────────────────────────────────────────
         # Real data — sourced from live public APIs and government datasets
         df_property = self._load_property()
+        df_property = self._ensure_property_in_df(df_property, address)
         df_climate  = self._load_climate()
         df_transit  = self._load_transit()
         # Estimated data — derived from config fixtures or LLM synthesis
@@ -1505,9 +2249,11 @@ class RealtorAgent:
             _divider("─"),
         ])
 
-        # Resolve property zone code for filtered zoning summary
         raw_zone_code = ""
-        if not df_property.empty and "address" in df_property.columns:
+        _gis_z = self._zoning_lookup_address(address, zipcode)
+        if _gis_z.get("ok") and _gis_z.get("zone_code"):
+            raw_zone_code = _gis_z["zone_code"]
+        elif not df_property.empty and "address" in df_property.columns:
             addr_up = address.strip().upper()
             _pm = df_property[df_property["address"].str.upper() == addr_up]
             if _pm.empty:
@@ -1528,6 +2274,7 @@ class RealtorAgent:
             self._render_compliance_grid(df_property, df_zoning, address),
             self._render_investment_proforma(df_property, df_zoning, address),
             self._render_climate(df_climate, address=address, zipcode=zipcode),
+            self._render_historic(address, zipcode),
             self._render_transit(df_transit),
             self._render_market(df_market),
             self._render_profile(df_profile),
@@ -1613,6 +2360,7 @@ class RealtorAgent:
         """Return a complete Gmail-pasteable HTML Civic Audit Report."""
         # ── Load all data (same as generate_report) ────────────────────
         df_property = self._load_property()
+        df_property = self._ensure_property_in_df(df_property, address)
         df_climate  = self._load_climate()
         df_transit  = self._load_transit()
         df_market   = self._load_market()
@@ -1639,7 +2387,13 @@ class RealtorAgent:
 
         zone_row = None
         if prop_row is not None:
-            zone_row = self._resolve_zone_row(df_zoning, str(prop_row.get("zone_code", "")))
+            _gis = self._zoning_lookup_address(address, zipcode)
+            _zc_for_lookup = (
+                _gis["zone_code"]
+                if _gis.get("ok") and _gis.get("zone_code")
+                else str(prop_row.get("zone_code", ""))
+            )
+            zone_row = self._resolve_zone_row(df_zoning, _zc_for_lookup)
 
         # ── 01 AGENT BRIEF ────────────────────────────────────────────
         # Reuse _render_agent_brief (has resolved zone code + property-level FEMA lookup)
@@ -1664,10 +2418,22 @@ class RealtorAgent:
             av   = _fmt_usd(av_float) if av_float else "—"
             yb   = str(int(prop_row["year_built"])) if prop_row.get("year_built") else "—"
             _raw_zc   = str(prop_row.get("zone_code", ""))
-            _zone_map = self._cfg.get("assessor_to_zoning_map", {})
-            _resolved = _zone_map.get(_raw_zc) or _zone_map.get(_raw_zc.upper())
-            zc = (f"{_resolved} <span style='font-size:11px;color:#888;'>(assessor: {_raw_zc})</span>"
-                  if _resolved and _resolved != _raw_zc else (_raw_zc or "—"))
+            _gis_zone = self._zoning_lookup_address(address, zipcode)
+            if _gis_zone.get("ok") and _gis_zone.get("zone_name"):
+                zc = f"<strong>{_gis_zone['zone_name']}</strong>"
+                if _gis_zone.get("zone_description"):
+                    zc += f"<br><span style='font-size:11px;color:#666;'>{_gis_zone['zone_description']}</span>"
+                zc += "<br><span style='font-size:11px;color:#888;'>Source: Arlington Zoning GIS (point-in-polygon)</span>"
+            else:
+                _zone_map = self._cfg.get("assessor_to_zoning_map", {})
+                _resolved = _zone_map.get(_raw_zc) or _zone_map.get(_raw_zc.upper())
+                if _resolved:
+                    zc = f"{_resolved} <span style='font-size:11px;color:#888;'>(assessor: {_raw_zc})</span>"
+                elif _raw_zc:
+                    zc = (f"<span style='color:#888;'>Verify with town</span> "
+                          f"<span style='font-size:11px;color:#888;'>(assessor: {_raw_zc})</span>")
+                else:
+                    zc = "—"
             bd   = str(int(prop_row["beds"])) if prop_row.get("beds") else "—"
             ba   = str(float(prop_row["baths"])) if prop_row.get("baths") else "—"
             ls   = f"{int(prop_row['lot_size_sqft']):,} sq ft" if prop_row.get("lot_size_sqft") else "—"
@@ -1957,6 +2723,89 @@ class RealtorAgent:
         s05 = self._h_section(5, "FLOOD RISK &nbsp;·&nbsp; FEMA NFHL",
                                '<span class="br">REAL DATA</span>', flood_body)
 
+        # ── 05b HISTORIC STATUS ──────────────────────────────────────
+        _hist_cfg = self._cfg.get("historic_resources", {}) or {}
+        if _hist_cfg.get("macris_polygon_layer_url") or _hist_cfg.get("macris_point_layer_url"):
+            _h = self._historic_lookup_address(address, zipcode)
+            _macris_link = _hist_cfg.get("macris_search_url", "")
+            _ahc_link    = _hist_cfg.get("ahc_inventory_url", "")
+            if _h.get("error") and not _h["found"]:
+                _hist_box = (
+                    f'<div style="background:#fff3cd;border-left:4px solid #e0a020;padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>⚠ Historic lookup unavailable</strong><br>'
+                    f'<span style="font-size:13px;">{_h["error"]}</span></div>'
+                )
+            elif not _h["found"]:
+                _hist_box = (
+                    f'<div style="background:#d4edda;border-left:4px solid #27ae60;padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>✅ THIS PROPERTY: NOT on MACRIS, NOT in a historic district</strong><br>'
+                    f'<span style="font-size:13px;">No special historic-preservation review required for renovations.</span></div>'
+                )
+            else:
+                _tags_html = []
+                _in_lhd = False
+                for _d in _h["designations"]:
+                    _du = _d.upper()
+                    if _du in ("LHD", "LOCAL HISTORIC DISTRICT"):
+                        _tags_html.append("Local Historic District (LHD)"); _in_lhd = True
+                    elif _du in ("NRHP", "NATIONAL REGISTER OF HISTORIC PLACES"):
+                        _tags_html.append("National Register (NRHP)")
+                    elif _du == "NRHP AND LHD":
+                        _tags_html.append("NRHP + Local Historic District"); _in_lhd = True
+                    elif _du in ("MA/HL", "MASSACHUSETTS HISTORIC LANDMARK"):
+                        _tags_html.append("MA Historic Landmark")
+                    elif _du == "PR" or "PRESERVATION RESTRICTION" in _du:
+                        _tags_html.append("Preservation Restriction")
+                    elif _du in ("INVENTORIED PROPERTY", "INV"):
+                        _tags_html.append("Inventoried (no formal designation)")
+                    else:
+                        _tags_html.append(_d)
+                _bg, _bd, _icon, _label = (
+                    ("#f8d7da", "#cc2222", "🔴", "ALTERATIONS RESTRICTED")
+                    if _in_lhd else ("#fff3cd", "#e0a020", "🟡", "Listed on MACRIS inventory")
+                )
+                _details = []
+                if _h["historic_name"]:
+                    _details.append(f'<tr><td>Historic Name</td><td>{_h["historic_name"]}</td></tr>')
+                if _h["common_name"] and _h["common_name"] != _h["historic_name"]:
+                    _details.append(f'<tr><td>Common Name</td><td>{_h["common_name"]}</td></tr>')
+                if _h["constructed"]:
+                    _details.append(f'<tr><td>Constructed</td><td>{_h["constructed"]}</td></tr>')
+                if _h["architectural_style"]:
+                    _details.append(f'<tr><td>Architectural Style</td><td>{_h["architectural_style"]}</td></tr>')
+                if _h["macris_id"]:
+                    _details.append(f'<tr><td>MACRIS ID</td><td>{_h["macris_id"]}</td></tr>')
+                _details_html = ("<table class='kv'>" + "".join(_details) + "</table>") if _details else ""
+                _warn_html = ""
+                if _in_lhd:
+                    _warn_html = (
+                        '<p style="font-size:12px;color:#666;margin:8px 0;">'
+                        '<strong>⚠ Exterior alterations</strong> visible from a public way require an '
+                        'Arlington Historical Commission <strong>Certificate of Appropriateness</strong> '
+                        'before any building permit can be issued.</p>'
+                    )
+                _hist_box = (
+                    f'<div style="background:{_bg};border-left:4px solid {_bd};padding:10px 14px;'
+                    f'margin-bottom:14px;border-radius:0 4px 4px 0;">'
+                    f'<strong>{_icon} THIS PROPERTY: {_label}</strong><br>'
+                    f'<span style="font-size:13px;">{" &nbsp;|&nbsp; ".join(_tags_html) or "Designated"}</span></div>'
+                    + _details_html + _warn_html
+                )
+            _links = []
+            if _macris_link: _links.append(f'<a href="{_macris_link}" style="color:#1a73e8;">MACRIS Maps</a>')
+            if _ahc_link:    _links.append(f'<a href="{_ahc_link}" style="color:#1a73e8;">Arlington Historical Commission</a>')
+            _links_html = ('<p style="font-size:12px;margin:6px 0;">' + " &nbsp;·&nbsp; ".join(_links) + '</p>') if _links else ""
+            _hist_body = _hist_box + _links_html + (
+                '<div class="sn">Source: MA Historical Commission MACRIS '
+                '(point + polygon layers via Boston Planning ArcGIS).</div>'
+            )
+            s05b = self._h_section(6, "HISTORIC STATUS &nbsp;·&nbsp; MACRIS / AHC",
+                                    '<span class="br">REAL DATA</span>', _hist_body)
+        else:
+            s05b = ""
+
         # ── 06 TRANSIT ────────────────────────────────────────────────
         if not df_transit.empty and "event_name" in df_transit.columns:
             alerts_html = ""
@@ -1981,7 +2830,7 @@ class RealtorAgent:
             transit_body = alerts_html + f'<div class="sn">Source: {src_t} — live MBTA API v3</div>'
         else:
             transit_body = "<p>No active MBTA alerts for configured routes.</p>"
-        s06 = self._h_section(6, "LIVE TRANSIT ALERTS &nbsp;·&nbsp; MBTA API v3",
+        s06 = self._h_section(7, "LIVE TRANSIT ALERTS &nbsp;·&nbsp; MBTA API v3",
                                '<span class="br">REAL DATA</span>', transit_body)
 
         # ── 07 MARKET ─────────────────────────────────────────────────
@@ -2004,7 +2853,7 @@ class RealtorAgent:
                         + f'<div class="sn">Source: {mkt_src} — Zillow ZHVI (Home Value Index), 36-month history</div>')
         else:
             mkt_body = "<p>Market data not available.</p>"
-        s07 = self._h_section(7, "MARKET DYNAMICS &nbsp;·&nbsp; Zillow ZHVI",
+        s07 = self._h_section(8, "MARKET DYNAMICS &nbsp;·&nbsp; Zillow ZHVI",
                                '<span class="br">REAL DATA</span>', mkt_body)
 
         # ── 08 TOWN PROFILE ───────────────────────────────────────────
@@ -2037,7 +2886,7 @@ class RealtorAgent:
                 prof_body += f'<div class="nt">{vibes}</div>'
         else:
             prof_body = "<p>Town profile data not available.</p>"
-        s08 = self._h_section(8, "TOWN PROFILE &nbsp;·&nbsp; Investment Intelligence",
+        s08 = self._h_section(9, "TOWN PROFILE &nbsp;·&nbsp; Investment Intelligence",
                                '<span class="be">ESTIMATED</span>', prof_body)
 
         # ── 09 STR ────────────────────────────────────────────────────
@@ -2062,7 +2911,7 @@ class RealtorAgent:
             ])
         else:
             str_body = "<p>STR data not available.</p>"
-        s09 = self._h_section(9, "SHORT-TERM RENTAL (STR) DYNAMICS",
+        s09 = self._h_section(10, "SHORT-TERM RENTAL (STR) DYNAMICS",
                                '<span class="be">ESTIMATED</span>', str_body)
 
         # ── 10 INFRA ──────────────────────────────────────────────────
@@ -2082,7 +2931,7 @@ class RealtorAgent:
                           + self._h_table(["Project", "Status", "Est. Cost"], inf_rows))
         else:
             infra_body = "<p>Infrastructure data not available.</p>"
-        s10 = self._h_section(10, "INFRASTRUCTURE PROJECTS (DPW)",
+        s10 = self._h_section(11, "INFRASTRUCTURE PROJECTS (DPW)",
                                '<span class="be">ESTIMATED</span>', infra_body)
 
         # ── 11 ZONING — property's zone only ──────────────────────────
@@ -2113,7 +2962,7 @@ class RealtorAgent:
         else:
             zon_body = "<p>Zoning data not available.</p>"
         _bylaw_year = self._cfg.get("zoning", {}).get("bylaw_year", "2024")
-        s11 = self._h_section(11, f"ZONING SUMMARY &nbsp;·&nbsp; {self._town_name} Bylaw {_bylaw_year}",
+        s11 = self._h_section(12, f"ZONING SUMMARY &nbsp;·&nbsp; {self._town_name} Bylaw {_bylaw_year}",
                                '<span class="ba">ACCURATE</span>', zon_body)
 
         # ── Assemble ──────────────────────────────────────────────────
@@ -2131,7 +2980,7 @@ class RealtorAgent:
   <div class="sub">Generated &nbsp;·&nbsp; {now_str}</div>
   <span class="badge">{real_label}</span>
 </div>
-{s01}{s02}{s02b}{s03}{s04}{s05}{s06}{s07}{s08}{s09}{s10}{s11}
+{s01}{s02}{s02b}{s03}{s04}{s05}{s05b}{s06}{s07}{s08}{s09}{s10}{s11}
 <div class="disc">
   <strong>LEGAL DISCLAIMER</strong><br>
   TownEye Civic Audit Reports, including qualitative market summaries and STR estimates,
@@ -2166,7 +3015,11 @@ if __name__ == "__main__":
     )
     args = p.parse_args()
 
+    import time as _t
+    _start = _t.monotonic()
+
     agent = RealtorAgent(town_slug=args.town)
+    agent._prefetch_property_apis(args.address, args.zip)
     report = agent.generate_report(address=args.address, zipcode=args.zip)
 
     print(report)
@@ -2177,11 +3030,15 @@ if __name__ == "__main__":
         out_path.write_text(report, encoding="utf-8")
         print(f"\nReport saved      → {out_path}")
 
-        # Always generate the Gmail-ready HTML alongside the .txt
+        # Always generate the Gmail-ready HTML alongside the .txt.
+        # Brief, FEMA, historic, zoning, and live property fetches are all
+        # cached on the agent instance, so this second pass is mostly I/O.
         html_report = agent.generate_html_report(address=args.address, zipcode=args.zip)
         html_path   = out_path.with_suffix("").parent / (out_path.stem + "_email.html")
         html_path.write_text(html_report, encoding="utf-8")
         print(f"Gmail HTML saved  → {html_path}")
+
+    print(f"\nTotal elapsed: {_t.monotonic() - _start:.1f}s")
 
 # reports/realtor_agent.py
 # End of Patch #183

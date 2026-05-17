@@ -16,6 +16,11 @@ pandas>=2.0
 pyarrow>=14.0
 duckdb>=0.10
 
+# Tier 3 — Spatial Resolver (point-in-polygon / containment / nearest)
+# Shapely handles MultiPolygons, interior rings, polyline distance, and
+# coordinate transforms correctly — replacing ad-hoc ray-cast helpers.
+shapely>=2.0
+
 # Expansion Agent + LLM Synthesis — geohash encoding and multi-provider LLM clients
 geohash2>=1.1
 openai>=1.0
@@ -27,6 +32,11 @@ tavily-python>=0.3     # optional — used when TAVILY_API_KEY is set
 
 # Realtor Agent chatbot UI
 streamlit>=1.32
+
+# Tier 4 — HTML report rendering for the Buildability Brief generator.
+# Jinja2 ships transitively with streamlit / pip-tools, but Tier 4 imports
+# it directly so we declare it explicitly.
+jinja2>=3.1
 
 # Test suite
 pytest>=7.4

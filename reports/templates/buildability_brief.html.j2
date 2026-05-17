@@ -1,0 +1,472 @@
+{# [FILE PATH]: reports/templates/buildability_brief.html.j2 #}
+{# Patch #205 — Tier 4 Buildability Brief #}
+{# Renders a BriefData object (`d`) into the parcel buildability brief. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Parcel Buildability Brief — {{ d.parcel.address or d.inputs.parcel_id }}</title>
+<style>
+  body{font-family:Georgia,serif;font-size:13px;line-height:1.55;color:#1a1a1a;max-width:780px;margin:36px auto;padding:0 28px;background:#fff}
+  h1{font-size:22px;margin:0 0 4px 0;letter-spacing:.5px;color:#0b2545}
+  h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#0b2545;border-bottom:2px solid #0b2545;padding:18px 0 4px 0;margin:18px 0 10px 0}
+  h3{font-size:13px;color:#0b2545;margin:14px 0 6px 0}
+  .hd{border-bottom:1px solid #ccc;padding-bottom:10px;margin-bottom:8px}
+  .hd .meta{font-size:11px;color:#555;margin-top:6px}
+  .verdict{padding:10px 14px;margin:10px 0 12px 0;border-radius:4px;font-weight:bold}
+  .v-green{background:#dff1d6;color:#1a5b22;border-left:6px solid #1a7a1a}
+  .v-yellow{background:#fff3cf;color:#7a5a00;border-left:6px solid #c89800}
+  .v-red{background:#fadcdc;color:#7a1a1a;border-left:6px solid #a02020}
+  table{width:100%;border-collapse:collapse;margin:6px 0 10px 0;font-size:12.5px}
+  th{background:#0b2545;color:#fff;text-align:left;padding:6px 9px;font-size:11.5px;letter-spacing:.5px}
+  td{padding:5px 9px;border-bottom:1px solid #e5e5e5;vertical-align:top}
+  tr:nth-child(even) td{background:#f7f9fc}
+  .kv td:first-child{color:#555;width:36%}
+  .ok{color:#1a7a1a;font-weight:bold}
+  .wn{color:#a06b00;font-weight:bold}
+  .fl{color:#a02020;font-weight:bold}
+  .src{font-size:10.5px;color:#666;margin:4px 0 12px 0;font-style:italic}
+  .num{font-variant-numeric:tabular-nums}
+  .calc{background:#f4f6fb;border-left:3px solid #0b2545;padding:10px 14px;margin:8px 0;font-family:'SF Mono',Consolas,monospace;font-size:12px;white-space:pre-wrap;color:#222}
+  .footnote{font-size:10.5px;color:#555;margin-top:6px}
+  .pagebreak{page-break-before:always}
+  .small{font-size:11px;color:#555}
+  .badge{display:inline-block;background:#1a5b22;color:#fff;font-size:10px;padding:2px 8px;border-radius:9px;margin-left:6px;letter-spacing:.5px}
+</style>
+</head>
+<body>
+
+{# ===================== HEADER / EXECUTIVE SUMMARY ===================== #}
+<div class="hd">
+  <h1>Parcel Buildability Brief</h1>
+  <div style="font-size:15px;color:#0b2545;font-weight:bold">
+    {{ d.parcel.address or "(address pending assessor ingest)" }}
+  </div>
+  <div class="meta">
+    {% if d.inputs.prepared_for %}Prepared for {{ d.inputs.prepared_for }} &nbsp;·&nbsp;{% endif %}
+    Prepared on {{ d.report_date_text }} &nbsp;·&nbsp;
+    Parcel ID {{ d.inputs.parcel_id }}
+    {% if d.parcel_metadata_extras.get("raw_attributes", {}).get("Short_id") %}
+      &nbsp;·&nbsp; Map–Block–Lot {{ d.parcel_metadata_extras.raw_attributes.Short_id }}
+    {% endif %}
+  </div>
+</div>
+
+<h2>1 · Executive Summary</h2>
+
+<div class="verdict {{ d.headline_verdict_class }}">
+  {{ d.headline_verdict_text }}
+</div>
+
+{% if d.has_overlay_election %}
+<p>
+This parcel sits under <strong>{{ d.base_zoning_hits|length }} base district(s)</strong>
+and <strong>{{ d.overlay_zoning_hits|length }} overlay district(s)</strong>.  The
+buildable envelope under the overlay is materially larger than under the base
+zone — see §3 and §4 for the side-by-side analysis.
+</p>
+{% else %}
+<p>
+This parcel sits under base zoning only — no §3A multi-family overlay applies.
+The buildable envelope is governed entirely by the base district's dimensional
+controls; see §3 and §4.
+</p>
+{% endif %}
+
+<p class="src">
+Sources: {{ d.inputs.town_slug }} Tax Assessor (property.parquet); Town zoning
+GIS (zoning.parquet, zoning-overlay.parquet); MA MACRIS, FEMA NFHL, Town hydrology
+& historic FeatureServers — all resolved via OverlayResolver.
+</p>
+
+{# ===================== PARCEL SNAPSHOT ===================== #}
+<h2>2 · Parcel Snapshot</h2>
+
+<table class="kv">
+<tr><td>Address</td><td>{{ d.parcel.address or "—" }}</td></tr>
+{% if d.property_info and d.property_info.owner_name %}
+<tr><td>Owner</td><td>{{ d.property_info.owner_name }}</td></tr>
+{% endif %}
+<tr><td>Parcel ID</td><td>{{ d.inputs.parcel_id }}</td></tr>
+{% if d.property_info and d.property_info.book_page %}
+<tr><td>Deed reference</td><td>{{ d.property_info.book_page }}</td></tr>
+{% endif %}
+{% if d.property_info and d.property_info.year_built %}
+<tr><td>Year built</td><td>{{ d.property_info.year_built }}{% if d.property_info.building_type %} ({{ d.property_info.building_type }}){% endif %}</td></tr>
+{% endif %}
+{% if d.property_info and d.property_info.luc_description %}
+<tr><td>Use code (current)</td><td>{{ d.property_info.luc or "" }} — {{ d.property_info.luc_description }}</td></tr>
+{% endif %}
+{% if d.property_info and d.property_info.finished_area_sqft %}
+<tr><td>Existing GFA</td>
+    <td><span class="num">{{ d.property_info.finished_area_sqft|fmt_int }} sf</span> assessor (total finished area)</td></tr>
+{% endif %}
+{% if d.property_info and (d.property_info.beds or d.property_info.baths) %}
+<tr><td>Bedrooms / bathrooms</td><td>{{ d.property_info.beds or "—" }} BR / {{ d.property_info.baths or "—" }} baths</td></tr>
+{% endif %}
+{% if d.property_info and d.property_info.last_sale_date %}
+<tr><td>Last sale</td><td>{{ d.property_info.last_sale_price|fmt_money }} ({{ d.property_info.last_sale_date }})</td></tr>
+{% endif %}
+{% if d.property_info and d.property_info.assessed_value %}
+<tr><td>Assessed value</td><td><span class="num">{{ d.property_info.assessed_value|fmt_money }}</span></td></tr>
+{% endif %}
+<tr><td>Lot size</td>
+    <td>
+      {% if d.property_info and d.property_info.lot_size_sqft %}
+        <span class="num">{{ d.property_info.lot_size_sqft|fmt_int }} sf</span> assessor (regulatory) &nbsp;·&nbsp;
+      {% endif %}
+      <span class="num">{{ d.parcel.area_sqft|fmt_int }} sf</span> GIS polygon
+    </td></tr>
+<tr><td>Lot shape</td>
+    <td>Edges {{ d.parcel.edges_ft | map('round', 1) | list | join(' / ') }} ft
+        (perimeter {{ d.parcel.perimeter_ft|fmt_float(1) }} ft)</td></tr>
+<tr><td>Approx. longest edge</td><td><span class="num">{{ d.parcel.longest_edge_ft|fmt_float(1) }} ft</span></td></tr>
+<tr><td>Centroid (WGS-84)</td>
+    <td>{{ d.parcel.centroid_lat|fmt_float(7) }} N, {{ d.parcel.centroid_lon|fmt_float(7) }} W</td></tr>
+</table>
+
+{% if not d.property_info %}
+<p class="footnote">
+<strong>Note:</strong> No assessor record found in <code>property.parquet</code>
+for parcel <code>{{ d.inputs.parcel_id }}</code>.  Owner / deed / GFA / sale fields
+are omitted from §2 above and from §4 envelope math (FAR comparison falls back to
+"max GFA" without an "existing GFA" reference point).  Re-running the property
+ingestor for this parcel will fill these fields automatically.
+</p>
+{% endif %}
+
+<p class="src">
+Sources: Town tax assessor (property.parquet); Town parcels-with-CAMA
+FeatureServer (parcel.parquet); centroid + edge metrics computed from the GIS
+polygon by the parcel scraper.
+</p>
+
+{# ===================== ZONING STACK ===================== #}
+<h2 class="pagebreak">3 · Zoning Stack &amp; Dimensional Compliance</h2>
+
+{% if d.base_zoning_hits %}
+<h3>3.1 — Base zoning</h3>
+{% for h in d.base_zoning_hits %}
+<table class="kv">
+<tr><td>Zone code</td><td><strong>{{ h.code }}</strong>
+  {% set rule = d.zoning_rules.get(h.code) %}
+  {% if rule and rule.zone_description %} — {{ rule.zone_description }}{% endif %}
+</td></tr>
+<tr><td>Source</td><td>{{ h.layer }} — point-in-polygon match at parcel centroid</td></tr>
+{% if rule and rule.allowed_uses %}
+<tr><td>Permitted uses</td><td>{{ rule.allowed_uses | join(', ') }}</td></tr>
+{% endif %}
+</table>
+{% endfor %}
+{% endif %}
+
+{% if d.overlay_zoning_hits %}
+<h3>3.2 — Overlay zoning</h3>
+{% for h in d.overlay_zoning_hits %}
+<table class="kv">
+<tr><td>Overlay</td>
+    <td><strong>{{ h.code or h.label or '(unnamed overlay)' }}</strong>
+        {% if h.label and h.code and h.label != h.code %} — {{ h.label }}{% endif %}</td></tr>
+<tr><td>Source</td><td>{{ h.layer }} — point-in-polygon match at parcel centroid</td></tr>
+{% set rule = d.zoning_rules.get(h.code) %}
+{% if rule and rule.allowed_uses %}
+<tr><td>Permitted uses</td><td>{{ rule.allowed_uses | join(', ') }}</td></tr>
+{% endif %}
+</table>
+{% endfor %}
+{% else %}
+<p class="footnote">No overlay districts intersect this parcel.</p>
+{% endif %}
+
+<h3>3.{{ "3" if d.overlay_zoning_hits else "2" }} — Side-by-side dimensional comparison</h3>
+
+<table>
+<tr>
+  <th>Standard</th>
+  {% for env in d.envelopes %}<th>{{ env.label }}</th>{% endfor %}
+  <th>This parcel</th>
+</tr>
+
+<tr><td>Min. lot size</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.is_overlay and env.zone_code not in d.zoning_rules %}<strong>None required</strong>
+        {% elif d.zoning_rules.get(env.zone_code) and d.zoning_rules[env.zone_code].min_lot_sqft %}
+          <span class="num">{{ d.zoning_rules[env.zone_code].min_lot_sqft|fmt_int }} sf</span>
+        {% else %}—{% endif %}</td>
+  {% endfor %}
+  <td><span class="num">{{ d.envelopes[0].lot_sqft|fmt_int if d.envelopes else "—" }} sf</span></td>
+</tr>
+
+<tr><td>Min. frontage</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.is_overlay and env.zone_code not in d.zoning_rules %}<strong>None required</strong>
+        {% elif d.zoning_rules.get(env.zone_code) and d.zoning_rules[env.zone_code].min_frontage_ft %}
+          <span class="num">{{ d.zoning_rules[env.zone_code].min_frontage_ft }} ft</span>
+        {% else %}—{% endif %}</td>
+  {% endfor %}
+  <td><span class="num">~{{ d.parcel.longest_edge_ft|fmt_float(0) }} ft (longest edge)</span></td>
+</tr>
+
+<tr><td>Max. height</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.height_max_ft %}{{ env.height_max_ft|fmt_float(0) }} ft{% else %}see overlay text{% endif %}</td>
+  {% endfor %}
+  <td>existing</td>
+</tr>
+
+<tr><td>Max. FAR</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.is_overlay and env.max_far is none %}<strong>None required</strong>
+        {% elif env.max_far %}<span class="num">{{ env.max_far|fmt_float(2) }}</span>
+        {% else %}—{% endif %}</td>
+  {% endfor %}
+  <td>{% if d.envelopes and d.envelopes[0].pct_of_far_cap %}
+        <span class="num">{{ (d.envelopes[0].pct_of_far_cap * (d.envelopes[0].max_far or 1))|fmt_float(3) }}</span>
+      {% else %}—{% endif %}</td>
+</tr>
+
+<tr><td>Front setback</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.setback_front_ft %}{{ env.setback_front_ft|fmt_float(0) }} ft{% else %}—{% endif %}</td>
+  {% endfor %}
+  <td>existing</td>
+</tr>
+
+<tr><td>Lot qualifies?</td>
+  {% for env in d.envelopes %}
+    <td>{% if env.qualifies %}<span class="ok">✅ qualifies</span>
+        {% elif env.qualifies is false %}<span class="fl">⚠ non-conforming</span>
+        {% else %}<span class="wn">⚠ not specified</span>{% endif %}</td>
+  {% endfor %}
+  <td>—</td>
+</tr>
+</table>
+
+<p class="src">
+Sources: zoning.parquet (Tier 2 zoning ingestor), zoning-overlay.parquet (Tier 2b
+overlay ingestor); dimensional values projected from the bylaw rule rows for
+each applicable zone code.
+</p>
+
+{# ===================== BUILDABLE ENVELOPE ===================== #}
+<h2 class="pagebreak">4 · Buildable Envelope &mdash; Math</h2>
+
+{% if d.envelopes %}
+{% for env in d.envelopes %}
+<h3>4.{{ loop.index }} — Under {{ env.label }}</h3>
+<div class="calc">
+{{ env.label }} — rationale: {{ env.rationale }}
+
+  Lot size                    : {{ env.lot_sqft|fmt_int }} sf
+  Max FAR                     : {% if env.max_far %}{{ env.max_far|fmt_float(2) }}{% else %}none required{% endif %}
+  Max GFA permitted           : {% if env.max_gfa_sqft %}{{ env.max_gfa_sqft|fmt_int }} sf{% else %}unbounded by FAR{% endif %}
+  {% if env.existing_gfa_sqft %}
+  Existing GFA (assessor)     : {{ env.existing_gfa_sqft|fmt_int }} sf
+  By-right expansion room     : {% if env.expansion_room_sqft is not none %}{{ env.expansion_room_sqft|fmt_int }} sf{% else %}—{% endif %}
+  Pct of FAR cap              : {% if env.pct_of_far_cap is not none %}{{ (env.pct_of_far_cap * 100)|fmt_float(1) }} %{% else %}—{% endif %}
+  {% endif %}
+  {% if env.height_max_ft %}
+  Max height                  : {{ env.height_max_ft|fmt_float(0) }} ft (~{{ env.height_max_stories or "—" }} stories)
+  {% endif %}
+  {% if env.setback_front_ft %}
+  Front setback               : {{ env.setback_front_ft|fmt_float(0) }} ft
+  {% endif %}
+  {% if env.qualifies is false %}
+  Lot qualifies               : NO — does not meet min-lot-size for this regime
+  {% elif env.qualifies %}
+  Lot qualifies               : YES
+  {% endif %}
+</div>
+{% if env.notes %}<p class="footnote">{{ env.notes }}</p>{% endif %}
+{% endfor %}
+{% else %}
+<p>No applicable zoning rules found in <code>zoning.parquet</code> for this parcel's hits.  Envelope math will be added when the zoning ingestor catches up.</p>
+{% endif %}
+
+{# ===================== DEVELOPMENT OPTIONS MATRIX ===================== #}
+<h2 class="pagebreak">5 · Development Options Matrix</h2>
+
+<table>
+<tr><th>#</th><th>Option</th><th>Path</th><th>Process</th><th>Available?</th></tr>
+
+<tr>
+  <td>1</td>
+  <td>Status quo &mdash; no change</td>
+  <td>—</td>
+  <td>—</td>
+  <td><span class="ok">Always</span></td>
+</tr>
+
+<tr>
+  <td>2</td>
+  <td>Interior renovation (no envelope change)</td>
+  <td>Building permit only</td>
+  <td>By-right (no zoning trigger)</td>
+  <td><span class="ok">Yes</span></td>
+</tr>
+
+{% set base_codes = d.base_zoning_hits | map(attribute='code') | list %}
+{% if 'R2' in base_codes or 'R1' in base_codes %}
+<tr>
+  <td>3</td>
+  <td>Add Accessory Dwelling Unit (ADU)</td>
+  <td>Base zone use table; MA AHA c. 150/2024 dimensional floor</td>
+  <td>By-right (subject to setbacks)</td>
+  <td><span class="wn">Lot-size dependent</span></td>
+</tr>
+{% endif %}
+
+{% if 'R2' in base_codes %}
+<tr>
+  <td>4</td>
+  <td>Convert existing structure to two-family</td>
+  <td>R2 use table (Two-Family Dwelling permitted)</td>
+  <td>By-right; pre-existing non-conforming lot grandfathered</td>
+  <td><span class="ok">Yes</span></td>
+</tr>
+{% endif %}
+
+{% if d.has_overlay_election %}
+{% for h in d.overlay_zoning_hits %}
+<tr>
+  <td>{{ 5 + loop.index0 }}</td>
+  <td>Demolish + rebuild as multi-family under <strong>{{ h.code or h.label }}</strong></td>
+  <td>{{ h.layer }}</td>
+  <td>By-right with Site Plan Review (typical for §3A overlays)</td>
+  <td><span class="ok">Yes</span></td>
+</tr>
+{% endfor %}
+{% endif %}
+
+{% set any_flagged = (d.wraparound | selectattr('status', 'equalto', 'flagged') | list | length) > 0 %}
+{% if any_flagged %}
+<tr>
+  <td>—</td>
+  <td>Any path crossing a wraparound flag</td>
+  <td>—</td>
+  <td>Special permit / variance / consultation may apply</td>
+  <td><span class="wn">See §6</span></td>
+</tr>
+{% endif %}
+</table>
+
+<p class="footnote">
+Options matrix is generated from the base/overlay zoning hits.  Town-specific
+options (e.g. dual-family + ADU stacking) require the generator's option-rule
+file to be authored per town — for v1 the deterministic rows above cover the
+common cases.
+</p>
+
+{# ===================== WRAPAROUND CONSTRAINTS ===================== #}
+<h2 class="pagebreak">6 · Wraparound Constraints</h2>
+
+<table>
+<tr><th>Constraint</th><th>Status</th><th>Detail</th><th>Source</th></tr>
+{% for w in d.wraparound %}
+<tr>
+  <td>{{ w.label }}</td>
+  <td>
+    {% if w.status == "clear" %}<span class="ok">✅ {{ w.detail }}</span>
+    {% elif w.status == "caution" %}<span class="wn">⚠ {{ w.detail }}</span>
+    {% else %}<span class="fl">⚠ {{ w.detail }}</span>{% endif %}
+  </td>
+  <td>{{ w.hit_count }} hit(s)</td>
+  <td>{{ w.source }}</td>
+</tr>
+{% endfor %}
+</table>
+
+{% if not any_flagged %}
+<p>
+There is no historic, environmental, flood, or open-violation friction on this parcel.
+Standard pre-1978 lead-paint disclosure may still apply for any dwelling built before 1978
+(see §8 — Open Items).
+</p>
+{% else %}
+<p>
+This parcel intersects {{ d.wraparound | selectattr('status', 'equalto', 'flagged') | list | length }} wraparound layer(s).
+Each flagged item may require additional permits, hearings, or consultations beyond the standard zoning approvals analysed in §5.
+</p>
+{% endif %}
+
+{# ===================== PROCESS PATHWAY ===================== #}
+<h2>7 · Process Pathway — Indicative Timeline</h2>
+
+<table>
+<tr><th>Stage</th><th>Body</th><th>Est. duration</th></tr>
+<tr><td>1. DPCD pre-application meeting</td><td>Planning &amp; Community Development</td><td>2–3 weeks</td></tr>
+<tr><td>2. Civil + architect schematic design</td><td>(consultant team)</td><td>4–6 weeks</td></tr>
+{% if d.has_overlay_election %}
+<tr><td>3. Site Plan Review submission</td><td>Town review board (e.g. ARB)</td><td>file day</td></tr>
+<tr><td>4. Public hearing(s)</td><td>Review board</td><td>8–12 weeks</td></tr>
+<tr><td>5. Decision + appeal period</td><td>Review board</td><td>4 weeks</td></tr>
+{% endif %}
+<tr><td>{{ "6" if d.has_overlay_election else "3" }}. Building permit application</td><td>ISD</td><td>4–8 weeks</td></tr>
+<tr><td>{{ "7" if d.has_overlay_election else "4" }}. Construction</td><td>contractor</td><td>10–14 months</td></tr>
+<tr><td>{{ "8" if d.has_overlay_election else "5" }}. Certificate of Occupancy</td><td>ISD</td><td>2 weeks</td></tr>
+</table>
+
+{# ===================== OPEN ITEMS / RISKS ===================== #}
+<h2>8 · Open Items — To Be Verified Before Commitment</h2>
+
+<ol>
+  {% for env in d.envelopes %}
+    {% if env.is_overlay and env.zone_code not in d.zoning_rules %}
+  <li><strong>{{ env.zone_code }} dimensional rules — confirm bylaw text.</strong>
+      Overlay rule was not found in <code>zoning.parquet</code>.  Confirm height,
+      stories, setbacks, parking, and inclusionary thresholds at the Town
+      Clerk's office or DPCD's published bylaw.</li>
+    {% endif %}
+  {% endfor %}
+  {% if d.property_info and d.property_info.year_built and d.property_info.year_built < 1978 %}
+  <li><strong>Lead paint disclosure (M.G.L. c. 111 §§189A–199B).</strong>
+      Building was constructed in {{ d.property_info.year_built }} (pre-1978) — mandatory
+      lead-paint disclosure on sale.</li>
+  {% endif %}
+  <li><strong>Existing structure setbacks.</strong> Computed from GIS parcel polygon edges,
+      not from a stamped survey.  A Class I survey is recommended before architectural SD.</li>
+  <li><strong>Title / easements / open MLC.</strong> Run a current Municipal Lien Certificate
+      and a title rundown before any LOI.  Out of scope for this brief.</li>
+  {% if d.has_overlay_election %}
+  <li><strong>Base vs. overlay election.</strong> The property owner must elect either base
+      zoning or the overlay for any given project; the regimes do not stack.  Election is
+      project-by-project, not parcel-perpetual.</li>
+  {% endif %}
+</ol>
+
+{# ===================== METHODOLOGY ===================== #}
+<h2>9 · Methodology &amp; Sources</h2>
+
+<h3>9.1 Data acquisition</h3>
+<ul>
+  <li><strong>Parcel geometry &amp; centroid:</strong> <code>parcel.parquet</code>
+      (Tier 2a parcel ingestor) — sourced from the town's Parcels-with-CAMA FeatureServer.</li>
+  <li><strong>Zoning rules:</strong> <code>zoning.parquet</code> (Tier 1 zoning bylaw ingestor).</li>
+  <li><strong>Zoning &amp; overlay polygons:</strong> <code>zoning-overlay.parquet</code>
+      (Tier 2b overlay ingestor).</li>
+  <li><strong>Wraparound constraints:</strong> resolved through a single
+      <code>core.spatial.OverlayResolver</code> call against MACRIS, local-historic,
+      environmental-overlay, and noncompliance Gold parquets.</li>
+  {% if d.property_info %}
+  <li><strong>Assessor record:</strong> <code>property.parquet</code>.</li>
+  {% endif %}
+</ul>
+
+<h3>9.2 Spatial method</h3>
+<p class="footnote">
+Point-in-polygon and polyline-distance queries use Shapely 2.x with WGS-84
+coordinates.  Distances are reported in feet via the haversine formula on the
+WGS-84 sphere (sub-1% drift from the ellipsoidal solution at municipal scale).
+</p>
+
+<h3>9.3 Disclaimer</h3>
+<p class="footnote">
+This brief is prepared for informational purposes only.  It is not legal advice,
+not a licensed appraisal, and not a substitute for a stamped survey or an opinion
+from the town's Inspectional Services.  All conclusions should be verified
+against the consolidated bylaw at the Town Clerk's office and confirmed with a
+licensed land-use attorney before any binding commitment.
+</p>
+
+</body>
+</html>

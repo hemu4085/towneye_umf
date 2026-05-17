@@ -48,6 +48,21 @@ source_mappings:
   climate_resilience: "fema-flood-maps"
   social_equity:    "ej-burden-indices"
 
+  # Tier 2 (Domain 14-19) source identifiers — used as the te_source stamp
+  # on every Gold row.  Domains for which Lexington has no source are
+  # intentionally OMITTED so the master loop classifies them as "skipped"
+  # rather than "failed".
+  parcel_geometry:   "ma-massgis-l3-parcels"   # MassGIS L3 statewide, TOWN_ID=155
+  zoning_overlay:    "lexington-ma-mbta-zoning"
+  historic_resources: "ma-mhc-macris"          # statewide MACRIS
+  local_historic:    "lexington-ma-local-historic"
+  # environmental_overlay: SKIP — Lexington publishes only one specific
+  #     wetland complex (Pine Meadows); no town-wide service.  FEMA NFHL
+  #     flood data is available statewide but the brief generator's
+  #     spatial layer queries it on-demand rather than via the ingestor.
+  # noncompliance: SKIP — Lexington publishes no land-use noncompliance
+  #     layer (Arlington-specific concept).
+
 scraper_urls:
   property_assessor:   "https://lexington.patriotproperties.com/SearchResults.asp"
   civic_meetings:      "https://www.lexingtonma.gov/calendar"
@@ -62,6 +77,40 @@ scraper_urls:
   fcc_broadband_api:   "https://broadbandmap.fcc.gov/api/public/map/listAvailability"
   permits_api:         "https://www.lexingtonma.gov/building-department"
   zillow_zhvi_csv:     "https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
+
+  # ----------------------------------------------------------------------
+  # Tier 2 (Domain 14-19) endpoints — Tier 5 onboarding (2026-05-07).
+  # ----------------------------------------------------------------------
+  # Domain 14 — Parcel Geometry.  Lexington does not publish a town-wide
+  # parcels FeatureServer in its AGOL org (only TownOwnedParcels and a
+  # Parcel_QA editing layer).  Use MassGIS L3 statewide layer with
+  # TOWN_ID=155 filter — confirmed 12,780 parcels carrying full CAMA
+  # (owner / year built / total value / sale data / lot size / building
+  # area / zoning / use code).
+  parcels_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/Massachusetts_Property_Tax_Parcels/FeatureServer"
+
+  # Domain 15 — Zoning Overlay Polygons.  Lexington's
+  # MBTA_MULTIFAMILY_ZONING_editing service publishes 15 polygon layers,
+  # most of which are workshop drafts (named map1..map11).  Layer 14 is
+  # the canonical Zoning layer; layer 13 is the Historic Districts
+  # overlay.  The zoning_overlay block below restricts ingestion via
+  # include_layer_ids: [13, 14].
+  zoning_overlay_arcgis_url:
+    "https://services.arcgis.com/bP0owepHkr9WxF4V/arcgis/rest/services/MBTA_MULTIFAMILY_ZONING_editing/FeatureServer"
+
+  # Domain 18 — Local Historic Resources.  Lexington publishes the property-
+  # level survey (HistoricPropertySurveyView, ~21-field MHCR2013 schema) at
+  # the URL below.  HistoricPropInventoryView2 is a true mirror of layer 0
+  # (verified 2026-05-07: identical 1,926 OBJECTIDs and MHCR2013_lexID values),
+  # so we ingest only the canonical survey URL.
+  local_historic_arcgis_urls:
+    historic_property_survey:
+      "https://services.arcgis.com/bP0owepHkr9WxF4V/arcgis/rest/services/HistoricPropertySurveyView/FeatureServer"
+
+  # Domain 17 (noncompliance) and Domain 19 (environmental_overlay):
+  # OMITTED — see source_mappings comment above.  The master loop
+  # classifies missing URLs as "skipped" (DomainNotApplicableError).
 
 http:
   ssl_verify: true
@@ -194,3 +243,182 @@ broadband_tech_code_map:
   "30": "LTE"
   "31": "NR"
   "300": "OTHER"
+
+# ============================================================================
+# Tier 2 (Domain 14-19) runtime knobs — Tier 5 onboarding (2026-05-07).
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Domain 14 — Parcel Geometry runtime knobs.
+# Source: MassGIS L3 statewide (https://services1.arcgis.com/.../
+#         Massachusetts_Property_Tax_Parcels/FeatureServer), one polygon
+# layer carrying ~1.18M parcels statewide.  Filter to Lexington only via
+# WHERE TOWN_ID=155 (Lexington's MassGIS town id).
+# ----------------------------------------------------------------------------
+parcels:
+  where_clause: "TOWN_ID=155"
+
+  id_field_candidates:
+    - "MAP_PAR_ID"   # MassGIS L3 primary id (e.g. "11-16")
+    - "LOC_ID"       # MassGIS location id  (e.g. "F_725293_2978557")
+    - "PROP_ID"      # assessor's parcel id (alternate, "11_16")
+    - "PARCEL_ID"
+
+  address_field_candidates:
+    - "SITE_ADDR"     # MassGIS L3 canonical (e.g. "16 BENJAMIN RD")
+    - "FULL_STR"      # street-name only, used when SITE_ADDR is empty
+    - "ADDRESS"
+    - "FULL_ADDR"
+    - "FULLADDR"
+
+  page_size:                1000
+  max_features:            50000
+  request_timeout_s:          30
+  output_spatial_reference: 4326
+
+# ----------------------------------------------------------------------------
+# Domain 15 — Zoning Overlay Polygons runtime knobs.
+# Source: Lexington AGOL MBTA_MULTIFAMILY_ZONING_editing/FeatureServer.
+# 15 polygon layers exist; only ids 13 (Historic Districts) and 14 (Zoning)
+# are canonical — the rest (map1..map11, MBTA_COMMENTS, etc.) are workshop
+# drafts of MBTA Communities Act §3A maps.  include_layer_ids filters to
+# the canonical pair.
+# ----------------------------------------------------------------------------
+zoning_overlay:
+  include_layer_ids: [13, 14]
+
+  # Layer 14 (Zoning) carries ZONING + District; layer 13 (Historic
+  # Districts) carries District only.
+  code_field_candidates:
+    - "ZONING"        # Lexington layer 14 — base zoning code (e.g. "RO", "CB")
+    - "ZoneCode"
+    - "OverlayAbbr"
+    - "OverlayCode"
+    - "Zone_Code"
+    - "ZONE_CODE"
+    - "DistrictCode"
+    - "OVERLAY_CODE"
+    - "Code"
+
+  type_field_candidates:
+    - "OverlayType"
+    - "Overlay_Type"
+    - "DistrictType"
+    - "DISTRICT_TYPE"
+    - "Type"
+    - "Category"
+
+  name_field_candidates:
+    - "District"          # Lexington layers 13 + 14 — district name
+    - "ZoneName"
+    - "OverlayDistrict"
+    - "ZoneDesc"
+    - "DistrictName"
+    - "Name"
+    - "DISTRICT_NAME"
+
+  page_size:                 500
+  # Tier 5 cleanup (2026-05-07): bumped from 5000 -> 50000 because the prior
+  # cap silently truncated the include_layer_ids=[13,14] pull at 5000 features
+  # (Lexington's MBTA-zoning layer publishes ~6.5k draft polygons + base zoning).
+  max_features:            50000
+  request_timeout_s:          60
+  output_spatial_reference: 4326
+
+# ----------------------------------------------------------------------------
+# Domain 16 — MACRIS Historic Resource runtime knobs.
+# The statewide MACRIS layer is identical for every MA town; only the
+# town_filter value changes.  ~2,295 records for Lexington (Revolution-era
+# town has more historic inventory than most MA municipalities).
+# ----------------------------------------------------------------------------
+historic_resources:
+  macris_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/MHC_Inventory_GDB/FeatureServer"
+  macris_town_name: "Lexington"
+
+macris:
+  exclude_layer_ids: [2]   # MassHistoric Commission Towns reference layer
+
+  town_filter_field_candidates:
+    - "TOWN_NAME"
+    - "TOWN"
+    - "MUNICIPALITY"
+
+  mhcn_field_candidates:                ["MHCN"]
+  resource_kind_field_candidates:       ["TYPE"]
+  legend_field_candidates:              ["LEGEND"]
+  designation_field_candidates:         ["DESIGNATIO", "DESIGNATION"]
+  designation_date_field_candidates:    ["D_DATE", "DESIGNATION_DATE"]
+  historic_name_field_candidates:       ["HISTORIC_N", "HISTORIC_NAME"]
+  common_name_field_candidates:         ["COMMON_NAM", "COMMON_NAME"]
+  address_field_candidates:             ["ADDRESS", "STREET_ADDRESS"]
+  construction_date_field_candidates:   ["CONSTRUCTI", "CONSTRUCTION_DATE"]
+  architectural_style_field_candidates: ["ARCHITECTU", "ARCH"]
+  architect_field_candidates:           ["MAKER", "ARCHITECT"]
+  use_type_field_candidates:            ["USE_TYPE"]
+  significance_field_candidates:        ["SIGNIFICAN", "SIGNIFICANCE"]
+  demolished_field_candidates:          ["DEMOLISHED"]
+
+  page_size:                1000
+  max_features:            50000
+  request_timeout_s:          30
+  output_spatial_reference: 4326
+
+# ----------------------------------------------------------------------------
+# Domain 18 — Local Historic Resources runtime knobs.
+# Lexington uses its own MHCR2013_* schema (different from Arlington's
+# Hist_Name / Designated / Cnstr_Date).  Source layout (3 layers per FS):
+#   layer 0 = HistoricPropSurveyView  -- the actual ~1,926 historic points
+#   layer 1 = Parcels                  -- redundant with parcel.parquet
+#   layer 2 = Historic District Boundary -- 4 polygons we skip
+# Hence ``source_layer_filters`` below restricts this scraper to layer 0.
+# Note: HistoricPropInventoryView2 was originally enumerated separately
+# but is a true mirror of layer 0; dropped to avoid 2x duplication.
+# ----------------------------------------------------------------------------
+local_historic:
+  source_field_maps:
+    historic_property_survey:
+      mhcn:                 ["MHCR2013_lexID"]
+      historic_name:        ["MHCR2013_desc"]
+      common_name:          []
+      address:              ["Mhcr2013_Address"]
+      legend:               []
+      designation:          []
+      designation_date:     []
+      resource_kind:        []
+      construction_date:    ["MHCR2013_yearbuilt"]
+      architectural_style:  []
+      architect:            []
+      use_type:             []
+      significance:         []
+      demolished:           []
+
+  source_default_legends:
+    historic_property_survey:    "Inv."
+
+  # Tier 5 cleanup (2026-05-07): both Lexington FeatureServers publish 3
+  # layers each — only layer 0 (HistoricPropSurveyView, ~1,926 points) is
+  # the real historic inventory.  Layer 1/2 republish the town-wide parcel
+  # polygons + 4 district boundary polygons, which double-count badly:
+  # without this filter we ingested 28,061 rows for ~1,492 unique MHCNs.
+  source_layer_filters:
+    historic_property_survey:    {include_layer_ids: [0]}
+
+  page_size:                1000
+  max_features:            20000
+  request_timeout_s:          30
+  output_spatial_reference: 4326
+
+# ============================================================================
+# Tier 4 (buildability brief) — assessor-to-zoning code reconciliation map.
+# Lexington uses MassGIS-published ZONING codes that match its bylaw codes
+# directly (RO = Residential One-family, CB = Central Business, etc.) so
+# this map is intentionally empty — the report layer falls back to the raw
+# ZONING string when no override is present.
+# ============================================================================
+assessor_to_zoning_map: {}
+
+zoning:
+  bylaw_year: "2024"
+  arcgis_layer_url:
+    "https://services.arcgis.com/bP0owepHkr9WxF4V/arcgis/rest/services/MBTA_MULTIFAMILY_ZONING_editing/FeatureServer/14/query"

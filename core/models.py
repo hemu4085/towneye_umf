@@ -1,7 +1,7 @@
 # [FILE PATH]: core/models.py
-# Patch #167
-# Execution Mode: Gold Tier Pydantic Model Definition
-# Date: 2026-03-01
+# Patch #171
+# Execution Mode: Gold Tier Pydantic Model Definition (+ TeNonCompliance, TeEnvironmentalOverlay)
+# Date: 2026-05-07
 
 import uuid
 from datetime import datetime
@@ -1121,6 +1121,556 @@ class TePropertyAssessment(AuditFields):
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Flexible sidecar for remaining assessor fields (living_area, stories, etc.).",
+    )
+
+
+class TeParcel(AuditFields):
+    """
+    Gold-tier Parcel Geometry record.  Schema mirrors gold.te_parcel exactly.
+
+    Captures the **authoritative GIS polygon** for a single parcel as
+    published by the municipality's parcel feature service (e.g.
+    Arlington's ``Parcels with CAMA`` ArcGIS layer).
+
+    Why a separate model from ``TePropertyAssessment``?
+    ---------------------------------------------------
+    * ``TePropertyAssessment`` is the *assessor's tax record* — beds, baths,
+      assessed value, year built.  Sourced from the Patriot Properties
+      portal HTML scrape (Domain 01).
+    * ``TeParcel`` is the *GIS parcel polygon* — geometry, lot size, edges,
+      perimeter, longest edge, centroid.  Sourced from the town's own
+      ArcGIS feature service.
+
+    They are joined by ``parcel_id`` (the assessor's natural key).  Every
+    parcel polygon should resolve cleanly to at most one assessment row;
+    every assessment row should resolve to exactly one polygon.
+
+    Computed fields
+    ---------------
+    Each polygon is enriched at scrape time with three computed numbers
+    that are otherwise expensive to derive at report time:
+
+    * ``edges_ft``         — list of ring edge lengths, feet (haversine).
+    * ``perimeter_ft``     — sum of edge lengths, feet.
+    * ``longest_edge_ft``  — longest single edge, feet (proxy for the
+                              "frontage" dimension when the parcel touches
+                              a street).
+    * ``area_sqft``        — polygon area in square feet (shoelace formula
+                              on the haversine-projected ring).
+    * ``centroid_lat`` / ``centroid_lon`` — mean of ring vertices.
+
+    Geometry
+    --------
+    ``geometry_type`` and ``geometry_coordinates`` mirror the GeoJSON
+    ``geometry`` object exactly so a Gold record reconstructs into a valid
+    ``shapely`` geometry without transformation.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    te_parcel_pk: int = Field(
+        ...,
+        description="System PK assigned by identity linker (hash of parcel_id + te_source).",
+    )
+    parcel_id: str = Field(
+        ...,
+        max_length=64,
+        description="Assessor parcel identifier (natural key, e.g. '128.0-0003-0012.0').",
+    )
+    address: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Full street address from the GIS attributes (may differ slightly from assessor record).",
+    )
+    geometry_type: str = Field(
+        ...,
+        max_length=20,
+        description="GeoJSON geometry type ('Polygon' or 'MultiPolygon').",
+    )
+    geometry_coordinates: Any = Field(
+        ...,
+        description=(
+            "GeoJSON coordinate array matching geometry_type.  Stored as a "
+            "native Python list — serialised to JSON before Parquet write."
+        ),
+    )
+    area_sqft: Optional[float] = Field(
+        None,
+        description="Polygon area in square feet (shoelace on haversine-projected ring).",
+    )
+    perimeter_ft: Optional[float] = Field(
+        None,
+        description="Polygon perimeter in feet (sum of haversine edge lengths).",
+    )
+    longest_edge_ft: Optional[float] = Field(
+        None,
+        description="Longest single edge of the outer ring in feet.",
+    )
+    edges_ft: List[float] = Field(
+        default_factory=list,
+        description="Ordered list of outer-ring edge lengths in feet.",
+    )
+    centroid_lat: Optional[float] = Field(
+        None,
+        description="Centroid latitude (mean of ring vertices, WGS-84).",
+    )
+    centroid_lon: Optional[float] = Field(
+        None,
+        description="Centroid longitude (mean of ring vertices, WGS-84).",
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Flexible sidecar for source-specific GIS attributes such as "
+            "MAP_PAR_ID, CAMA_ID, LOC_ID, owner name, land-use code, "
+            "assessed values from the CAMA join, layer_id, source_dataset."
+        ),
+    )
+
+
+class TeNonCompliance(AuditFields):
+    """
+    Gold-tier Land-Use / Zoning Non-Compliance polygon record.  Schema
+    mirrors ``gold.te_noncompliance`` exactly.
+
+    Despite the upstream layer being named "LandUse_NonCompliance", these
+    rows are NOT regulatory enforcement cases.  They are **descriptive**
+    polygons published by Arlington's planning GIS that flag every parcel
+    whose recorded land-use code diverges from what its zoning permits —
+    e.g. a duplex sitting in a single-family zone (legal pre-existing
+    non-conforming use), or a commercial garage in a residential zone.
+
+    Why this matters for buildability
+    ---------------------------------
+    A pre-existing non-conforming use can usually continue but cannot be
+    expanded; a tear-down rebuild often forfeits the non-conforming
+    status and the new structure must conform to current zoning.  So a
+    parcel with a non-compliance polygon is materially different from a
+    "clean" parcel even though both are perfectly legal today.
+
+    The scraper writes one row per polygon — there are typically hundreds
+    per town.  Report-side code resolves a parcel to its non-compliance
+    rows by point-in-polygon, exactly the same pattern used by
+    ``TeZoningOverlay``.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    te_violation_pk: int = Field(
+        ...,
+        description="System-generated BigInt PK assigned by identity linker.",
+    )
+    land_use_code: Optional[str] = Field(
+        None,
+        max_length=32,
+        description=(
+            "Land-use code from the assessor / planning database — typically "
+            "a numeric MA Department of Revenue (DOR) classification code."
+        ),
+    )
+    zone_code_numeric: Optional[int] = Field(
+        None,
+        description=(
+            "Numeric internal zone code used by the GIS layer (NOT the "
+            "alphanumeric bylaw code like 'R2' / 'NMF').  Resolve to the "
+            "bylaw code via the parcel's TeZoning row when needed."
+        ),
+    )
+    land_use_zone_diff: Optional[int] = Field(
+        None,
+        description=(
+            "Divergence indicator (the layer's 'luzndiff' field) — a "
+            "small-integer flag used by Arlington to grade severity of "
+            "the non-compliance.  Higher values typically mean larger "
+            "departure from current zoning."
+        ),
+    )
+    status: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Free-text status / classification published by the planning "
+            "GIS (e.g. 'Pre-Existing Non-Conforming', 'Permitted Variance', "
+            "'Open Violation').  Vocabulary is town-specific."
+        ),
+    )
+    geometry_type: str = Field(
+        ...,
+        max_length=20,
+        description="GeoJSON geometry type ('Polygon' or 'MultiPolygon').",
+    )
+    geometry_coordinates: Any = Field(
+        ...,
+        description=(
+            "GeoJSON coordinate array matching geometry_type.  Stored as a "
+            "native Python list — serialised to JSON before Parquet write."
+        ),
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Flexible sidecar for source-specific GIS attributes (raw "
+            "FID, OBJECTID, source_dataset, layer_id, layer_name, "
+            "Shape__Area, Shape__Length, etc.)."
+        ),
+    )
+
+
+class TeEnvironmentalOverlay(AuditFields):
+    """
+    Gold-tier Environmental Overlay polygon record (wetlands + flood
+    zones).  Schema mirrors ``gold.te_environmental_overlay`` exactly.
+
+    A unified record for any **water/flood-related** spatial overlay a
+    parcel might intersect.  The buildability brief uses these to answer:
+
+      * "Is any portion of this lot inside a flood zone?" → yes/no + zone code
+      * "Are there mapped wetlands on or adjacent to this lot?" → yes/no
+      * "How does the preliminary 2023 FEMA update change the answer?"
+
+    Sources merged into this single domain (one row per polygon, the
+    ``category`` field discriminates):
+
+      * "wetland"             — town wetlands inventory
+      * "flood-effective"     — current FEMA NFHL panels (locally mirrored)
+      * "flood-preliminary"   — preliminary FEMA updates (e.g. June 2023)
+
+    Why one model for all three?
+    ----------------------------
+    The FEMA flood layers (effective + preliminary) share the same
+    NFHL attribute schema (FLD_ZONE / ZONE_SUBTY / SFHA_TF / static_bfe).
+    The wetlands layer publishes a different attribute set (CLASSIF /
+    Acres_GIS) but answers the same "is this lot inside?" question.
+    Keeping them in one parquet means the report-side spatial-join code
+    runs once instead of three times and produces a unified
+    "environmental constraints" section in the brief.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    te_overlay_pk: int = Field(
+        ...,
+        description="System-generated BigInt PK assigned by identity linker.",
+    )
+    category: str = Field(
+        ...,
+        max_length=32,
+        description=(
+            "Discriminator: 'wetland' / 'flood-effective' / "
+            "'flood-preliminary'.  Determines which fields below are "
+            "populated and how the report should label any hit."
+        ),
+    )
+    zone_code: Optional[str] = Field(
+        None,
+        max_length=32,
+        description=(
+            "Primary classification code for the polygon — e.g. 'AE' / "
+            "'X' / 'AO' for FEMA flood zones, or 'BVW' / 'IVW' / 'OW' "
+            "for wetlands.  Sourced via config field-name candidates."
+        ),
+    )
+    zone_subtype: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Secondary classifier when present — e.g. FEMA ZONE_SUBTY "
+            "('FLOODWAY', '0.2 PCT ANNUAL CHANCE FLOOD HAZARD')."
+        ),
+    )
+    sfha_flag: Optional[str] = Field(
+        None,
+        max_length=8,
+        description=(
+            "FEMA Special Flood Hazard Area flag ('T' / 'F' / null).  "
+            "Empty for wetland rows."
+        ),
+    )
+    static_bfe: Optional[float] = Field(
+        None,
+        description=(
+            "FEMA Base Flood Elevation in feet, where published.  "
+            "Empty for wetlands and X-zone (non-SFHA) rows."
+        ),
+    )
+    source_layer_name: str = Field(
+        ...,
+        max_length=128,
+        description=(
+            "Source FeatureServer / layer name — e.g. "
+            "'ArlingtonMA_Wetlands', 'FloodHazards', "
+            "'FloodHazards_Preliminary202306_clip'.  Preserves provenance "
+            "so analysts can trace any row back to the upstream service."
+        ),
+    )
+    geometry_type: str = Field(
+        ...,
+        max_length=20,
+        description="GeoJSON geometry type ('Polygon' or 'MultiPolygon').",
+    )
+    geometry_coordinates: Any = Field(
+        ...,
+        description=(
+            "GeoJSON coordinate array matching geometry_type.  Stored as a "
+            "native Python list — serialised to JSON before Parquet write."
+        ),
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Flexible sidecar for source-specific attributes (raw FEMA "
+            "fields, wetland CLASSIF / Source / Acres_GIS, layer_id, "
+            "service_root, etc.)."
+        ),
+    )
+
+
+class TeHistoricResource(AuditFields):
+    """
+    Gold-tier Historic Resource record.  Schema mirrors
+    ``gold.te_historic_resource`` exactly.
+
+    A unified record for any historic property — point (individual
+    structure / burial ground / monument) or polygon (historic district /
+    NRHP-listed area) — sourced from MACRIS, local Historic Commission
+    inventories, or the National Register of Historic Places.
+
+    Why one model for both points and polygons?
+    -------------------------------------------
+    The MACRIS data model uses the **same attribute schema** for the
+    points layer (individual buildings) and the polygons layer (districts);
+    the only difference is geometry.  Local town inventories follow the
+    same pattern.  Keeping them in one Pydantic model means the buildability
+    report can answer *"is this address listed?"* and *"is this address
+    inside a historic district?"* with one parquet read.
+
+    The ``resource_kind`` column ("Building", "Area", "Burial Ground",
+    "Object", etc.) is the discriminator within a single geometry type;
+    ``geometry_type`` tells you points-vs-polygon at the GIS level.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    te_resource_pk: int = Field(
+        ...,
+        description="System-generated BigInt PK assigned by identity linker.",
+    )
+    mhcn: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "MHC inventory number — e.g. 'ARL.123', 'BOS.10655'.  "
+            "Natural key when present.  May be blank for non-MACRIS "
+            "(e.g. local-only) inventory rows."
+        ),
+    )
+    resource_kind: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "MACRIS resource type — 'Building', 'Area', 'Burial Ground', "
+            "'Object', 'Structure', etc.  Sourced from the TYPE attribute."
+        ),
+    )
+    legend: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Short legend / classification — e.g. 'NRHP' (National Register "
+            "of Historic Places), 'LHD' (Local Historic District), "
+            "'NHL' (National Historic Landmark), 'Inv.' (Inventoried only)."
+        ),
+    )
+    designation: Optional[str] = Field(
+        None,
+        max_length=255,
+        description=(
+            "Full legal historic designation string from MACRIS DESIGNATIO "
+            "field — codes are space-separated (e.g. 'NRDIS NRTRA' = "
+            "National Register District + National Register Travel/Transport)."
+        ),
+    )
+    designation_date: Optional[str] = Field(
+        None,
+        max_length=255,
+        description=(
+            "Designation date string from MACRIS D_DATE — kept as string "
+            "because the upstream value is multi-date semicolon-separated "
+            "(e.g. '06/15/1987; 03/25/2021;')."
+        ),
+    )
+    historic_name: Optional[str] = Field(
+        None,
+        max_length=512,
+        description="Historic name of the resource (HISTORIC_N field).",
+    )
+    common_name: Optional[str] = Field(
+        None,
+        max_length=512,
+        description="Common / current name of the resource (COMMON_NAM field).",
+    )
+    address: Optional[str] = Field(
+        None,
+        max_length=255,
+        description=(
+            "Street address as published by MACRIS (may be blank for "
+            "districts and burial grounds).  Whitespace is collapsed."
+        ),
+    )
+    town_name: str = Field(
+        ...,
+        max_length=128,
+        description=(
+            "Municipality name from MACRIS TOWN_NAME — the value used as "
+            "the API filter when ingesting (e.g. 'Arlington', 'Boston')."
+        ),
+    )
+    construction_date: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Construction date as published — kept as string because the "
+            "upstream values include circa values, ranges, and zeros for "
+            "unknown ('c. 1880', '1880-1885', '0')."
+        ),
+    )
+    architectural_style: Optional[str] = Field(
+        None,
+        max_length=255,
+        description=(
+            "Architectural style — sourced from ARCHITECTU on the points "
+            "layer or ARCH on the polygons layer (the abbreviations differ "
+            "between MACRIS layers — see config field-name candidates)."
+        ),
+    )
+    architect: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Architect / designer / maker (MAKER field).",
+    )
+    use_type: Optional[str] = Field(
+        None,
+        max_length=255,
+        description=(
+            "Historic / current use — semicolon-separated values "
+            "(e.g. 'Single Dwelling; Workshop;')."
+        ),
+    )
+    significance: Optional[str] = Field(
+        None,
+        max_length=2048,
+        description=(
+            "Historical significance themes — semicolon-separated values "
+            "(e.g. 'Architecture; Community Planning; Industry;')."
+        ),
+    )
+    demolished: Optional[str] = Field(
+        None,
+        max_length=16,
+        description="Demolished flag from MACRIS ('Y'/'N'/blank).",
+    )
+    geometry_type: str = Field(
+        ...,
+        max_length=20,
+        description=(
+            "GeoJSON geometry type — 'Point' for individual structures, "
+            "'Polygon'/'MultiPolygon' for historic districts, "
+            "'LineString'/'MultiLineString' for polyline boundaries (e.g. "
+            "Arlington's National Historic District is published as a "
+            "single polyline outlining the district perimeter)."
+        ),
+    )
+    geometry_coordinates: Any = Field(
+        ...,
+        description=(
+            "GeoJSON coordinate array matching geometry_type.  Stored as a "
+            "native Python list — serialised to JSON before Parquet write."
+        ),
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Flexible sidecar for source-specific attributes (raw_attributes, "
+            "layer_id, layer_name, source_dataset, OBJECTID, etc.)."
+        ),
+    )
+
+
+class TeZoningOverlay(AuditFields):
+    """
+    Gold-tier Zoning Overlay Polygon record.  Schema mirrors
+    ``gold.te_zoning_overlay`` exactly.
+
+    The **spatial counterpart** to ``TeZoning``.  Where ``TeZoning`` answers
+    *"what does R2 / NMF / MBMF allow?"* (a textual bylaw record), this
+    model answers *"where on the map does that district apply?"* — one row
+    per polygon in a town's zoning + overlay GIS feature service.
+
+    A single parcel can intersect multiple overlay polygons (base zone +
+    Massachusetts §3A overlay + historic district + corridor overlay).
+    Report-side point-in-polygon code joins these rows back to a parcel
+    and produces the full applicable-rules stack.
+
+    Why a separate model from ``TeClimateZone``?
+    --------------------------------------------
+    ``TeClimateZone`` carries a ``risk_level`` field that is meaningless
+    for zoning overlays (NMF has no "HIGH / MODERATE / LOW" risk).  Keeping
+    them separate avoids forcing semantically empty values into either
+    schema and lets each domain evolve independently.
+
+    Fields the scraper extracts when present, falling back to ``None`` /
+    ``metadata`` otherwise — every field-name lookup is config-driven via
+    ``zoning_overlay.code_field_candidates`` and
+    ``zoning_overlay.type_field_candidates``.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    te_overlay_pk: int = Field(
+        ...,
+        description="System-generated BigInt PK assigned by identity linker.",
+    )
+    layer_name: str = Field(
+        ...,
+        max_length=128,
+        description=(
+            "Name of the GIS layer this polygon was sourced from "
+            "(e.g. 'Zoning Districts', 'NMF Overlay'). Required."
+        ),
+    )
+    zone_code: Optional[str] = Field(
+        None,
+        max_length=32,
+        description=(
+            "Zoning code extracted from feature attributes — e.g. 'R2', "
+            "'NMF', 'MBMF', 'B2'.  May be None for layers that publish "
+            "districts only by name (e.g. 'Russell Historic District')."
+        ),
+    )
+    overlay_type: Optional[str] = Field(
+        None,
+        max_length=64,
+        description=(
+            "Classification of this polygon — e.g. 'Base', 'Multi-Family', "
+            "'Historic', 'Mass Ave Corridor', 'Industrial / Office'. "
+            "Sourced from the feature's OverlayType / DistrictType field "
+            "where present, otherwise inferred from layer_name."
+        ),
+    )
+    geometry_type: str = Field(
+        ...,
+        max_length=20,
+        description="GeoJSON geometry type ('Polygon' or 'MultiPolygon').",
+    )
+    geometry_coordinates: Any = Field(
+        ...,
+        description=(
+            "GeoJSON coordinate array matching geometry_type.  Stored as a "
+            "native Python list — serialised to JSON before Parquet write."
+        ),
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Flexible sidecar for source-specific GIS attributes such as "
+            "ZoneName, ZoneDesc, Notes, Article, Approval_Date, layer_id, "
+            "source_dataset."
+        ),
     )
 
 

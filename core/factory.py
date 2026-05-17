@@ -32,10 +32,14 @@ from .models import (
     PartyType,
     TeBroadband,
     TeClimateZone,
+    TeEnvironmentalOverlay,
     TeEquityIndex,
     TeEvent,
+    TeHistoricResource,
     TeInfraProject,
     TeMarketTrend,
+    TeNonCompliance,
+    TeParcel,
     TeParty,
     TePartyRelationship,
     TePermit,
@@ -43,6 +47,7 @@ from .models import (
     TeStrDynamics,
     TeTownProfile,
     TeZoning,
+    TeZoningOverlay,
 )
 
 
@@ -832,6 +837,294 @@ class MedallionFactory:
         }
 
         validated: TePropertyAssessment = TePropertyAssessment(**gold_payload)
+        return validated.model_dump()
+
+    # ------------------------------------------------------------------
+    # Domain 14 — Parcel Geometry (GIS polygons + computed dimensions)
+    # ------------------------------------------------------------------
+
+    def map_to_parcel(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform a raw Bronze GIS parcel feature into a validated Gold
+        ``TeParcel`` record.
+
+        ``TeParcel`` is the **GIS polygon counterpart** to
+        ``TePropertyAssessment``.  The two domains share ``parcel_id`` as
+        a join key but live in separate Parquet files because they have
+        different update cadences and different source-of-truth contracts:
+
+        * ``TePropertyAssessment`` — assessor's tax record (annual roll)
+        * ``TeParcel``             — GIS authoritative polygon (continuous)
+
+        Parameters
+        ----------
+        raw_data : dict
+            Source record from the Bronze / GeoJSON-parsed feature.  Must contain:
+
+            * ``te_parcel_pk``         — BigInt PK (assigned by linker).
+            * ``parcel_id``            — Assessor-style natural key.
+            * ``geometry_type``        — ``"Polygon"`` or ``"MultiPolygon"``.
+            * ``geometry_coordinates`` — GeoJSON coordinate array.
+
+            Optional fields promoted to columns when present:
+
+            * ``address``         — Site address from the GIS attributes.
+            * ``area_sqft``       — Polygon area in square feet.
+            * ``perimeter_ft``    — Polygon perimeter in feet.
+            * ``longest_edge_ft`` — Longest outer-ring edge in feet.
+            * ``edges_ft``        — Ordered list of edge lengths in feet.
+            * ``centroid_lat`` / ``centroid_lon`` — Polygon centroid.
+            * ``metadata``        — Sidecar dict for everything else.
+
+        Returns
+        -------
+        dict
+            Validated Gold-tier payload matching ``gold.te_parcel``.
+
+        Raises
+        ------
+        pydantic.ValidationError
+            If required fields are missing or type constraints are violated.
+        """
+        audit = self._inject_audit_fields(raw_data)
+
+        def _to_float(v: Any) -> Optional[float]:
+            if v is None:
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+
+        gold_payload = {
+            "te_parcel_pk":         int(raw_data["te_parcel_pk"]),
+            "parcel_id":            str(raw_data["parcel_id"]),
+            "address":              raw_data.get("address"),
+            "geometry_type":        raw_data["geometry_type"],
+            "geometry_coordinates": raw_data["geometry_coordinates"],
+            "area_sqft":            _to_float(raw_data.get("area_sqft")),
+            "perimeter_ft":         _to_float(raw_data.get("perimeter_ft")),
+            "longest_edge_ft":      _to_float(raw_data.get("longest_edge_ft")),
+            "edges_ft":             list(raw_data.get("edges_ft", [])),
+            "centroid_lat":         _to_float(raw_data.get("centroid_lat")),
+            "centroid_lon":         _to_float(raw_data.get("centroid_lon")),
+            "metadata":             raw_data.get("metadata", {}),
+            **audit,
+        }
+
+        validated: TeParcel = TeParcel(**gold_payload)
+        return validated.model_dump()
+
+    # ------------------------------------------------------------------
+    # Domain 15 — Zoning Overlay Polygons (GIS spatial counterpart of TeZoning)
+    # ------------------------------------------------------------------
+
+    def map_to_zoning_overlay(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform a raw Bronze GIS overlay feature into a validated Gold
+        ``TeZoningOverlay`` record.
+
+        Where ``map_to_zoning`` produces *textual* bylaw rows (allowed_uses,
+        max_height_ft, min_lot_sqft), this method produces the *spatial*
+        polygon that says where each rule-set applies on the map.
+
+        Parameters
+        ----------
+        raw_data : dict
+            Source record from the Bronze / GeoJSON-parsed feature.  Must
+            contain:
+
+            * ``te_overlay_pk``        — BigInt PK (assigned by linker).
+            * ``layer_name``           — Name of the source GIS layer.
+            * ``geometry_type``        — ``"Polygon"`` or ``"MultiPolygon"``.
+            * ``geometry_coordinates`` — GeoJSON coordinate array.
+
+            Optional fields promoted to columns:
+
+            * ``zone_code``    — Short code, e.g. ``"R2"`` or ``"NMF"``.
+            * ``overlay_type`` — Classification, e.g. ``"Base"`` /
+                                 ``"Multi-Family"`` / ``"Historic"``.
+            * ``metadata``     — Sidecar dict (layer_id, source_dataset,
+                                 plus the full raw_attributes payload).
+
+        Returns
+        -------
+        dict
+            Validated Gold-tier payload matching ``gold.te_zoning_overlay``.
+        """
+        audit = self._inject_audit_fields(raw_data)
+
+        gold_payload = {
+            "te_overlay_pk":        int(raw_data["te_overlay_pk"]),
+            "layer_name":           str(raw_data["layer_name"]),
+            "zone_code":            raw_data.get("zone_code"),
+            "overlay_type":         raw_data.get("overlay_type"),
+            "geometry_type":        raw_data["geometry_type"],
+            "geometry_coordinates": raw_data["geometry_coordinates"],
+            "metadata":             raw_data.get("metadata", {}),
+            **audit,
+        }
+
+        validated: TeZoningOverlay = TeZoningOverlay(**gold_payload)
+        return validated.model_dump()
+
+    # ------------------------------------------------------------------
+    # Domain 16 — Historic Resources (MACRIS / NRHP / Local Inventory)
+    # ------------------------------------------------------------------
+
+    def map_to_historic_resource(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform a raw Bronze MACRIS / historic-inventory feature into a
+        validated Gold ``TeHistoricResource`` record.
+
+        Used for both **points** (individual buildings, burial grounds,
+        objects) and **polygons** (historic districts, NRHP-listed areas).
+        The geometry difference is captured in the ``geometry_type`` field;
+        every other field carries the same MACRIS attribute schema.
+
+        Parameters
+        ----------
+        raw_data : dict
+            Source record from the Bronze / GeoJSON-parsed feature.  Must
+            contain:
+
+            * ``te_resource_pk``       — BigInt PK (assigned by linker).
+            * ``town_name``            — Municipality (filter value).
+            * ``geometry_type``        — ``"Point"`` / ``"Polygon"`` / ``"MultiPolygon"``.
+            * ``geometry_coordinates`` — GeoJSON coordinate array.
+
+            Optional MACRIS-attribute fields promoted to columns: ``mhcn``,
+            ``resource_kind``, ``legend``, ``designation``,
+            ``designation_date``, ``historic_name``, ``common_name``,
+            ``address``, ``construction_date``, ``architectural_style``,
+            ``architect``, ``use_type``, ``significance``, ``demolished``.
+
+        Returns
+        -------
+        dict
+            Validated Gold-tier payload matching ``gold.te_historic_resource``.
+        """
+        audit = self._inject_audit_fields(raw_data)
+
+        gold_payload = {
+            "te_resource_pk":       int(raw_data["te_resource_pk"]),
+            "mhcn":                 raw_data.get("mhcn"),
+            "resource_kind":        raw_data.get("resource_kind"),
+            "legend":               raw_data.get("legend"),
+            "designation":          raw_data.get("designation"),
+            "designation_date":     raw_data.get("designation_date"),
+            "historic_name":        raw_data.get("historic_name"),
+            "common_name":          raw_data.get("common_name"),
+            "address":              raw_data.get("address"),
+            "town_name":            str(raw_data["town_name"]),
+            "construction_date":    raw_data.get("construction_date"),
+            "architectural_style":  raw_data.get("architectural_style"),
+            "architect":            raw_data.get("architect"),
+            "use_type":             raw_data.get("use_type"),
+            "significance":         raw_data.get("significance"),
+            "demolished":           raw_data.get("demolished"),
+            "geometry_type":        raw_data["geometry_type"],
+            "geometry_coordinates": raw_data["geometry_coordinates"],
+            "metadata":             raw_data.get("metadata", {}),
+            **audit,
+        }
+
+        validated: TeHistoricResource = TeHistoricResource(**gold_payload)
+        return validated.model_dump()
+
+    # ------------------------------------------------------------------
+    # Domain 17 — Land-Use / Zoning Non-Compliance (descriptive polygons)
+    # ------------------------------------------------------------------
+
+    def map_to_noncompliance(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform a raw Bronze land-use / zoning non-compliance polygon
+        feature into a validated Gold ``TeNonCompliance`` record.
+
+        These polygons are *descriptive* (legal pre-existing non-conforming
+        use, expansion-restricted parcels) rather than enforcement cases,
+        so the model focuses on classification fields rather than dates
+        or case numbers.
+
+        Required keys in *raw_data*:
+          * ``te_violation_pk``      — BigInt PK assigned by linker.
+          * ``geometry_type``        — ``"Polygon"`` / ``"MultiPolygon"``.
+          * ``geometry_coordinates`` — GeoJSON coordinate array.
+
+        Optional keys promoted to columns: ``land_use_code``,
+        ``zone_code_numeric``, ``land_use_zone_diff``, ``status``,
+        ``metadata``.
+        """
+        audit = self._inject_audit_fields(raw_data)
+
+        def _to_int(v: Any) -> Optional[int]:
+            if v is None:
+                return None
+            try:
+                return int(v)
+            except (ValueError, TypeError):
+                return None
+
+        gold_payload = {
+            "te_violation_pk":      int(raw_data["te_violation_pk"]),
+            "land_use_code":        raw_data.get("land_use_code"),
+            "zone_code_numeric":    _to_int(raw_data.get("zone_code_numeric")),
+            "land_use_zone_diff":   _to_int(raw_data.get("land_use_zone_diff")),
+            "status":               raw_data.get("status"),
+            "geometry_type":        raw_data["geometry_type"],
+            "geometry_coordinates": raw_data["geometry_coordinates"],
+            "metadata":             raw_data.get("metadata", {}),
+            **audit,
+        }
+
+        validated: TeNonCompliance = TeNonCompliance(**gold_payload)
+        return validated.model_dump()
+
+    # ------------------------------------------------------------------
+    # Domain 19 — Environmental Overlay (wetlands + flood zones unified)
+    # ------------------------------------------------------------------
+
+    def map_to_environmental_overlay(
+        self, raw_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Transform a raw Bronze wetlands / flood-zone polygon feature into
+        a validated Gold ``TeEnvironmentalOverlay`` record.
+
+        The ``category`` field discriminates wetland vs flood-effective vs
+        flood-preliminary; downstream report code uses the category to
+        choose the appropriate label and severity.
+
+        Required keys in *raw_data*: ``te_overlay_pk``, ``category``,
+        ``source_layer_name``, ``geometry_type``, ``geometry_coordinates``.
+        Optional: ``zone_code``, ``zone_subtype``, ``sfha_flag``,
+        ``static_bfe``, ``metadata``.
+        """
+        audit = self._inject_audit_fields(raw_data)
+
+        def _to_float(v: Any) -> Optional[float]:
+            if v is None:
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+
+        gold_payload = {
+            "te_overlay_pk":        int(raw_data["te_overlay_pk"]),
+            "category":             str(raw_data["category"]),
+            "zone_code":            raw_data.get("zone_code"),
+            "zone_subtype":         raw_data.get("zone_subtype"),
+            "sfha_flag":            raw_data.get("sfha_flag"),
+            "static_bfe":           _to_float(raw_data.get("static_bfe")),
+            "source_layer_name":    str(raw_data["source_layer_name"]),
+            "geometry_type":        raw_data["geometry_type"],
+            "geometry_coordinates": raw_data["geometry_coordinates"],
+            "metadata":             raw_data.get("metadata", {}),
+            **audit,
+        }
+
+        validated: TeEnvironmentalOverlay = TeEnvironmentalOverlay(**gold_payload)
         return validated.model_dump()
 
     # ------------------------------------------------------------------

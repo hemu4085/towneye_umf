@@ -58,6 +58,18 @@ source_mappings:
   town_profile:       "arlington-ma-town-profile"
   # Domain 12 — STR Dynamics (LLM Synthesis)
   str_dynamics:       "arlington-ma-str-dynamics"
+  # Domain 14 — Parcel Geometry (authoritative GIS polygon layer with CAMA join)
+  parcel_geometry:    "arlington-ma-parcels-cama"
+  # Domain 15 — Zoning Overlay Polygons (spatial counterpart to zoning_bylaws)
+  zoning_overlay:     "arlington-ma-zoning-overlay-gis"
+  # Domain 16 — MACRIS Historic Resources (statewide MAPC-hosted)
+  historic_resources: "ma-mhc-macris"
+  # Domain 17 — Land-Use / Zoning Non-Compliance polygons (descriptive, town-published)
+  noncompliance:      "arlington-ma-landuse-noncompliance"
+  # Domain 18 — Local Historic Resources (Arlington-hosted aggregate of LHD/NHD/Overlay/AHC)
+  local_historic:     "arlington-ma-local-historic"
+  # Domain 19 — Environmental Overlays (wetlands + flood-effective + flood-preliminary)
+  environmental_overlay: "arlington-ma-environmental-overlay"
 
 # Public portal URLs used by Bronze-layer scrapers.
 # All scraper code must read URLs exclusively from this block —
@@ -116,6 +128,293 @@ scraper_urls:
   # Scraped via download_zillow_cache.py; stored at data/cache/{town_slug}/zillow_zhvi.csv.
   zillow_zhvi_csv: "https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
 
+  # Domain 14 — Parcel Geometry (MassGIS L3 statewide layer, filtered to
+  # Arlington via TOWN_ID=10).  Tier 5 update (2026-05-07): switched from
+  # Arlington's own AGOL "Parcels with CAMA" (12,644 parcels) to MassGIS
+  # L3 (15,669 Arlington parcels — superset including condo subparcels,
+  # ROW slivers and other CAMA-side records the town's own service does
+  # not publish).  L3 carries the FULL CAMA assessor record per parcel
+  # in raw_attributes (OWNER1, YEAR_BUILT, TOTAL_VAL, LS_DATE, LS_PRICE,
+  # LOT_SIZE, BLD_AREA, ZONING, USE_CODE, STORIES, NUM_ROOMS, etc.) so a
+  # downstream Path-A promoter can lift them into property.parquet
+  # without ever touching the Patriot Properties HTML scraper.
+  #
+  # Field map (layer 0):
+  #   MAP_PAR_ID   stable parcel natural key (preserved from town source,
+  #                e.g. "128.0-0003-0012.0" for Arlington)
+  #   LOC_ID       MassGIS location id  (e.g. "F_725293_2978557")
+  #   SITE_ADDR    site street address  ("29 WALNUT ST")
+  #   ADDR_NUM,    decomposed address parts
+  #   FULL_STR
+  #   PROP_ID      assessor's parcel id (alternate)
+  #   OWNER1       primary owner name
+  #   YEAR_BUILT, BLD_AREA, RES_AREA, STYLE, STORIES, NUM_ROOMS, USE_CODE
+  #   TOTAL_VAL, LAND_VAL, BLDG_VAL, OTHER_VAL, FY
+  #   LS_DATE, LS_PRICE, LS_BOOK, LS_PAGE
+  #   LOT_SIZE (acres) + LOT_UNITS
+  #   ZONING (assessor-side zoning code; complementary to zoning_overlay)
+  #
+  # The previous Arlington-only URL is preserved in
+  # parcels_arcgis_url_legacy for emergency rollback only.
+  parcels_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/Massachusetts_Property_Tax_Parcels/FeatureServer"
+  parcels_arcgis_url_legacy:
+    "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Parcels%20with%20CAMA/FeatureServer"
+
+  # Domain 15 — Zoning Overlay Polygons (FeatureServer root, all polygon
+  # layers ingested).  This is the SPATIAL counterpart to the textual bylaw
+  # data in `zoning_bylaws_mock_data` — it answers "where on the map does
+  # each district apply?" so a parcel can be resolved to its full applicable
+  # rules stack (base zone + overlays).  For Arlington this includes the
+  # MBTA Communities Act §3A overlays (NMF, MBMF) added at the May 2024
+  # and April 2025 Town Meetings.
+  zoning_overlay_arcgis_url: "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Zoning_and_Overlay_Districts/FeatureServer"
+
+  # Domain 17 — Land-Use / Zoning Non-Compliance polygons (descriptive layer
+  # of parcels whose actual land-use code diverges from current zoning;
+  # NOT a regulatory enforcement registry).  ~858 polygons for Arlington.
+  noncompliance_arcgis_url: "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/LandUse_NonCompliance/FeatureServer"
+
+  # Domain 18 — Local Historic Resources (4 Arlington-hosted FeatureServers
+  # aggregated into one Gold parquet).  Complements the statewide MACRIS
+  # data with town-level designations and the official LHD boundaries.
+  local_historic_arcgis_urls:
+    local_historic_district:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Local_Historic_District/FeatureServer"
+    national_historic_district:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/National_Historic_District/FeatureServer"
+    historic_overlay_districts:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Historic_Overlay_Districts/FeatureServer"
+    historic_commission_inventory:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Historic_Commission_Inventory_view/FeatureServer"
+
+  # Domain 19 — Environmental Overlays (3 hydrology FeatureServers
+  # aggregated into one Gold parquet, distinguished by category column).
+  environmental_overlay_arcgis_urls:
+    wetland:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_Wetlands/FeatureServer"
+    flood_effective:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Flood_Zones/FeatureServer"
+    flood_preliminary:
+      "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Flood_Zones_Preliminary_Changes_2023/FeatureServer"
+
+# Domain 13 — Historic Resources (MACRIS / Local Historic District / AHC inventory)
+# Massachusetts Cultural Resource Information System — point + polygon layers
+# hosted by Boston Planning (mirror of MA Historical Commission MACRIS data).
+# Queried at report-generation time using the property's geocoded lat/lon.
+# Designation values include: "Inventoried Property", "LHD", "NRHP", "NRHP and LHD",
+#                             "MA/HL" (MA Historic Landmark), "PR" (Preservation Restriction)
+historic_resources:
+  # ----------------------------------------------------------------------
+  # Authoritative statewide MACRIS GIS source — hosted by MAPC (Metro Boston
+  # Planning Council) on behalf of the MA Historical Commission.
+  # ----------------------------------------------------------------------
+  # Layers:
+  #   0 = MassHistoric Commission Inventory (Points)   ~226k statewide
+  #   1 = MassHistoric Commission Inventory (Areas)    ~7k  statewide (districts)
+  #   2 = MassHistoric Commission Towns                town status meta — skipped
+  # Verified counts for Arlington at scraper-build time: 1,272 points + 57 polygons.
+  #
+  # NOTE — the previous URLs (gis.bostonplans.org/.../MHC_Historic_Inventory)
+  # turned out to be a Boston-only mirror with **zero** Arlington records, so
+  # the report-side "MACRIS hit?" check has historically returned no matches.
+  # That endpoint is removed; the scraper now uses the canonical statewide one.
+  macris_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/MHC_Inventory_GDB/FeatureServer"
+
+  # Exact value used in WHERE TOWN_NAME='…' on the MACRIS service.  This
+  # is case-sensitive and may differ from the slug ('arlington-ma' → 'Arlington').
+  macris_town_name: "Arlington"
+
+  # Public-facing search portals — rendered as clickable links in reports.
+  # MACRIS town code for Arlington = "ARL" (used by the public search UI).
+  macris_search_url:    "https://maps.mhc-macris.net/"
+  ahc_inventory_url:    "https://www.arlingtonma.gov/departments/historical-commission"
+  macris_town_code:     "ARL"
+
+  # Arlington's seven Local Historic Districts (LHDs) — names rendered in reports
+  # when MACRIS returns a district hit but the polygon's name field is empty.
+  known_local_districts:
+    - "Avon Place Historic District"
+    - "Broadway Historic District"
+    - "Central Street Historic District"
+    - "Jason/Gray Street Historic District"
+    - "Mt Gilboa / Crescent Hill Historic District"
+    - "Pleasant Street Historic District"
+    - "Russell Historic District"
+
+# Domain 16 — MACRIS Historic Resource runtime knobs.
+# Mirror of parcels:/zoning_overlay: blocks — every endpoint-specific
+# assumption (field names, layer ids, paging) lives in YAML, never code.
+macris:
+  # Layer ids to skip when enumerating the FeatureServer.  Layer 2 is
+  # "MassHistoric Commission Towns" — a town-status reference layer with
+  # one row per municipality; not useful for buildability questions.
+  exclude_layer_ids: [2]
+
+  # Field-name candidates for the town filter.  Layer 0/1 use TOWN_NAME;
+  # other Massachusetts datasets sometimes use TOWN or MUNICIPALITY.
+  town_filter_field_candidates:
+    - "TOWN_NAME"
+    - "TOWN"
+    - "MUNICIPALITY"
+
+  # Field-name candidates for each promoted column.  Points and polygons
+  # use slightly different abbreviations (ARCHITECTU vs ARCH on the
+  # architectural-style field, etc.) — listing both keeps the scraper
+  # schema-agnostic.
+  mhcn_field_candidates:                ["MHCN"]
+  resource_kind_field_candidates:       ["TYPE"]
+  legend_field_candidates:              ["LEGEND"]
+  designation_field_candidates:         ["DESIGNATIO", "DESIGNATION"]
+  designation_date_field_candidates:    ["D_DATE", "DESIGNATION_DATE"]
+  historic_name_field_candidates:       ["HISTORIC_N", "HISTORIC_NAME"]
+  common_name_field_candidates:         ["COMMON_NAM", "COMMON_NAME"]
+  address_field_candidates:             ["ADDRESS", "STREET_ADDRESS"]
+  construction_date_field_candidates:   ["CONSTRUCTI", "CONSTRUCTION_DATE"]
+  architectural_style_field_candidates: ["ARCHITECTU", "ARCH"]
+  architect_field_candidates:           ["MAKER", "ARCHITECT"]
+  use_type_field_candidates:            ["USE_TYPE"]
+  significance_field_candidates:        ["SIGNIFICAN", "SIGNIFICANCE"]
+  demolished_field_candidates:          ["DEMOLISHED"]
+
+  # ArcGIS pagination — Arlington has ~1,272 points + 57 polygons,
+  # so 1,000 features per page completes in two requests.
+  page_size: 1000
+  max_features: 50000
+  request_timeout_s: 30
+  output_spatial_reference: 4326
+
+# Domain 17 — Land-Use / Zoning Non-Compliance runtime knobs.
+# Mirror of parcels:/zoning_overlay:/macris: blocks.
+noncompliance:
+  land_use_code_field_candidates:    ["LandUseCod", "LANDUSE_CODE", "LandUseCode"]
+  zone_code_numeric_field_candidates: ["zonecode", "ZoneCodeNum", "ZONE_CODE_NUM"]
+  land_use_zone_diff_field_candidates: ["luzndiff", "LUZN_DIFF", "ZoneDiff"]
+  status_field_candidates:           ["status", "STATUS", "Status"]
+
+  page_size: 1000
+  max_features: 20000
+  request_timeout_s: 30
+  output_spatial_reference: 4326
+
+# Domain 18 — Local Historic Resources runtime knobs.
+# Each upstream FeatureServer publishes a different attribute schema;
+# this block carries per-source field-name maps so the multi-source
+# scraper can normalise everything into TeHistoricResource without
+# any source-specific Python code.
+local_historic:
+  # Per-source field maps.  Each top-level key matches a key in
+  # scraper_urls.local_historic_arcgis_urls.  Values are lists of
+  # candidate attribute names (first non-empty wins).
+  source_field_maps:
+    local_historic_district:
+      mhcn:                 []
+      historic_name:        ["district"]
+      common_name:          []
+      address:              []
+      legend:               []
+      designation:          ["overlay1", "overlay2", "overlay3"]
+      designation_date:     ["last_edit"]
+      resource_kind:        []
+      construction_date:    []
+      architectural_style:  []
+      architect:            []
+      use_type:             []
+      significance:         []
+      demolished:           []
+
+    national_historic_district:
+      mhcn:                 []
+      historic_name:        ["Name"]
+      common_name:          []
+      address:              []
+      legend:               []
+      designation:          []
+      designation_date:     []
+      resource_kind:        []
+      construction_date:    []
+      architectural_style:  []
+      architect:            []
+      use_type:             []
+      significance:         []
+      demolished:           []
+
+    historic_overlay_districts:
+      mhcn:                 []
+      historic_name:        ["District", "DistrictName"]
+      common_name:          []
+      address:              []
+      legend:               []
+      designation:          []
+      designation_date:     ["Est_Date"]
+      resource_kind:        []
+      construction_date:    []
+      architectural_style:  []
+      architect:            []
+      use_type:             []
+      significance:         ["TMA"]
+      demolished:           []
+
+    historic_commission_inventory:
+      mhcn:                 ["MHC_id"]
+      historic_name:        ["Hist_Name"]
+      common_name:          ["Comm_Name"]
+      address:              ["FullAddr"]
+      legend:               ["Designated"]   # "Designated" doubles as legend code
+      designation:          ["Designated"]
+      designation_date:     ["D_Date"]
+      resource_kind:        ["Type"]
+      construction_date:    ["Cnstr_Date"]
+      architectural_style:  ["Architect"]    # the alias on this layer is "Architectural Style"
+      architect:            ["Maker"]
+      use_type:             ["UseType"]
+      significance:         ["Significan"]
+      demolished:           []
+
+  # Default legend / overlay-type strings to assign per source when the
+  # upstream layer does not publish one.  Used only as a tiebreaker.
+  source_default_legends:
+    local_historic_district:        "LHD"
+    national_historic_district:     "NHD"
+    historic_overlay_districts:     "Overlay"
+    historic_commission_inventory:  "Inv."
+
+  page_size: 1000
+  max_features: 20000
+  request_timeout_s: 30
+  output_spatial_reference: 4326
+
+# Domain 19 — Environmental Overlay runtime knobs.
+# Each upstream source publishes a slightly different attribute schema
+# (FEMA layers use FLD_ZONE / fld_zone — case-different but otherwise
+# identical; the wetlands layer uses CLASSIF / Source / Acres_GIS).
+# Per-source field maps make this town- and source-agnostic.
+environmental_overlay:
+  source_field_maps:
+    wetland:
+      zone_code:    ["CLASSIF", "Class", "WET_TYPE"]
+      zone_subtype: ["Source", "WET_SUBTYPE"]
+      sfha_flag:    []
+      static_bfe:   []
+
+    flood_effective:
+      zone_code:    ["FLD_ZONE", "fld_zone"]
+      zone_subtype: ["ZONE_SUBTY", "zone_subty"]
+      sfha_flag:    ["SFHA_TF", "sfha_tf"]
+      static_bfe:   ["STATIC_BFE", "static_bfe"]
+
+    flood_preliminary:
+      zone_code:    ["fld_zone", "FLD_ZONE"]
+      zone_subtype: ["zone_subty", "ZONE_SUBTY"]
+      sfha_flag:    ["sfha_tf", "SFHA_TF"]
+      static_bfe:   ["static_bfe", "STATIC_BFE"]
+
+  page_size: 1000
+  max_features: 20000
+  request_timeout_s: 30
+  output_spatial_reference: 4326
+
 # Inline zoning fixture used when zoning_bylaws_json URL is a placeholder or
 # unavailable.  Derived from Arlington MA Zoning Bylaw Article 5 (2024 edition).
 # Replace with a live API fetch once the town publishes a machine-readable feed.
@@ -134,6 +433,120 @@ assessor_to_zoning_map:
 # Bylaw year — used in report section header
 zoning:
   bylaw_year: "2024"
+  # Arlington's official Zoning + Overlay Districts feature service.
+  # Updated April 2025 Town Meeting. Point-in-polygon query at report time.
+  # Fields: ZoneCode (short, e.g. "R2"), ZoneName ("R2: Two Family"), ZoneDesc, Notes
+  arcgis_layer_url: "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Zoning_and_Overlay_Districts/FeatureServer/1/query"
+
+# Domain 15 — Zoning Overlay Polygon runtime knobs.
+# Mirror of the `parcels:` block — the scraper enumerates polygon layers
+# from the FeatureServer root, paginates through every feature, and writes
+# one Gold row per polygon.  All field-name candidates are config-driven so
+# towns whose feature service uses different attribute names can onboard
+# without any Python change.
+zoning_overlay:
+  # Field-name candidates for the zone code (short string).  Arlington
+  # publishes two distinct attribute schemas in the same FeatureServer:
+  #   - Base zone layer uses `ZoneCode`  ("R0", "R1", "R2", ...).
+  #   - Overlay layer  uses `OverlayAbbr` ("NMF", "MBMF") — the §3A
+  #     MBTA-Communities-Act sub-districts adopted at Town Meeting 2024/25.
+  # First non-empty value wins.  Order matters — most-specific first.
+  code_field_candidates:
+    - "ZoneCode"        # Arlington base zones — primary
+    - "OverlayAbbr"     # Arlington overlay layer — short code (NMF / MBMF)
+    - "OverlayCode"
+    - "Zone_Code"
+    - "ZONE_CODE"
+    - "DistrictCode"
+    - "OVERLAY_CODE"
+    - "Code"
+
+  # Field-name candidates for the overlay type / classification.  Used to
+  # tag a polygon as "Base", "Multi-Family", "Historic", "Mass Ave", etc.
+  type_field_candidates:
+    - "OverlayType"     # Arlington overlay layer ("Multi-Family", "Historic")
+    - "Overlay_Type"
+    - "DistrictType"
+    - "DISTRICT_TYPE"
+    - "Type"
+    - "Category"
+
+  # Field-name candidates for the human-readable district name.  Used as
+  # a fallback when zone_code is empty (e.g. "Russell Historic District").
+  name_field_candidates:
+    - "ZoneName"            # Arlington base zones — "R2: Two Family"
+    - "OverlayDistrict"     # Arlington overlay layer — "Neighborhood Multi-Family Housing"
+    - "ZoneDesc"
+    - "DistrictName"
+    - "Name"
+    - "DISTRICT_NAME"
+
+  # ArcGIS pagination knob — features fetched per HTTP request.  Overlay
+  # services have FAR fewer features than parcels; a small page works fine.
+  page_size: 500
+
+  # Hard upper bound on total features ingested per run.  Arlington has
+  # ~50-200 polygons across all overlay layers — 5000 is comfortable headroom.
+  max_features: 5000
+
+  # ArcGIS request timeout, seconds.
+  request_timeout_s: 30
+
+  # Coordinate system the scraper requests (4326 = WGS-84 lon/lat).
+  output_spatial_reference: 4326
+
+# Domain 14 — Parcel Geometry runtime knobs.
+# All endpoint-specific assumptions live here; the parcel scraper reads them
+# at runtime and never hardcodes a field name or layer id.
+parcels:
+  # WHERE clause passed to the parcels FeatureServer query.  When the
+  # source is a statewide multi-town layer (MassGIS L3), this filters
+  # to the target town only.  Arlington's MassGIS TOWN_ID is 10.
+  # When the source is a per-town single-municipality service (legacy),
+  # set this to "1=1" or omit (defaults to "1=1").
+  where_clause: "TOWN_ID=10"
+
+  # Field-name candidates the scraper tries (in order) when extracting the
+  # parcel natural key from an ArcGIS attribute dict.  First non-empty value
+  # wins.  Vary across towns / schema generations — keep ordered by likelihood.
+  id_field_candidates:
+    - "MAP_PAR_ID"   # MassGIS L3 + Arlington legacy primary id (e.g. "128.0-0003-0012.0")
+    - "CAMA_ID"      # CAMA system id (alternate)
+    - "LOC_ID"       # MassGIS location id (fallback for towns without parcel ids)
+    - "PROP_ID"      # assessor's parcel id (alternate)
+    - "PARCEL_ID"    # generic fallback used by towns that publish a clean field
+
+  # Field-name candidates for the human-readable site address.
+  # Order matters: first non-empty value wins, so cleaner / canonical
+  # representations should appear before padded or decomposed alternatives.
+  # Tier 5 update: SITE_ADDR (MassGIS L3 canonical) now leads — same field
+  # the rest of the lake already keys on; the legacy Arlington-only fields
+  # remain as fallbacks for any town still pointed at an in-house service.
+  address_field_candidates:
+    - "SITE_ADDR"     # MassGIS L3 — clean, canonical (e.g. "29 WALNUT ST")
+    - "m_addr_full"   # Arlington legacy AGOL — clean, no padding
+    - "fullstreet"    # Arlington legacy AGOL — padded variant; whitespace-collapsed by scraper
+    - "SITUSADDR"     # common ESRI demographics / Tyler Munis
+    - "PROP_LOC"      # Vision Government Solutions assessor exports
+    - "ADDRESS"       # generic fallback used by towns with simple schemas
+    - "FULL_ADDR"     # alternate generic form
+    - "FULLADDR"      # alternate (no underscore) — seen on some MA towns
+
+  # ArcGIS pagination knob — features fetched per HTTP request.  Most ArcGIS
+  # services default to maxRecordCount=2000.  Lowering this trades round-trips
+  # for memory; raising it risks 413/504 from upstream.
+  page_size: 1000
+
+  # Hard upper bound on total features ingested per run.  Set high enough to
+  # cover the town's full parcel count.  Arlington has ~13,000 parcels.
+  max_features: 50000
+
+  # ArcGIS request timeout, seconds.
+  request_timeout_s: 30
+
+  # Coordinate system the scraper requests (4326 = WGS-84 lon/lat).
+  # GeoJSON output assumes 4326; do not change without a downstream re-project.
+  output_spatial_reference: 4326
 
 zoning_bylaws_mock_data:
   - zone_code: "R0"
@@ -289,6 +702,13 @@ scraper_column_map:
 # SearchOwner="" triggers an "all properties" listing.
 scraper_search_params:
   SearchOwner: ""
+
+# Per-portal query-string param names for single-address lookup.
+# Used by the report generator's on-demand fetch when an address is missing
+# from the cached parquet.
+scraper_search_by_address:
+  street_number_param: "SearchStreetNumber"
+  street_name_param:   "SearchStreetName"
 
 # Name of the query-string parameter used for pagination (portal-specific).
 # Patriot Properties uses lowercase "page"; other portals may use "Page" or "p".
