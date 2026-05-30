@@ -16,6 +16,7 @@ export default function ReportGrid({
   address,
   parcel,
   requestEmail,
+  apiOnline,
 }) {
   const visibleReports = reportsForUserType(userType);
 
@@ -33,8 +34,8 @@ export default function ReportGrid({
         const isLoading = loadingId === r.id;
         const isDone = completed?.[r.id];
         const status = availability?.[r.id];
-        const isUnavailable = status && status.available === false;
-        const isChecking = availabilityLoading && !status;
+        const isUnavailable = apiOnline === true && status?.available === false;
+        const isChecking = availabilityLoading && apiOnline === true && !status;
 
         const className = `text-left card transition-all ${
           isUnavailable

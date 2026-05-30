@@ -1,40 +1,58 @@
 import { useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
 
-export default function AddressInput({ value, onChange, onSubmit, disabled }) {
+export default function AddressInput({ value, onChange, onSubmit, disabled, suggestEnabled = true }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const rootRef = useRef(null);
+  const abortRef = useRef(null);
+  const loadingTimerRef = useRef(null);
   const listId = 'address-suggestions';
 
   useEffect(() => {
     const q = value.trim();
-    if (q.length < 3) {
+    if (!suggestEnabled || q.length < 3) {
       setSuggestions([]);
       setOpen(false);
       setActiveIndex(-1);
+      setLoading(false);
       return undefined;
     }
 
     const timer = setTimeout(async () => {
-      setLoading(true);
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      loadingTimerRef.current = setTimeout(() => setLoading(true), 350);
+
       try {
         const results = await suggestAddresses(q);
+        if (controller.signal.aborted) return;
         setSuggestions(results);
         setOpen(results.length > 0);
         setActiveIndex(-1);
       } catch {
+        if (controller.signal.aborted) return;
         setSuggestions([]);
         setOpen(false);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          clearTimeout(loadingTimerRef.current);
+          setLoading(false);
+        }
       }
-    }, 250);
+    }, 450);
 
-    return () => clearTimeout(timer);
-  }, [value]);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(loadingTimerRef.current);
+      abortRef.current?.abort();
+      setLoading(false);
+    };
+  }, [value, suggestEnabled]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -108,8 +126,8 @@ export default function AddressInput({ value, onChange, onSubmit, disabled }) {
                      focus:outline-none focus:border-gold"
         />
 
-        {loading && value.trim().length >= 3 && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-graytown">
+        {suggestEnabled && loading && value.trim().length >= 3 && (
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-graytown pointer-events-none">
             Searching…
           </span>
         )}

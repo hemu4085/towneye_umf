@@ -4,16 +4,9 @@ import AddressInput from '../components/AddressInput';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { fetchReportAvailability, resolveParcel } from '../api';
-import { reportsForUserType } from '../reportCatalog';
+import { checkApiHealth, fetchReportAvailability, resolveParcel } from '../api';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
-
-function allUnavailable(userType, reason) {
-  return Object.fromEntries(
-    reportsForUserType(userType).map((r) => [r.id, { available: false, reason }]),
-  );
-}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -26,6 +19,7 @@ export default function Home() {
   const [availability, setAvailability] = useState(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
+  const [apiOnline, setApiOnline] = useState(null);
 
   useEffect(() => {
     if (location.state?.address) setAddress(location.state.address);
@@ -33,10 +27,22 @@ export default function Home() {
   }, [location.state]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ok = await checkApiHealth();
+      if (!cancelled) setApiOnline(ok);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const trimmed = address.trim();
-    if (!userType || trimmed.length < 5) {
+    if (!userType || trimmed.length < 5 || !apiOnline) {
       setParcel(null);
       setAvailability(null);
+      setAvailabilityLoading(false);
       return undefined;
     }
 
@@ -50,17 +56,19 @@ export default function Home() {
         setError('');
       } catch (err) {
         setParcel(null);
-        setAvailability(allUnavailable(userType, err.message));
+        setAvailability(null);
+        setError(err.message);
       } finally {
         setAvailabilityLoading(false);
       }
-    }, 400);
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, [address, userType]);
+  }, [address, userType, apiOnline]);
 
   async function handleReportClick(report) {
-    if (availability?.[report.id]?.available === false) return;
+    const status = availability?.[report.id];
+    if (status && status.available === false) return;
 
     if (!address.trim()) {
       setError('Enter a property address.');
@@ -68,6 +76,10 @@ export default function Home() {
     }
     if (!userType) {
       setError('Select your role to choose a report.');
+      return;
+    }
+    if (!apiOnline) {
+      setError('Report API is not connected. Set VITE_API_URL on Vercel or deploy the backend.');
       return;
     }
 
@@ -103,7 +115,18 @@ export default function Home() {
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
-          <AddressInput value={address} onChange={setAddress} />
+          {apiOnline === false && (
+            <div className="w-full max-w-2xl mb-6 px-4 py-3 rounded-lg border border-gold/40 bg-gold/10 text-sm text-cream text-center">
+              Report API is offline — address autocomplete and report generation need a backend.
+              Add <code className="text-gold">VITE_API_URL</code> in Vercel env vars.
+            </div>
+          )}
+
+          <AddressInput
+            value={address}
+            onChange={setAddress}
+            suggestEnabled={apiOnline === true}
+          />
           <UserTypeSelector value={userType} onChange={setUserType} />
 
           {userType && (
@@ -116,15 +139,16 @@ export default function Home() {
                 loadingId={loadingReportId}
                 onGenerate={handleReportClick}
                 availability={availability}
-                availabilityLoading={availabilityLoading}
+                availabilityLoading={availabilityLoading && apiOnline === true}
                 address={address.trim()}
                 parcel={parcel}
                 requestEmail={requestEmail}
+                apiOnline={apiOnline}
               />
             </div>
           )}
 
-          {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
+          {error && <p className="text-red-400 mt-4 text-center max-w-xl">{error}</p>}
         </div>
       </main>
     </div>
