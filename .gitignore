@@ -34,6 +34,11 @@ data/*.log
 # Report outputs — generated on-demand, not source code
 reports/output/
 
+# Node / frontend build artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
 # IDE and OS
 .vscode/
 .cursor/
