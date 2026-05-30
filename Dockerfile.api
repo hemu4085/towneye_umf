@@ -1,0 +1,30 @@
+# TownEye Portal API — Docker image for Render, Railway, etc.
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wkhtmltopdf \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend backend
+COPY core core
+COPY configs configs
+COPY reports reports
+
+# Demo gold data (run scripts/prepare_demo_data.sh before deploy)
+COPY demo-data/gold/ /data/gold/
+
+RUN mkdir -p /data/gold /tmp/towneye/reports
+
+ENV GOLD_DATA_PATH=/data/gold
+ENV REPORTS_OUTPUT_PATH=/tmp/towneye/reports
+ENV PORTAL_PUBLIC_URL=https://demo.towneye.ai
+ENV TOWNEYE_ENV=production
+
+EXPOSE 8000
+
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}

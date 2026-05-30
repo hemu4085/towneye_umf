@@ -1,0 +1,26 @@
+# Render Blueprint — TownEye Portal API
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: towneye-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORTAL_PUBLIC_URL
+        value: https://demo.towneye.ai
+      - key: CORS_ORIGINS
+        value: https://demo.towneye.ai,https://www.demo.towneye.ai,https://towneye.vercel.app
+      - key: SUPPORTED_TOWNS
+        value: arlington-ma
+      - key: GOLD_DATA_PATH
+        value: /data/gold
+      - key: REPORTS_OUTPUT_PATH
+        value: /tmp/towneye/reports
+      - key: TOWNEYE_ENV
+        value: production
+      # Add in Render dashboard (secret):
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
