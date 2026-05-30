@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .btn-gold {
+    @apply bg-gold text-navy font-semibold px-6 py-3 rounded-lg
+           hover:bg-gold-light transition-colors disabled:opacity-50;
+  }
+  .btn-outline {
+    @apply border border-gold text-cream px-4 py-2 rounded-lg
+           hover:bg-navy-light transition-colors;
+  }
+  .card {
+    @apply bg-navy-light border border-gold/30 rounded-xl p-5;
+  }
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      #122849 0%,
+      #C9A84C44 50%,
+      #122849 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

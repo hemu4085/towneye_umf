@@ -1,0 +1,132 @@
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import AddressInput from '../components/AddressInput';
+import FlowSteps from '../components/FlowSteps';
+import ReportGrid from '../components/ReportGrid';
+import UserTypeSelector from '../components/UserTypeSelector';
+import { fetchReportAvailability, resolveParcel } from '../api';
+import { reportsForUserType } from '../reportCatalog';
+
+const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
+
+function allUnavailable(userType, reason) {
+  return Object.fromEntries(
+    reportsForUserType(userType).map((r) => [r.id, { available: false, reason }]),
+  );
+}
+
+export default function Home() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [address, setAddress] = useState(location.state?.address || '');
+  const [userType, setUserType] = useState(location.state?.userType || null);
+  const [error, setError] = useState('');
+  const [loadingReportId, setLoadingReportId] = useState(null);
+  const [parcel, setParcel] = useState(null);
+  const [availability, setAvailability] = useState(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
+
+  useEffect(() => {
+    if (location.state?.address) setAddress(location.state.address);
+    if (location.state?.userType) setUserType(location.state.userType);
+  }, [location.state]);
+
+  useEffect(() => {
+    const trimmed = address.trim();
+    if (!userType || trimmed.length < 5) {
+      setParcel(null);
+      setAvailability(null);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      setAvailabilityLoading(true);
+      try {
+        const data = await fetchReportAvailability(trimmed);
+        setParcel(data.parcel);
+        setAvailability(data.reports);
+        if (data.report_request_email) setRequestEmail(data.report_request_email);
+        setError('');
+      } catch (err) {
+        setParcel(null);
+        setAvailability(allUnavailable(userType, err.message));
+      } finally {
+        setAvailabilityLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [address, userType]);
+
+  async function handleReportClick(report) {
+    if (availability?.[report.id]?.available === false) return;
+
+    if (!address.trim()) {
+      setError('Enter a property address.');
+      return;
+    }
+    if (!userType) {
+      setError('Select your role to choose a report.');
+      return;
+    }
+
+    setError('');
+    setLoadingReportId(report.id);
+    try {
+      const resolved = parcel || (await resolveParcel(address.trim()));
+      navigate(`/report/${report.id}`, {
+        state: {
+          report,
+          parcel: resolved,
+          userType,
+          address: address.trim(),
+        },
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingReportId(null);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="px-6 py-8 text-center border-b border-gold/20">
+        <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
+        <p className="text-graytown mt-2 text-lg">
+          AI-Powered Real Estate Intelligence for Massachusetts
+        </p>
+      </header>
+
+      <main className="flex-1 flex flex-col items-center px-6 py-12">
+        <FlowSteps current={userType ? 'pick' : 'address'} />
+
+        <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
+          <AddressInput value={address} onChange={setAddress} />
+          <UserTypeSelector value={userType} onChange={setUserType} />
+
+          {userType && (
+            <div className="w-full mt-2">
+              <h2 className="font-display text-lg text-cream text-center mt-6">
+                Choose a report to generate
+              </h2>
+              <ReportGrid
+                userType={userType}
+                loadingId={loadingReportId}
+                onGenerate={handleReportClick}
+                availability={availability}
+                availabilityLoading={availabilityLoading}
+                address={address.trim()}
+                parcel={parcel}
+                requestEmail={requestEmail}
+              />
+            </div>
+          )}
+
+          {error && <p className="text-red-400 mt-4 text-center">{error}</p>}
+        </div>
+      </main>
+    </div>
+  );
+}
