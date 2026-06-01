@@ -1,0 +1,18 @@
+# TownEye Portal API — production deploy (Render/Railway/Docker)
+# Excludes Streamlit, Playwright, pytest, and scraper-only deps for faster builds.
+
+pydantic>=2.0
+PyYAML>=6.0
+requests>=2.31
+pandas>=2.0
+pyarrow>=14.0
+duckdb>=0.10
+shapely>=2.0
+geohash2>=1.1
+anthropic>=0.25
+jinja2>=3.1
+fastapi>=0.115
+uvicorn[standard]>=0.32
+httpx>=0.27
+python-dotenv>=1.0
+email-validator>=2.0

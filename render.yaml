@@ -1,5 +1,8 @@
 # Render Blueprint — TownEye Portal API
 # https://render.com/docs/blueprint-spec
+#
+# Option A (recommended): Docker — deps baked into image
+# Option B: Native Python — set build/start to scripts/render_*.sh
 
 services:
   - type: web
@@ -24,3 +27,13 @@ services:
       # Add in Render dashboard (secret):
       # - key: ANTHROPIC_API_KEY
       #   sync: false
+
+  # Uncomment for native Python instead of Docker:
+  # - type: web
+  #   name: towneye-api-python
+  #   runtime: python
+  #   plan: free
+  #   buildCommand: bash scripts/render_build.sh
+  #   startCommand: bash scripts/render_start.sh
+  #   healthCheckPath: /api/health
+  #   envVars: ...

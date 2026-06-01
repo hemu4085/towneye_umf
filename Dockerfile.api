@@ -7,18 +7,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements-portal.txt .
+RUN pip install --no-cache-dir -r requirements-portal.txt
 
 COPY backend backend
 COPY core core
 COPY configs configs
 COPY reports reports
 
-# Demo gold data (run scripts/prepare_demo_data.sh before deploy)
-COPY demo-data/gold/ /data/gold/
-
-RUN mkdir -p /data/gold /tmp/towneye/reports
+# Demo gold data (optional — run scripts/prepare_demo_data.sh before deploy for parcel search)
+COPY demo-data/ /tmp/demo-data/
+RUN mkdir -p /data/gold /tmp/towneye/reports \
+    && if [ -d /tmp/demo-data/gold ] && [ -n "$(find /tmp/demo-data/gold -name '*.parquet' -print -quit)" ]; then \
+         cp -r /tmp/demo-data/gold/* /data/gold/; \
+       fi
 
 ENV GOLD_DATA_PATH=/data/gold
 ENV REPORTS_OUTPUT_PATH=/tmp/towneye/reports

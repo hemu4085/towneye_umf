@@ -1,0 +1,2 @@
+# Placeholder so Docker build succeeds before demo parquet is committed.
+# Run: ./scripts/prepare_demo_data.sh && git add demo-data/
