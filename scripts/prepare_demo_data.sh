@@ -4,6 +4,12 @@
 # Default town: arlington-ma (from SUPPORTED_TOWNS or first arg).
 set -euo pipefail
 
+# Large geometry layers excluded from Render demo image (512MB RAM).
+# Full layers remain in data/gold/ for local dev.
+DEMO_EXCLUDE=(
+  "environmental-overlay.parquet"
+)
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC_ROOT="${ROOT}/data/gold"
 DEST_ROOT="${ROOT}/demo-data/gold"
@@ -33,10 +39,25 @@ for town in "${TOWNS[@]}"; do
 
   rm -rf "${dest}"
   mkdir -p "${dest}"
-  cp -a "${src}"/*.parquet "${dest}/"
+  copied=0
+  for f in "${src}"/*.parquet; do
+    base="$(basename "${f}")"
+    skip=0
+    for ex in "${DEMO_EXCLUDE[@]}"; do
+      if [[ "${base}" == "${ex}" ]]; then
+        skip=1
+        echo "  skip ${base} (demo slim profile)"
+        break
+      fi
+    done
+    if [[ "${skip}" -eq 0 ]]; then
+      cp -a "${f}" "${dest}/"
+      copied=$((copied + 1))
+    fi
+  done
 
   bytes="$(du -sb "${dest}" | cut -f1)"
-  echo "OK: ${town} — ${count} parquet file(s), $(numfmt --to=iec-i --suffix=B "${bytes}" 2>/dev/null || echo "${bytes} bytes") → demo-data/gold/${town}/"
+  echo "OK: ${town} — ${copied} parquet file(s), $(numfmt --to=iec-i --suffix=B "${bytes}" 2>/dev/null || echo "${bytes} bytes") → demo-data/gold/${town}/"
 done
 
 echo "Done. Commit demo-data/ and push to trigger Render rebuild."

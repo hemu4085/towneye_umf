@@ -184,26 +184,66 @@ async def _lookup_gis(town_slug: str, address: str) -> Optional[dict[str, Any]]:
     return None
 
 
-def _assessor_snapshot(town_slug: str, parcel_id: str) -> dict[str, Any]:
-    from reports.buildability_brief import BriefInputs, BuildabilityBriefGenerator
+def _read_property_row(town_slug: str, parcel_id: str) -> Optional[pd.Series]:
+    path = get_settings().gold_data_path / town_slug / "property.parquet"
+    if not path.exists():
+        return None
+    df = pd.read_parquet(path)
+    if df.empty or "parcel_id" not in df.columns:
+        return None
+    hit = df[df["parcel_id"] == parcel_id]
+    if hit.empty:
+        return None
+    return hit.iloc[0]
 
-    gen = BuildabilityBriefGenerator(town_slug=town_slug, data_dir=get_settings().gold_data_path)
-    data = gen.collect_data(BriefInputs(town_slug=town_slug, parcel_id=parcel_id))
-    p = data.parcel
-    prop = data.property_info
-    snapshot: dict[str, Any] = {
-        "address": p.address,
-        "parcel_id": p.parcel_id,
-        "lot_size_sqft": p.area_sqft,
-        "year_built": prop.year_built if prop else None,
-        "owner": prop.owner_name if prop else None,
-        "assessed_value": prop.assessed_value if prop else None,
-        "current_use": prop.luc_description or prop.luc if prop else None,
-        "zoning_base": data.primary_zone_code,
-        "zoning_overlay": data.primary_overlay_code,
-        "verdict": data.headline_verdict_text,
+
+def _read_parcel_row(town_slug: str, parcel_id: str) -> Optional[pd.Series]:
+    path = get_settings().gold_data_path / town_slug / "parcel.parquet"
+    if not path.exists():
+        return None
+    df = pd.read_parquet(path, columns=["parcel_id", "address", "area_sqft"])
+    if df.empty:
+        return None
+    hit = df[df["parcel_id"] == parcel_id]
+    if hit.empty:
+        return None
+    return hit.iloc[0]
+
+
+def _assessor_snapshot(town_slug: str, parcel_id: str) -> dict[str, Any]:
+    """Lightweight assessor card for resolve/availability (no full brief generation)."""
+    parcel_row = _read_parcel_row(town_slug, parcel_id)
+    prop_row = _read_property_row(town_slug, parcel_id)
+
+    lot_size_sqft = None
+    if parcel_row is not None and pd.notna(parcel_row.get("area_sqft")):
+        lot_size_sqft = float(parcel_row["area_sqft"])
+
+    owner = year_built = assessed_value = current_use = None
+    if prop_row is not None:
+        if pd.notna(prop_row.get("lot_size_sqft")):
+            lot_size_sqft = float(prop_row["lot_size_sqft"])
+        owner = prop_row.get("owner_name")
+        if pd.notna(prop_row.get("year_built")):
+            year_built = int(prop_row["year_built"])
+        if pd.notna(prop_row.get("assessed_value")):
+            assessed_value = float(prop_row["assessed_value"])
+        luc_desc = prop_row.get("luc_description")
+        luc = prop_row.get("luc")
+        current_use = luc_desc if pd.notna(luc_desc) and luc_desc else luc
+
+    return {
+        "address": str(parcel_row["address"]) if parcel_row is not None else "",
+        "parcel_id": parcel_id,
+        "lot_size_sqft": lot_size_sqft,
+        "year_built": year_built,
+        "owner": str(owner) if owner is not None and pd.notna(owner) else None,
+        "assessed_value": assessed_value,
+        "current_use": str(current_use) if current_use is not None and pd.notna(current_use) else None,
+        "zoning_base": None,
+        "zoning_overlay": None,
+        "verdict": None,
     }
-    return snapshot
 
 
 class ParcelNotFoundError(Exception):

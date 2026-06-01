@@ -4,24 +4,38 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
+
 from backend.config import get_settings
-from backend.services.buildability import collect_brief_data
 
 LLM_REPORTS = frozenset({"market", "proforma", "neighborhood"})
 BRIEF_REPORTS = frozenset({"buildability", "zoning", "risk", "lender"})
 ALL_REPORTS = BRIEF_REPORTS | LLM_REPORTS
 
 
-def get_report_availability(town_slug: str, parcel_id: str) -> dict[str, dict[str, Any]]:
-    brief_ok = False
-    brief_reason = ""
-
+def _brief_data_available(town_slug: str, parcel_id: str) -> tuple[bool, str]:
+    """Fast check without loading overlay geometry (Render free-tier memory)."""
+    gold = get_settings().gold_data_path
+    parcel_path = gold / town_slug / "parcel.parquet"
+    property_path = gold / town_slug / "property.parquet"
+    if not parcel_path.is_file():
+        return False, "Parcel layer is not available for this town."
+    if not property_path.is_file():
+        return False, "Assessor layer is not available for this town."
     try:
-        collect_brief_data(town_slug, parcel_id)
-        brief_ok = True
+        parcels = pd.read_parquet(parcel_path, columns=["parcel_id"])
+        if parcel_id not in set(parcels["parcel_id"].astype(str)):
+            return False, "Parcel not found in town GIS layer."
+        props = pd.read_parquet(property_path, columns=["parcel_id"])
+        if parcel_id not in set(props["parcel_id"].astype(str)):
+            return False, "Assessor record not found for this parcel."
     except Exception as exc:
-        brief_reason = str(exc) or "Required parcel data is not available."
+        return False, str(exc) or "Required parcel data is not available."
+    return True, ""
 
+
+def get_report_availability(town_slug: str, parcel_id: str) -> dict[str, dict[str, Any]]:
+    brief_ok, brief_reason = _brief_data_available(town_slug, parcel_id)
     has_llm = bool(get_settings().anthropic_api_key.strip())
     llm_reason = "AI synthesis is not configured for this report."
 

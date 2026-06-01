@@ -79,7 +79,7 @@ export default function Home() {
       return;
     }
     if (!apiOnline) {
-      setError('Report API is not connected. Set VITE_API_URL on Vercel or deploy the backend.');
+      setError('Report API is offline. Set VITE_API_URL to the Render API URL in Vercel (see portal/README.md).');
       return;
     }
 
@@ -117,8 +117,8 @@ export default function Home() {
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
           {apiOnline === false && (
             <div className="w-full max-w-2xl mb-6 px-4 py-3 rounded-lg border border-gold/40 bg-gold/10 text-sm text-cream text-center">
-              Report API is offline — address autocomplete and report generation need a backend.
-              Add <code className="text-gold">VITE_API_URL</code> in Vercel env vars.
+              Report API is offline. Set{' '}
+              <code className="text-gold">VITE_API_URL=https://towneye-umf.onrender.com</code> in Vercel.
             </div>
           )}
 
