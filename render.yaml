@@ -15,7 +15,7 @@ services:
       - key: PORTAL_PUBLIC_URL
         value: https://demo.towneye.ai
       - key: CORS_ORIGINS
-        value: https://demo.towneye.ai,https://www.demo.towneye.ai,https://towneye.vercel.app
+        value: https://demo.towneye.ai,https://www.demo.towneye.ai,https://towneye-umf.vercel.app,https://towneye.vercel.app
       - key: SUPPORTED_TOWNS
         value: arlington-ma
       - key: GOLD_DATA_PATH
