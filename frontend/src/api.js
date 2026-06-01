@@ -1,17 +1,34 @@
-/** API base URL (no trailing slash). Empty = same origin (/api via Vite proxy or Vercel rewrite). */
-export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+/**
+ * API base URL (no trailing slash).
+ * Production uses same-origin /api — vercel.json rewrites to Render (no CORS).
+ * Dev uses Vite proxy when VITE_API_URL is unset; direct URL when set.
+ */
+function resolveApiBase() {
+  if (import.meta.env.PROD) return '';
+  return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+}
 
+export const API_BASE = resolveApiBase();
 export const API_ROOT = API_BASE ? `${API_BASE}/api` : '/api';
 
+const HEALTH_TIMEOUT_MS = 20000;
+
 export async function checkApiHealth() {
-  try {
-    const res = await fetch(`${API_ROOT}/health`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data?.status === 'ok';
-  } catch {
-    return false;
+  const url = `${API_ROOT}/health`;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+        cache: 'no-store',
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data?.status === 'ok') return true;
+    } catch {
+      /* Render free tier cold start — retry once */
+    }
   }
+  return false;
 }
 
 export async function checkAccess(email) {

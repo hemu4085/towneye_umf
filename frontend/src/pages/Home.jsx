@@ -117,8 +117,10 @@ export default function Home() {
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
           {apiOnline === false && (
             <div className="w-full max-w-2xl mb-6 px-4 py-3 rounded-lg border border-gold/40 bg-gold/10 text-sm text-cream text-center">
-              Report API is offline. Set{' '}
-              <code className="text-gold">VITE_API_URL=https://towneye-umf.onrender.com</code> in Vercel.
+              Report API is offline. Redeploy the Vercel project after pulling latest{' '}
+              <code className="text-gold">vercel.json</code> (proxies <code className="text-gold">/api</code>{' '}
+              to Render). If you set <code className="text-gold">VITE_API_URL</code> in Vercel, remove it or add
+              this site to Render <code className="text-gold">CORS_ORIGINS</code>.
             </div>
           )}
 
