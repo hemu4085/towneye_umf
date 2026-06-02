@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
 
+/** Fire suggest quickly while typing (ms). */
+const DEBOUNCE_MS = 120;
+
+function minQueryLength(query) {
+  const q = query.trim();
+  if (q.length >= 3) return 3;
+  if (q.length >= 2 && /\d/.test(q)) return 2;
+  return 3;
+}
+
 export default function AddressInput({ value, onChange, onSubmit, disabled, suggestEnabled = true }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -8,12 +18,13 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
   const [loading, setLoading] = useState(false);
   const rootRef = useRef(null);
   const abortRef = useRef(null);
-  const loadingTimerRef = useRef(null);
   const listId = 'address-suggestions';
 
   useEffect(() => {
     const q = value.trim();
-    if (!suggestEnabled || q.length < 3) {
+    const minLen = minQueryLength(q);
+
+    if (!suggestEnabled || q.length < minLen) {
       setSuggestions([]);
       setOpen(false);
       setActiveIndex(-1);
@@ -21,37 +32,30 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
       return undefined;
     }
 
+    setOpen(true);
+    setLoading(true);
+
     const timer = setTimeout(async () => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      loadingTimerRef.current = setTimeout(() => setLoading(true), 350);
-
       try {
-        const results = await suggestAddresses(q);
+        const results = await suggestAddresses(q, 8, controller.signal);
         if (controller.signal.aborted) return;
         setSuggestions(results);
         setOpen(results.length > 0);
         setActiveIndex(-1);
       } catch {
         if (controller.signal.aborted) return;
-        setSuggestions([]);
-        setOpen(false);
+        setSuggestions((prev) => prev);
+        setOpen((prev) => prev);
       } finally {
-        if (!controller.signal.aborted) {
-          clearTimeout(loadingTimerRef.current);
-          setLoading(false);
-        }
+        if (!controller.signal.aborted) setLoading(false);
       }
-    }, 450);
+    }, DEBOUNCE_MS);
 
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(loadingTimerRef.current);
-      abortRef.current?.abort();
-      setLoading(false);
-    };
+    return () => clearTimeout(timer);
   }, [value, suggestEnabled]);
 
   useEffect(() => {
@@ -99,6 +103,8 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
     }
   }
 
+  const showPanel = open && (suggestions.length > 0 || loading);
+
   return (
     <form
       onSubmit={(e) => {
@@ -111,13 +117,17 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
         <input
           type="text"
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={showPanel}
           aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          onFocus={() => {
+            if (value.trim().length >= minQueryLength(value) && (suggestions.length > 0 || loading)) {
+              setOpen(true);
+            }
+          }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder="e.g. 29 Walnut St, Arlington MA"
@@ -126,13 +136,13 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
                      focus:outline-none focus:border-gold"
         />
 
-        {suggestEnabled && loading && value.trim().length >= 3 && (
+        {suggestEnabled && loading && value.trim().length >= minQueryLength(value) && (
           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-graytown pointer-events-none">
             Searching…
           </span>
         )}
 
-        {open && suggestions.length > 0 && (
+        {showPanel && (
           <ul
             id={listId}
             role="listbox"
@@ -158,6 +168,9 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
                 </button>
               </li>
             ))}
+            {loading && suggestions.length === 0 && (
+              <li className="px-4 py-3 text-sm text-graytown">Finding addresses…</li>
+            )}
           </ul>
         )}
       </div>

@@ -49,10 +49,10 @@ export async function joinWaitlist(data) {
   return res.json();
 }
 
-export async function suggestAddresses(query, limit = 8) {
+export async function suggestAddresses(query, limit = 8, signal) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const res = await fetch(`${API_ROOT}/parcels/suggest?${params}`, {
-    signal: AbortSignal.timeout(45000),
+    signal: signal ?? AbortSignal.timeout(45000),
     cache: 'no-store',
   });
   const data = await res.json();

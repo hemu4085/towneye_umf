@@ -127,7 +127,7 @@ export default function Home() {
           <AddressInput
             value={address}
             onChange={setAddress}
-            suggestEnabled={apiOnline === true}
+            suggestEnabled={apiOnline !== false}
           />
           <UserTypeSelector value={userType} onChange={setUserType} />
 

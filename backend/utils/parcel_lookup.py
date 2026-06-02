@@ -334,7 +334,7 @@ def _format_suggestion_address(street: str, town_name: str) -> str:
 
 def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
     q = query.strip()
-    if len(q) < 3:
+    if len(q) < 2 or (len(q) < 3 and not any(c.isdigit() for c in q)):
         return []
 
     settings = get_settings()
