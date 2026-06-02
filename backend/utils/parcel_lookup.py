@@ -30,6 +30,39 @@ def _street_tokens(addr: str) -> set[str]:
     return {t for t in _normalize_address(addr).split() if t not in stop and not t.isdigit()}
 
 
+def _town_filter_tokens(town_slug: str) -> set[str]:
+    """Tokens that appear in user queries but not in index street lines."""
+    try:
+        cfg = _load_town_config(town_slug)
+        town_name = str(cfg.get("town_name") or town_slug.split("-")[0]).upper()
+    except OSError:
+        town_name = town_slug.split("-")[0].upper()
+    slug_prefix = town_slug.split("-")[0].upper()
+    return {town_name, slug_prefix, "MA", "MASSACHUSETTS", "USA"}
+
+
+def _suggest_query_tokens(query: str, town_slug: str | None = None) -> set[str]:
+    """Street-level tokens only — strip town/state so '29 walnut arlington' matches '29 WALNUT ST'."""
+    tokens = _query_tokens(query)
+    if town_slug:
+        tokens -= _town_filter_tokens(town_slug)
+    else:
+        for slug in get_settings().town_slugs:
+            tokens -= _town_filter_tokens(slug)
+    return tokens
+
+
+def _suggest_norm_parts(norm_q: str, town_slug: str | None) -> list[str]:
+    parts = [p for p in norm_q.split() if len(p) >= 2]
+    if town_slug:
+        remove = _town_filter_tokens(town_slug)
+        parts = [p for p in parts if p not in remove]
+    else:
+        for slug in get_settings().town_slugs:
+            parts = [p for p in parts if p not in _town_filter_tokens(slug)]
+    return parts[:4]
+
+
 def _query_tokens(query: str) -> set[str]:
     """Tokens for suggest pre-filter (includes street numbers)."""
     stop = {"ST", "STREET", "RD", "ROAD", "AVE", "AVENUE", "DR", "DRIVE", "LN", "LANE", "CT", "COURT", "MA"}
@@ -62,7 +95,7 @@ def _address_matches_query(addr: str, q_tokens: set[str]) -> bool:
     for digit in digit_tokens:
         if not lead_num:
             return False
-        if lead_num != digit and not lead_num.startswith(digit):
+        if lead_num != digit:
             return False
 
     for word in word_tokens:
@@ -83,8 +116,6 @@ def _suggest_score(q: str, street: str, q_tokens: set[str]) -> float:
         lead = _leading_street_number(street)
         if lead == primary:
             score = max(score, 0.98)
-        elif lead and lead.startswith(primary):
-            score = max(score, 0.85)
         else:
             return 0.0
 
@@ -161,14 +192,16 @@ def _lookup_address_index(town_slug: str, address: str) -> Optional[dict[str, An
     best_pid: str | None = None
     best_score = 0.0
 
+    street_tokens = _suggest_query_tokens(address, town_slug)
+
     for street, parcel_id in entries:
-        if q_tokens and not _address_matches_query(street, q_tokens):
+        if street_tokens and not _address_matches_query(street, street_tokens):
             continue
-        if not q_tokens and norm_q:
-            parts = [p for p in norm_q.split() if len(p) >= 2][:4]
+        if not street_tokens and norm_q:
+            parts = _suggest_norm_parts(norm_q, town_slug)
             if parts and not all(part in _normalize_address(street) for part in parts):
                 continue
-        score = _suggest_score(address, street, q_tokens)
+        score = _suggest_score(address, street, street_tokens or q_tokens)
         if score > best_score:
             best_score = score
             best_street = street
@@ -540,7 +573,7 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
     search_slugs = [town_slug] if town_slug else settings.town_slugs
 
     norm_q = _normalize_address(q)
-    q_tokens = _query_tokens(q)
+    q_tokens = _suggest_query_tokens(q, town_slug)
     hits: list[tuple[float, str, str, str, str]] = []
 
     for slug in search_slugs:
@@ -549,10 +582,12 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
         if not entries:
             continue
 
-        if q_tokens:
-            filtered = [(addr, pid) for addr, pid in entries if _address_matches_query(addr, q_tokens)]
+        slug_tokens = _suggest_query_tokens(q, slug)
+
+        if slug_tokens:
+            filtered = [(addr, pid) for addr, pid in entries if _address_matches_query(addr, slug_tokens)]
         elif norm_q:
-            parts = [p for p in norm_q.split() if len(p) >= 2][:4]
+            parts = _suggest_norm_parts(norm_q, slug)
             filtered = [
                 (addr, pid)
                 for addr, pid in entries
@@ -562,7 +597,7 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
             filtered = []
 
         for street, parcel_id in filtered[:400]:
-            score = _suggest_score(q, street, q_tokens)
+            score = _suggest_score(q, street, slug_tokens)
             if score < 0.45:
                 continue
             label = _format_suggestion_address(street, town_name)
