@@ -22,10 +22,24 @@ def _town_market_context(town_slug: str) -> dict:
     return {k: (None if pd.isna(v) else v) for k, v in row.items()}
 
 
+def _assessed_value(data: BriefData) -> float | None:
+    if data.property_info is not None and data.property_info.assessed_value is not None:
+        return data.property_info.assessed_value
+    return None
+
+
+def _lot_sqft(data: BriefData) -> float | None:
+    if data.parcel.area_sqft is not None:
+        return float(data.parcel.area_sqft)
+    if data.property_info is not None and data.property_info.lot_size_sqft is not None:
+        return float(data.property_info.lot_size_sqft)
+    return None
+
+
 def _market_fallback(data: BriefData) -> dict:
     ctx = _town_market_context(data.inputs.town_slug)
-    assessed = data.parcel.assessed_value
-    lot = data.parcel.area_sqft
+    assessed = _assessed_value(data)
+    lot = _lot_sqft(data)
     return {
         "summary": (
             f"Market snapshot for {data.parcel.address} from TownEye Gold assessor and town "
@@ -73,10 +87,20 @@ Use conservative estimates if exact comps unavailable."""
     )
 
 
+def _fmt_price(value) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"${float(value):,.0f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
 def render_market_html(payload: dict, address: str) -> str:
     comps = payload.get("comps") or []
     comp_rows = "".join(
-        f"<tr><td>{c.get('address','—')}</td><td>${c.get('price',0):,}</td><td>{c.get('sf','—')} sf</td></tr>"
+        f"<tr><td>{c.get('address','—')}</td><td>{_fmt_price(c.get('price'))}</td>"
+        f"<td>{c.get('sf','—')} sf</td></tr>"
         for c in comps
     ) or "<tr><td colspan='3'>No comps in response</td></tr>"
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
