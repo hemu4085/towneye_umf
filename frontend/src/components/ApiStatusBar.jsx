@@ -7,16 +7,12 @@ export default function ApiStatusBar({ online, checking, onRetry }) {
     );
   }
   if (online) {
-    return (
-      <p className="text-center text-sm text-green-400/90 mt-3">
-        API connected — type an address (e.g. 29 walnut) for suggestions
-      </p>
-    );
+    return null;
   }
   return (
     <div className="text-center mt-3">
       <p className="text-sm text-amber-300">
-        API is waking up (free-tier cloud). Suggestions and reports may be slow.
+        API is temporarily unavailable. Reports may be slow until connected.
       </p>
       <button type="button" onClick={onRetry} className="text-gold text-sm underline mt-1">
         Retry connection
