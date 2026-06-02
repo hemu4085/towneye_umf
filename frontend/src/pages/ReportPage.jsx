@@ -76,7 +76,16 @@ export default function ReportPage() {
 
       {loading && <LoadingState reportName={report.name} />}
 
-      {error && <p className="text-red-400 mt-6">{error}</p>}
+      {error && (
+        <div className="mt-6 p-4 rounded-lg bg-red-950/40 border border-red-800/50">
+          <p className="text-red-300">{error}</p>
+          <p className="text-sm text-graytown mt-2">
+            Demo tip: pick <strong>29 Walnut St</strong>, role <strong>RE Agent</strong>, then{' '}
+            <strong>Buildability Brief</strong>. If this is your first visit today, wait ~30s and
+            try again while Render wakes up.
+          </p>
+        </div>
+      )}
 
       {result && !loading && (
         <ReportViewer

@@ -1,5 +1,24 @@
 # TownEye Portal — Vercel + Render handoff
 
+## Buildability report “Failed to fetch” (2026-06-02)
+
+**Cause:** Vercel’s `/api` proxy times out (~60s) while Render free tier runs a heavy brief + PDF.
+
+**Fixes on `main` (push + redeploy Render + Vercel):**
+
+1. Pre-baked demo HTML: `demo-data/reports/arlington-ma/128.0-0003-0012.0/buildability.html` (29 Walnut) — instant on API.
+2. Report POSTs call **Render directly** first (`frontend/src/api.js`) to skip Vercel timeout.
+3. PDF export is best-effort; HTML preview still shows if PDF fails.
+
+**Regenerate cache after gold data changes:**
+
+```bash
+.venv/bin/python scripts/generate_demo_report_cache.py
+git add demo-data/reports/
+```
+
+---
+
 ## Status (2026-06-01)
 
 | Layer | URL | Status |
@@ -36,8 +55,7 @@ Wait for Render to rebuild (~5–10 min).
 1. Open https://vercel.com → project **towneye-umf**
 2. **Settings → Git** → Connect **hemu4085/towneye_umf**, branch **main**
 3. **Root Directory:** leave **empty** (repo root — `vercel.json` at root)
-4. **Settings → Environment Variables** (Production):
-   - `VITE_API_URL` = `https://towneye-umf.onrender.com`
+4. **Do not set** `VITE_API_URL` in Vercel (or remove it if present). Production uses same-origin `/api`; root `vercel.json` proxies to Render.
 5. **Deployments → Create Deployment** (or push triggers auto-deploy)
 6. Confirm build log shows `vite build` (~2s+, not 93ms)
 
@@ -46,8 +64,7 @@ Wait for Render to rebuild (~5–10 min).
 ```bash
 cd ~/projects/fine_tuned_models/towneye_umf
 vercel link --yes --project towneye-umf
-vercel env add VITE_API_URL production   # https://towneye-umf.onrender.com
-VITE_API_URL=https://towneye-umf.onrender.com vercel deploy --prod --yes
+vercel deploy --prod --yes
 ```
 
 ---

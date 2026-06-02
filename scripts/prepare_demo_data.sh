@@ -66,4 +66,10 @@ for town in "${TOWNS[@]}"; do
   fi
 done
 
+if [[ -x "${ROOT}/.venv/bin/python" ]]; then
+  "${ROOT}/.venv/bin/python" "${ROOT}/scripts/generate_demo_report_cache.py"
+else
+  python3 "${ROOT}/scripts/generate_demo_report_cache.py" || true
+fi
+
 echo "Done. Commit demo-data/ and push to trigger Render rebuild."

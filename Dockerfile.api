@@ -15,14 +15,15 @@ COPY core core
 COPY configs configs
 COPY reports reports
 
-# Demo gold data (optional — run scripts/prepare_demo_data.sh before deploy for parcel search)
-COPY demo-data/ /tmp/demo-data/
+# Demo gold + pre-built report HTML for reliable demos on Render free tier
+COPY demo-data/ /app/demo-data/
 RUN mkdir -p /data/gold /tmp/towneye/reports \
-    && if [ -d /tmp/demo-data/gold ] && [ -n "$(find /tmp/demo-data/gold -name '*.parquet' -print -quit)" ]; then \
-         cp -r /tmp/demo-data/gold/* /data/gold/; \
+    && if [ -d /app/demo-data/gold ] && [ -n "$(find /app/demo-data/gold -name '*.parquet' -print -quit)" ]; then \
+         cp -r /app/demo-data/gold/* /data/gold/; \
        fi
 
 ENV GOLD_DATA_PATH=/data/gold
+ENV DEMO_REPORTS_PATH=/app/demo-data/reports
 ENV REPORTS_OUTPUT_PATH=/tmp/towneye/reports
 ENV PORTAL_PUBLIC_URL=https://demo.towneye.ai
 ENV TOWNEYE_ENV=production

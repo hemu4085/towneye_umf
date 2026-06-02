@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from backend.config import get_settings
 from backend.services import buildability, lender, market, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
+from backend.services.demo_reports import get_demo_report_html
 from backend.services.report_availability import get_report_availability
 from backend.utils.parcel_lookup import (
     ParcelNotFoundError,
@@ -74,19 +75,25 @@ def _report_response(
     payload: dict[str, Any] | None,
     req: ReportRequest,
 ) -> dict[str, Any]:
-    pdf_path, download_url = export_portal_pdf(
-        html,
-        town_slug=req.town_slug,
-        parcel_id=req.parcel_id,
-        report_type=report_type,
-        address=req.address,
-        prepared_for=req.prepared_for,
-    )
+    download_url = None
+    pdf_path = None
+    try:
+        pdf_path, download_url = export_portal_pdf(
+            html,
+            town_slug=req.town_slug,
+            parcel_id=req.parcel_id,
+            report_type=report_type,
+            address=req.address,
+            prepared_for=req.prepared_for,
+        )
+    except Exception:
+        pass
+
     return {
         "report_type": report_type,
         "html": html,
         "data": payload,
-        "pdf_path": str(pdf_path),
+        "pdf_path": str(pdf_path) if pdf_path else None,
         "download_url": download_url,
     }
 
@@ -94,9 +101,11 @@ def _report_response(
 @router.post("/buildability")
 def report_buildability(req: ReportRequest):
     try:
-        html = buildability.generate_buildability_html(
-            req.town_slug, req.parcel_id, req.prepared_for,
-        )
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "buildability")
+        if html is None:
+            html = buildability.generate_buildability_html(
+                req.town_slug, req.parcel_id, req.prepared_for,
+            )
         return _report_response("buildability", html, None, req)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

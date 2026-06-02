@@ -1,5 +1,5 @@
 /**
- * API client — same-origin /api via Vercel, with Render direct fallback on 502.
+ * API client — Vercel proxies /api to Render; long report jobs call Render directly.
  */
 
 const RENDER_API_ROOT = 'https://towneye-umf.onrender.com/api';
@@ -18,16 +18,39 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
-function apiUrls(path) {
-  const p = path.startsWith('/') ? path : `/${path}`;
-  const primary = `${API_ROOT}${p}`;
-  if (primary.startsWith('http') || !import.meta.env.PROD) {
-    return [primary];
-  }
-  return [primary, `${RENDER_API_ROOT}${p}`];
+function isReportPath(path) {
+  return path.startsWith('/reports/');
 }
 
-/** One quick try per URL — no long client-side retry loops (they block mobile browsers). */
+/** Report POSTs hit Render first — avoids Vercel ~60s proxy timeout on slow generation. */
+function apiUrls(path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const viaVercel = `${API_ROOT}${p}`;
+  if (!import.meta.env.PROD || viaVercel.startsWith('http')) {
+    return [viaVercel];
+  }
+  const viaRender = `${RENDER_API_ROOT}${p}`;
+  if (isReportPath(path)) {
+    return [viaRender, viaVercel];
+  }
+  return [viaVercel, viaRender];
+}
+
+function friendlyFetchError(err, context) {
+  if (err?.name === 'AbortError') {
+    return new Error(
+      `${context} timed out while the server was waking up. Wait 30 seconds and try again.`,
+    );
+  }
+  const msg = err?.message || '';
+  if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return new Error(
+      `${context} could not reach the API. The server may be starting (Render free tier) — try again shortly.`,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 async function apiFetch(path, init = {}) {
   const urls = apiUrls(path);
   const mergedInit = {
@@ -100,7 +123,7 @@ export async function suggestAddresses(query, limit = 8) {
 }
 
 export async function resolveParcel(address) {
-  const { signal, cancel } = fetchSignal(60000);
+  const { signal, cancel } = fetchSignal(90000);
   try {
     const res = await apiFetch('/parcels/resolve', {
       method: 'POST',
@@ -111,13 +134,15 @@ export async function resolveParcel(address) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Address lookup failed');
     return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Address lookup');
   } finally {
     cancel();
   }
 }
 
 export async function fetchReportAvailability(address) {
-  const { signal, cancel } = fetchSignal(60000);
+  const { signal, cancel } = fetchSignal(90000);
   try {
     const res = await apiFetch('/reports/availability', {
       method: 'POST',
@@ -128,13 +153,15 @@ export async function fetchReportAvailability(address) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Could not check report availability');
     return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Report availability check');
   } finally {
     cancel();
   }
 }
 
 export async function generateReport(reportType, payload) {
-  const { signal, cancel } = fetchSignal(120000);
+  const { signal, cancel } = fetchSignal(180000);
   try {
     const res = await apiFetch(`/reports/${reportType}`, {
       method: 'POST',
@@ -145,6 +172,8 @@ export async function generateReport(reportType, payload) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Report generation failed');
     return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Report generation');
   } finally {
     cancel();
   }

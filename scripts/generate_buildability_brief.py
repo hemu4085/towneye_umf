@@ -35,6 +35,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from reports.buildability_brief import BriefInputs, BuildabilityBriefGenerator  # noqa: E402
+from reports.html_to_pdf import convert_html_to_pdf, pdf_output_path  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -56,6 +57,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--print", dest="print_html", action="store_true",
         help="Print the rendered HTML to stdout instead of writing a file.",
+    )
+    parser.add_argument(
+        "--pdf",
+        action="store_true",
+        help=(
+            "After writing HTML, export a PDF alongside it "
+            "(Playwright preferred; wkhtmltopdf fallback)."
+        ),
     )
     parser.add_argument(
         "--data-dir", default="data/gold",
@@ -86,6 +95,10 @@ def main() -> int:
     )
     html = generator.generate(inputs)
 
+    if args.print_html and args.pdf:
+        print("[ERROR] --pdf cannot be used with --print.", file=sys.stderr)
+        return 1
+
     if args.print_html:
         print(html)
         return 0
@@ -100,6 +113,25 @@ def main() -> int:
     summary = data.raw_stack.summary_one_liner()
     print(f"[OK] Wrote {out_path.relative_to(REPO_ROOT)} ({len(html):,} bytes)")
     print(f"     Stack summary: {summary}")
+
+    if args.pdf:
+        pdf_path = pdf_output_path(
+            out_path,
+            town_slug=args.town,
+            parcel_id=args.parcel_id,
+            prepared_for=args.prepared_for,
+        )
+        try:
+            convert_html_to_pdf(out_path, pdf_path)
+        except (FileNotFoundError, RuntimeError) as exc:
+            print(f"[ERROR] PDF export failed: {exc}", file=sys.stderr)
+            return 1
+        try:
+            pdf_display = pdf_path.relative_to(REPO_ROOT)
+        except ValueError:
+            pdf_display = pdf_path
+        print(f"PDF saved → {pdf_display}")
+
     return 0
 
 
