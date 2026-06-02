@@ -4,7 +4,7 @@ import AddressInput from '../components/AddressInput';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { checkApiHealth, fetchReportAvailability, resolveParcel } from '../api';
+import { checkApiHealth, fetchReportAvailability, resolveParcel, suggestAddresses } from '../api';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
 
@@ -19,7 +19,8 @@ export default function Home() {
   const [availability, setAvailability] = useState(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
-  const [apiOnline, setApiOnline] = useState(null);
+  const [apiOnline, setApiOnline] = useState(true);
+  const [apiChecking, setApiChecking] = useState(true);
 
   useEffect(() => {
     if (location.state?.address) setAddress(location.state.address);
@@ -28,9 +29,13 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
+    suggestAddresses('29', 3).catch(() => {});
     (async () => {
       const ok = await checkApiHealth();
-      if (!cancelled) setApiOnline(ok);
+      if (!cancelled) {
+        setApiOnline(ok);
+        setApiChecking(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -79,7 +84,7 @@ export default function Home() {
       return;
     }
     if (!apiOnline) {
-      setError('Report API is offline. Set VITE_API_URL to the Render API URL in Vercel (see portal/README.md).');
+      setError('Report API is waking up. Wait a few seconds and try again.');
       return;
     }
 
@@ -115,12 +120,15 @@ export default function Home() {
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
-          {apiOnline === false && (
+          {apiChecking && (
+            <p className="w-full max-w-2xl mb-4 text-center text-sm text-graytown">
+              Connecting to report services…
+            </p>
+          )}
+          {!apiChecking && apiOnline === false && (
             <div className="w-full max-w-2xl mb-6 px-4 py-3 rounded-lg border border-gold/40 bg-gold/10 text-sm text-cream text-center">
-              Report API is offline. Redeploy the Vercel project after pulling latest{' '}
-              <code className="text-gold">vercel.json</code> (proxies <code className="text-gold">/api</code>{' '}
-              to Render). If you set <code className="text-gold">VITE_API_URL</code> in Vercel, remove it or add
-              this site to Render <code className="text-gold">CORS_ORIGINS</code>.
+              Report API is slow to respond (common on free hosting). Address search may still work —
+              wait a few seconds and try again.
             </div>
           )}
 

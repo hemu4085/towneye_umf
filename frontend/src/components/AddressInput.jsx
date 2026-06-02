@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
 
-const DEBOUNCE_MS = 150;
+const DEBOUNCE_MS = 100;
 
 function minQueryLength(query) {
   const q = query.trim();

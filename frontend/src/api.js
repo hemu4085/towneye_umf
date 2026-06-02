@@ -1,8 +1,9 @@
 /**
- * API base URL (no trailing slash).
- * Production uses same-origin /api — vercel.json rewrites to Render (no CORS).
- * Dev uses Vite proxy when VITE_API_URL is unset; direct URL when set.
+ * API client — same-origin /api via Vercel, with Render direct fallback on 502.
  */
+
+const RENDER_API_ROOT = 'https://towneye-umf.onrender.com/api';
+
 function resolveApiBase() {
   if (import.meta.env.PROD) return '';
   return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
@@ -11,28 +12,77 @@ function resolveApiBase() {
 export const API_BASE = resolveApiBase();
 export const API_ROOT = API_BASE ? `${API_BASE}/api` : '/api';
 
-const HEALTH_TIMEOUT_MS = 20000;
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function apiUrls(path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const primary = `${API_ROOT}${p}`;
+  if (primary.startsWith('http') || !import.meta.env.PROD) {
+    return [primary];
+  }
+  const direct = `${RENDER_API_ROOT}${p}`;
+  return primary === direct ? [primary] : [primary, direct];
+}
+
+/** Fetch API routes; retry 502/503 and fall back to Render when Vercel proxy is cold. */
+async function apiFetch(path, init = {}) {
+  const urls = apiUrls(path);
+  const mergedInit = {
+    ...init,
+    cache: 'no-store',
+    credentials: 'omit',
+    headers: {
+      ...(init.headers || {}),
+      'Cache-Control': 'no-cache',
+    },
+  };
+
+  let lastError = null;
+  for (const url of urls) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const res = await fetch(url, mergedInit);
+        if (res.status === 502 || res.status === 503) {
+          lastError = new Error(`HTTP ${res.status}`);
+          await sleep(800 * (attempt + 1));
+          continue;
+        }
+        return res;
+      } catch (err) {
+        lastError = err;
+        await sleep(800 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError ?? new Error('API unavailable');
+}
 
 export async function checkApiHealth() {
-  const url = `${API_ROOT}/health`;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-        cache: 'no-store',
+      const res = await apiFetch('/health', {
+        signal: AbortSignal.timeout(25000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        await sleep(2000);
+        continue;
+      }
       const data = await res.json();
       if (data?.status === 'ok') return true;
     } catch {
-      /* Render free tier cold start — retry once */
+      await sleep(2000);
     }
   }
   return false;
 }
 
 export async function checkAccess(email) {
-  const res = await fetch(`${API_ROOT}/auth/check`, {    method: 'POST',
+  const res = await apiFetch('/auth/check', {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
   });
@@ -40,7 +90,7 @@ export async function checkAccess(email) {
 }
 
 export async function joinWaitlist(data) {
-  const res = await fetch(`${API_ROOT}/auth/waitlist`, {
+  const res = await apiFetch('/auth/waitlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -51,28 +101,20 @@ export async function joinWaitlist(data) {
 
 export async function suggestAddresses(query, limit = 8, signal) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  const res = await fetch(`${API_ROOT}/parcels/suggest?${params}`, {
+  const res = await apiFetch(`/parcels/suggest?${params}`, {
     signal: signal ?? AbortSignal.timeout(45000),
-    cache: 'no-store',
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Address suggest failed');
   return data.suggestions || [];
 }
 
-/** Preload parcel index on Render so first keystroke is fast. */
-export function warmSuggestCache() {
-  return Promise.allSettled([
-    fetch(`${API_ROOT}/health`, { cache: 'no-store' }),
-    suggestAddresses('29', 5),
-  ]);
-}
-
 export async function resolveParcel(address) {
-  const res = await fetch(`${API_ROOT}/parcels/resolve`, {
+  const res = await apiFetch('/parcels/resolve', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address }),
+    signal: AbortSignal.timeout(60000),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Address lookup failed');
@@ -80,10 +122,11 @@ export async function resolveParcel(address) {
 }
 
 export async function fetchReportAvailability(address) {
-  const res = await fetch(`${API_ROOT}/reports/availability`, {
+  const res = await apiFetch('/reports/availability', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address }),
+    signal: AbortSignal.timeout(60000),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Could not check report availability');
@@ -91,10 +134,11 @@ export async function fetchReportAvailability(address) {
 }
 
 export async function generateReport(reportType, payload) {
-  const res = await fetch(`${API_ROOT}/reports/${reportType}`, {
+  const res = await apiFetch(`/reports/${reportType}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(120000),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Report generation failed');
