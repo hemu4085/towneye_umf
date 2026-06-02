@@ -39,6 +39,63 @@ def _query_tokens(query: str) -> set[str]:
     }
 
 
+def _leading_street_number(addr: str) -> Optional[str]:
+    """Primary street number at start of address (not 129 when user typed 29)."""
+    norm = _normalize_address(addr)
+    if not norm:
+        return None
+    first = norm.split()[0]
+    match = re.match(r"^(\d+)", first)
+    return match.group(1) if match else None
+
+
+def _address_matches_query(addr: str, q_tokens: set[str]) -> bool:
+    norm_addr = _normalize_address(addr)
+    if not q_tokens:
+        return False
+
+    digit_tokens = {t for t in q_tokens if t.isdigit()}
+    word_tokens = q_tokens - digit_tokens
+    lead_num = _leading_street_number(addr)
+
+    for digit in digit_tokens:
+        if not lead_num:
+            return False
+        if lead_num != digit and not lead_num.startswith(digit):
+            return False
+
+    for word in word_tokens:
+        if word not in norm_addr:
+            return False
+
+    return True
+
+
+def _suggest_score(q: str, street: str, q_tokens: set[str]) -> float:
+    score = _score_match(q, street)
+    norm_q = _normalize_address(q)
+    norm_addr = _normalize_address(street)
+
+    digit_tokens = {t for t in q_tokens if t.isdigit()}
+    if digit_tokens:
+        primary = max(digit_tokens, key=len)
+        lead = _leading_street_number(street)
+        if lead == primary:
+            score = max(score, 0.98)
+        elif lead and lead.startswith(primary):
+            score = max(score, 0.85)
+        else:
+            return 0.0
+
+    word_tokens = q_tokens - digit_tokens
+    if word_tokens and word_tokens <= _street_tokens(street):
+        score = max(score, 0.92)
+    if norm_q and norm_q in norm_addr:
+        score = max(score, 0.9)
+
+    return score
+
+
 def _load_town_config(town_slug: str) -> dict[str, Any]:
     path = get_settings().config_dir / town_slug / "config.yaml"
     with path.open(encoding="utf-8") as fh:
@@ -377,28 +434,19 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
             continue
 
         if q_tokens:
-            filtered = [
-                (addr, pid)
-                for addr, pid in entries
-                if all(token in addr.upper() for token in q_tokens)
-            ]
+            filtered = [(addr, pid) for addr, pid in entries if _address_matches_query(addr, q_tokens)]
         elif norm_q:
             parts = [p for p in norm_q.split() if len(p) >= 2][:4]
             filtered = [
                 (addr, pid)
                 for addr, pid in entries
-                if parts and all(part in addr.upper() for part in parts)
+                if parts and all(part in _normalize_address(addr) for part in parts)
             ]
         else:
             filtered = []
 
         for street, parcel_id in filtered[:400]:
-            score = _score_match(q, street)
-            street_tokens = _street_tokens(street)
-            if q_tokens and q_tokens <= (street_tokens | {t for t in q_tokens if t.isdigit()}):
-                score = max(score, 0.92)
-            if norm_q and norm_q in _normalize_address(street):
-                score = max(score, 0.88)
+            score = _suggest_score(q, street, q_tokens)
             if score < 0.45:
                 continue
             label = _format_suggestion_address(street, town_name)
