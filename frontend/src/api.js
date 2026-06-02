@@ -135,7 +135,7 @@ export async function resolveParcel(address) {
 }
 
 export async function fetchReportAvailability(address) {
-  const { signal, cancel } = fetchSignal(90000);
+  const { signal, cancel } = fetchSignal(25000);
   try {
     const res = await apiFetch('/reports/availability', {
       method: 'POST',

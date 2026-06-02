@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
 
-const DEBOUNCE_MS = 80;
+const DEBOUNCE_MS = 50;
 
 function minQueryLength(query) {
   const q = query.trim();
@@ -155,10 +155,13 @@ export default function AddressInput({
           value={value}
           onChange={handleInputChange}
           onInput={handleInputChange}
-          onFocus={() => suggestions.length > 0 && setOpen(true)}
+          onFocus={() => {
+            if (suggestions.length > 0) setOpen(true);
+            else if (value.trim().length >= minQueryLength(value)) fetchSuggestions(value);
+          }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Enter a property address"
+          placeholder="e.g. 29 walnut, Arlington MA — pick from dropdown"
           className={`w-full px-5 py-4 rounded-xl bg-navy-light border-2 text-cream text-lg
                      placeholder:text-graytown/80 focus:outline-none focus:border-gold
                      ${loading ? 'border-gold/70' : 'border-gold/40'}`}

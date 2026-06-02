@@ -4,6 +4,7 @@ import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
 import { generateReport } from '../api';
+import { consumeReportPrefetch } from '../reportPrefetch';
 import { absoluteUrl, copyToClipboard } from '../utils/share';
 
 export default function ReportPage() {
@@ -17,7 +18,7 @@ export default function ReportPage() {
   const report = state?.report;
   const parcel = state?.parcel;
   const preparedFor = state?.preparedFor;
-  const reportPrefetch = state?.reportPrefetch;
+  const reportCacheKey = state?.reportCacheKey;
 
   useEffect(() => {
     if (!report || !parcel) {
@@ -34,16 +35,14 @@ export default function ReportPage() {
       lng: parcel.lng,
     };
 
-    const load =
-      reportPrefetch && typeof reportPrefetch.then === 'function'
-        ? reportPrefetch
-        : generateReport(report.endpoint, payload);
+    const prefetched = reportCacheKey ? consumeReportPrefetch(reportCacheKey) : null;
+    const load = prefetched ?? generateReport(report.endpoint, payload);
 
     load
       .then((data) => setResult(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [report, parcel, preparedFor, reportPrefetch, navigate]);
+  }, [report, parcel, preparedFor, reportCacheKey, navigate]);
 
   async function handleShare() {
     if (!result?.download_url) {
@@ -80,9 +79,8 @@ export default function ReportPage() {
         <div className="mt-6 p-4 rounded-lg bg-red-950/40 border border-red-800/50">
           <p className="text-red-300">{error}</p>
           <p className="text-sm text-graytown mt-2">
-            Demo tip: pick <strong>29 Walnut St</strong>, role <strong>RE Agent</strong>, then{' '}
-            <strong>Buildability Brief</strong>. If this is your first visit today, wait ~30s and
-            try again while Render wakes up.
+            Try <strong>Load demo property</strong> on the home page, then Buildability Brief again.
+            If the API was cold, wait 30 seconds and retry.
           </p>
         </div>
       )}

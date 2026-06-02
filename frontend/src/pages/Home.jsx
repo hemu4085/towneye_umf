@@ -7,8 +7,20 @@ import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
 import { checkApiHealth, fetchReportAvailability, generateReport, resolveParcel } from '../api';
 import { DEMO_PROPERTY } from '../demoProperty';
+import { reportCacheKey, startReportPrefetch } from '../reportPrefetch';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
+
+/** Brief reports are always offered when a parcel is known (demo path). */
+const DEFAULT_AVAILABILITY = {
+  buildability: { available: true, reason: '' },
+  market: { available: true, reason: '' },
+  risk: { available: true, reason: '' },
+  proforma: { available: true, reason: '' },
+  zoning: { available: true, reason: '' },
+  neighborhood: { available: true, reason: '' },
+  lender: { available: true, reason: '' },
+};
 
 function parcelFromSuggestion(item) {
   if (!item?.parcel_id) return null;
@@ -60,7 +72,11 @@ export default function Home() {
 
   function handleSelectSuggestion(item) {
     const p = parcelFromSuggestion(item);
-    if (p) setParcel(p);
+    if (p) {
+      setParcel(p);
+      setAvailability(DEFAULT_AVAILABILITY);
+      setError('');
+    }
   }
 
   function loadDemoProperty() {
@@ -73,6 +89,7 @@ export default function Home() {
       lat: DEMO_PROPERTY.lat,
       lng: DEMO_PROPERTY.lng,
     });
+    setAvailability(DEFAULT_AVAILABILITY);
     setError('');
     if (!userType) setUserType('agent');
   }
@@ -87,6 +104,11 @@ export default function Home() {
       return undefined;
     }
 
+    if (parcel?.parcel_id) {
+      setAvailability((prev) => prev ?? DEFAULT_AVAILABILITY);
+      return undefined;
+    }
+
     const timer = setTimeout(async () => {
       setAvailabilityLoading(true);
       try {
@@ -94,18 +116,16 @@ export default function Home() {
         setParcel(data.parcel);
         setAvailability(data.reports);
         if (data.report_request_email) setRequestEmail(data.report_request_email);
-        setError('');
         setApiOnline(true);
-      } catch (err) {
-        setAvailability(null);
-        setError(err.message);
+      } catch {
+        setAvailability(DEFAULT_AVAILABILITY);
       } finally {
         setAvailabilityLoading(false);
       }
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [address, userType]);
+  }, [address, userType, parcel?.parcel_id]);
 
   async function handleReportClick(report) {
     const status = availability?.[report.id];
@@ -126,9 +146,9 @@ export default function Home() {
       if (!apiOnline) {
         await refreshApiHealth();
       }
-      const resolved =
-        parcel ||
-        (await resolveParcel(address.trim()));
+      const resolved = parcel?.parcel_id
+        ? parcel
+        : await resolveParcel(address.trim());
       setParcel(resolved);
       const payload = {
         address: resolved.address,
@@ -137,14 +157,15 @@ export default function Home() {
         lat: resolved.lat,
         lng: resolved.lng,
       };
-      const reportPrefetch = generateReport(report.endpoint, payload);
+      const cacheKey = reportCacheKey(report.id, resolved.parcel_id);
+      startReportPrefetch(cacheKey, generateReport(report.endpoint, payload));
       navigate(`/report/${report.id}`, {
         state: {
           report,
           parcel: resolved,
           userType,
           address: address.trim(),
-          reportPrefetch,
+          reportCacheKey: cacheKey,
         },
       });
     } catch (err) {
@@ -193,9 +214,9 @@ export default function Home() {
               <h2 className="font-display text-lg text-cream text-center mt-6">
                 Choose a report to generate
               </h2>
-              {parcel && (
+              {parcel?.parcel_id && (
                 <p className="text-center text-xs text-graytown mt-2">
-                  Parcel {parcel.parcel_id} ready
+                  Parcel {parcel.parcel_id} ready — click a report to generate
                 </p>
               )}
               <ReportGrid
