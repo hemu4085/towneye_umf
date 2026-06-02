@@ -20,7 +20,6 @@ export default function Home() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
   const [apiOnline, setApiOnline] = useState(true);
-  const [apiChecking, setApiChecking] = useState(true);
 
   useEffect(() => {
     if (location.state?.address) setAddress(location.state.address);
@@ -28,28 +27,18 @@ export default function Home() {
   }, [location.state]);
 
   useEffect(() => {
-    let cancelled = false;
-    const stopChecking = setTimeout(() => {
-      if (!cancelled) setApiChecking(false);
-    }, 6000);
-
-    (async () => {
-      const ok = await checkApiHealth();
-      if (!cancelled) {
-        setApiOnline(ok);
-        setApiChecking(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(stopChecking);
-    };
+    checkApiHealth().then((ok) => {
+      if (ok) setApiOnline(true);
+    });
   }, []);
+
+  function handleSuggestReady() {
+    setApiOnline(true);
+  }
 
   useEffect(() => {
     const trimmed = address.trim();
-    if (!userType || trimmed.length < 5 || !apiOnline) {
+    if (!userType || trimmed.length < 5) {
       setParcel(null);
       setAvailability(null);
       setAvailabilityLoading(false);
@@ -125,21 +114,10 @@ export default function Home() {
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
-          {apiChecking && (
-            <p className="w-full max-w-2xl mb-4 text-center text-sm text-graytown">
-              Connecting to report services…
-            </p>
-          )}
-          {!apiChecking && apiOnline === false && (
-            <div className="w-full max-w-2xl mb-6 px-4 py-3 rounded-lg border border-gold/40 bg-gold/10 text-sm text-cream text-center">
-              Report API is slow to respond (common on free hosting). Address search may still work —
-              wait a few seconds and try again.
-            </div>
-          )}
-
           <AddressInput
             value={address}
             onChange={setAddress}
+            onSuggestReady={handleSuggestReady}
             suggestEnabled
           />
           <UserTypeSelector value={userType} onChange={setUserType} />

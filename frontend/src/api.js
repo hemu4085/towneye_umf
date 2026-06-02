@@ -88,7 +88,7 @@ export async function joinWaitlist(data) {
 
 export async function suggestAddresses(query, limit = 8) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  const { signal, cancel } = fetchSignal(20000);
+  const { signal, cancel } = fetchSignal(35000);
   try {
     const res = await apiFetch(`/parcels/suggest?${params}`, { signal });
     const data = await res.json();

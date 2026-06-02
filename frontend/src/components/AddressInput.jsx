@@ -10,10 +10,18 @@ function minQueryLength(query) {
   return 3;
 }
 
-export default function AddressInput({ value, onChange, onSubmit, disabled, suggestEnabled = true }) {
+export default function AddressInput({
+  value,
+  onChange,
+  onSubmit,
+  disabled,
+  suggestEnabled = true,
+  onSuggestReady,
+}) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [loading, setLoading] = useState(false);
 
   const rootRef = useRef(null);
   const debounceRef = useRef(null);
@@ -37,20 +45,24 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
 
       debounceRef.current = setTimeout(async () => {
         const reqId = ++requestRef.current;
+        setLoading(true);
         try {
           const results = await suggestAddresses(q, 8);
           if (reqId !== requestRef.current) return;
           setSuggestions(results);
           setOpen(results.length > 0);
           setActiveIndex(-1);
+          if (results.length > 0) onSuggestReady?.();
         } catch {
           if (reqId !== requestRef.current) return;
           setSuggestions([]);
           setOpen(false);
+        } finally {
+          if (reqId === requestRef.current) setLoading(false);
         }
       }, DEBOUNCE_MS);
     },
-    [suggestEnabled],
+    [suggestEnabled, onSuggestReady],
   );
 
   useEffect(() => {
@@ -140,6 +152,10 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
                      text-cream text-lg placeholder:text-graytown/80
                      focus:outline-none focus:border-gold"
         />
+
+        {loading && !open && value.trim().length >= minQueryLength(value) && (
+          <p className="mt-2 text-center text-xs text-graytown">Loading addresses…</p>
+        )}
 
         {open && suggestions.length > 0 && (
           <ul
