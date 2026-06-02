@@ -47,6 +47,7 @@ app.include_router(auth.router)
 
 @app.on_event("startup")
 def _warm_address_index() -> None:
+    from backend.services.demo_reports import get_demo_report_html
     from backend.utils.parcel_lookup import _address_index_entries
 
     for slug in get_settings().town_slugs:
@@ -54,6 +55,10 @@ def _warm_address_index() -> None:
             _address_index_entries(slug)
         except OSError:
             pass
+    try:
+        get_demo_report_html("arlington-ma", "128.0-0003-0012.0", "buildability")
+    except OSError:
+        pass
 
 
 @app.get("/api/health")
