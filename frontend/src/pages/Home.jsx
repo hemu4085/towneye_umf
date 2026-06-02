@@ -4,7 +4,7 @@ import AddressInput from '../components/AddressInput';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { checkApiHealth, fetchReportAvailability, resolveParcel, warmSuggestCache } from '../api';
+import { checkApiHealth, fetchReportAvailability, resolveParcel } from '../api';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
 
@@ -28,7 +28,6 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    warmSuggestCache();
     (async () => {
       const ok = await checkApiHealth();
       if (!cancelled) setApiOnline(ok);
@@ -128,7 +127,7 @@ export default function Home() {
           <AddressInput
             value={address}
             onChange={setAddress}
-            suggestEnabled={apiOnline !== false}
+            suggestEnabled
           />
           <UserTypeSelector value={userType} onChange={setUserType} />
 

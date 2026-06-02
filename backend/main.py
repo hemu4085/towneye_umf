@@ -46,13 +46,12 @@ app.include_router(auth.router)
 
 
 @app.on_event("startup")
-def _warm_parcel_index() -> None:
-    """Load parcel parquets at boot so first suggest is not a 10s cold read."""
-    from backend.utils.parcel_lookup import _parcel_address_df
+def _warm_address_index() -> None:
+    from backend.utils.parcel_lookup import _address_index_entries
 
     for slug in get_settings().town_slugs:
         try:
-            _parcel_address_df(slug)
+            _address_index_entries(slug)
         except OSError:
             pass
 

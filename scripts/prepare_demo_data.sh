@@ -58,6 +58,12 @@ for town in "${TOWNS[@]}"; do
 
   bytes="$(du -sb "${dest}" | cut -f1)"
   echo "OK: ${town} — ${copied} parquet file(s), $(numfmt --to=iec-i --suffix=B "${bytes}" 2>/dev/null || echo "${bytes} bytes") → demo-data/gold/${town}/"
+
+  if [[ -x "${ROOT}/.venv/bin/python" ]]; then
+    "${ROOT}/.venv/bin/python" "${ROOT}/scripts/build_address_index.py" "${town}"
+  else
+    python3 "${ROOT}/scripts/build_address_index.py" "${town}"
+  fi
 done
 
 echo "Done. Commit demo-data/ and push to trigger Render rebuild."

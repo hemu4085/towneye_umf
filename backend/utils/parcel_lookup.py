@@ -284,6 +284,31 @@ async def resolve_address(address: str) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=8)
+def _address_index_entries(town_slug: str) -> tuple[tuple[str, str], ...]:
+    """Compact address list for suggest — avoids loading 10MB parcel.parquet on Render."""
+    gold = get_settings().gold_data_path / town_slug
+    index_path = gold / "address-index.json"
+    if index_path.is_file():
+        try:
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+            rows: list[tuple[str, str]] = []
+            for entry in payload.get("entries") or []:
+                addr = str(entry.get("address") or "").strip()
+                parcel_id = str(entry.get("parcel_id") or "").strip()
+                if addr and parcel_id:
+                    rows.append((addr, parcel_id))
+            if rows:
+                return tuple(rows)
+        except (OSError, json.JSONDecodeError, TypeError):
+            pass
+
+    df = _parcel_address_df(town_slug)
+    if df.empty:
+        return ()
+    return tuple(zip(df["address"].tolist(), df["parcel_id"].tolist(), strict=False))
+
+
+@lru_cache(maxsize=8)
 def _parcel_address_df(town_slug: str) -> pd.DataFrame:
     path = get_settings().gold_data_path / town_slug / "parcel.parquet"
     if not path.exists():
@@ -347,8 +372,27 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
 
     for slug in search_slugs:
         town_name = _town_display_name(slug)
-        df = _prefilter_suggest_df(_parcel_address_df(slug), norm_q, q_tokens)
-        for street, parcel_id in zip(df["address"], df["parcel_id"], strict=False):
+        entries = _address_index_entries(slug)
+        if not entries:
+            continue
+
+        if q_tokens:
+            filtered = [
+                (addr, pid)
+                for addr, pid in entries
+                if all(token in addr.upper() for token in q_tokens)
+            ]
+        elif norm_q:
+            parts = [p for p in norm_q.split() if len(p) >= 2][:4]
+            filtered = [
+                (addr, pid)
+                for addr, pid in entries
+                if parts and all(part in addr.upper() for part in parts)
+            ]
+        else:
+            filtered = []
+
+        for street, parcel_id in filtered[:400]:
             score = _score_match(q, street)
             street_tokens = _street_tokens(street)
             if q_tokens and q_tokens <= (street_tokens | {t for t in q_tokens if t.isdigit()}):

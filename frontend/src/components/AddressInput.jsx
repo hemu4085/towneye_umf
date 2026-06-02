@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { suggestAddresses, warmSuggestCache } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import { suggestAddresses } from '../api';
+
+const DEBOUNCE_MS = 150;
 
 function minQueryLength(query) {
   const q = query.trim();
@@ -8,46 +10,12 @@ function minQueryLength(query) {
   return 3;
 }
 
-function filterSuggestions(results, query) {
-  const tokens = query.trim().toUpperCase().split(/\s+/).filter(Boolean);
-  if (!tokens.length) return results;
-  return results.filter((item) => {
-    const addr = item.address.toUpperCase();
-    return tokens.every((t) => addr.includes(t));
-  });
-}
-
-function pickFromCache(cache, query) {
-  const q = query.trim();
-  if (cache.has(q)) return cache.get(q);
-
-  let best = null;
-  for (const [key, results] of cache) {
-    if (q.startsWith(key) && key.length >= 2) {
-      if (!best || key.length > best.key.length) {
-        best = { key, results };
-      }
-    }
-  }
-  if (!best) return null;
-  return filterSuggestions(best.results, q);
-}
-
 export default function AddressInput({ value, onChange, onSubmit, disabled, suggestEnabled = true }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [fetching, setFetching] = useState(false);
-
   const rootRef = useRef(null);
-  const abortRef = useRef(null);
-  const cacheRef = useRef(new Map());
-  const seqRef = useRef(0);
   const listId = 'address-suggestions';
-
-  useEffect(() => {
-    if (suggestEnabled) warmSuggestCache();
-  }, [suggestEnabled]);
 
   useEffect(() => {
     const q = value.trim();
@@ -57,41 +25,22 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
       setSuggestions([]);
       setOpen(false);
       setActiveIndex(-1);
-      setFetching(false);
-      abortRef.current?.abort();
       return undefined;
     }
 
-    const instant = pickFromCache(cacheRef.current, q);
-    if (instant?.length) {
-      setSuggestions(instant);
-      setOpen(true);
-    }
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const seq = ++seqRef.current;
-    setFetching(!instant?.length);
-
-    (async () => {
+    const timer = setTimeout(async () => {
       try {
-        const results = await suggestAddresses(q, 8, controller.signal);
-        if (controller.signal.aborted || seq !== seqRef.current) return;
-        cacheRef.current.set(q, results);
+        const results = await suggestAddresses(q, 8);
         setSuggestions(results);
         setOpen(results.length > 0);
         setActiveIndex(-1);
       } catch {
-        if (controller.signal.aborted || seq !== seqRef.current) return;
-      } finally {
-        if (!controller.signal.aborted && seq === seqRef.current) {
-          setFetching(false);
-        }
+        setSuggestions([]);
+        setOpen(false);
       }
-    })();
+    }, DEBOUNCE_MS);
 
-    return () => controller.abort();
+    return () => clearTimeout(timer);
   }, [value, suggestEnabled]);
 
   useEffect(() => {
@@ -105,14 +54,11 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const pickSuggestion = useCallback(
-    (item) => {
-      onChange(item.address);
-      setOpen(false);
-      setActiveIndex(-1);
-    },
-    [onChange],
-  );
+  function pickSuggestion(item) {
+    onChange(item.address);
+    setOpen(false);
+    setActiveIndex(-1);
+  }
 
   function handleKeyDown(event) {
     if (!open || suggestions.length === 0) {
@@ -139,8 +85,6 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
     }
   }
 
-  const showPanel = open && suggestions.length > 0;
-
   return (
     <form
       onSubmit={(e) => {
@@ -153,32 +97,22 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
         <input
           type="text"
           role="combobox"
-          aria-expanded={showPanel}
+          aria-expanded={open && suggestions.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          onFocus={() => {
-            if (suggestions.length > 0) setOpen(true);
-          }}
+          onFocus={() => suggestions.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Start typing an address…"
-          className="w-full px-5 py-4 pr-11 rounded-xl bg-navy-light border-2 border-gold/40
+          placeholder="Enter a property address"
+          className="w-full px-5 py-4 rounded-xl bg-navy-light border-2 border-gold/40
                      text-cream text-lg placeholder:text-graytown/80
-                     focus:outline-none focus:border-gold transition-colors"
+                     focus:outline-none focus:border-gold"
         />
 
-        {fetching && suggestEnabled && (
-          <span
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full
-                       border-2 border-gold/30 border-t-gold animate-spin pointer-events-none"
-            aria-hidden="true"
-          />
-        )}
-
-        {showPanel && (
+        {open && suggestions.length > 0 && (
           <ul
             id={listId}
             role="listbox"
