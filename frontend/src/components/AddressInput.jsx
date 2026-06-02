@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
+import { filterLocalSuggestions } from '../utils/localSuggest';
 import { normalizePilotSearchQuery } from '../utils/address';
 
-const DEBOUNCE_MS = 50;
-
-function minQueryLength(query) {
-  const q = query.trim();
-  if (q.length >= 3) return 3;
-  if (q.length >= 2 && /\d/.test(q)) return 2;
-  return 3;
-}
+const SERVER_DEBOUNCE_MS = 280;
 
 export default function AddressInput({
   value,
@@ -20,6 +14,8 @@ export default function AddressInput({
   onSuggestReady,
   onSelectSuggestion,
   pilotTownHint = 'Arlington MA',
+  addressEntries = null,
+  indexReady = false,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -28,30 +24,52 @@ export default function AddressInput({
   const [suggestError, setSuggestError] = useState('');
 
   const rootRef = useRef(null);
-  const debounceRef = useRef(null);
+  const serverDebounceRef = useRef(null);
   const requestRef = useRef(0);
   const listId = 'address-suggestions';
 
-  const fetchSuggestions = useCallback(
+  const townName = pilotTownHint.split(',')[0]?.trim() || 'Arlington';
+
+  const runLocalSuggest = useCallback(
+    (raw) => {
+      const q = raw.trim();
+      if (!q || !addressEntries?.length) return [];
+
+      return filterLocalSuggestions(addressEntries, q, townName, 8);
+    },
+    [addressEntries, townName],
+  );
+
+  const runSuggest = useCallback(
     (raw) => {
       if (!suggestEnabled) return;
 
       const q = raw.trim();
-      const minLen = minQueryLength(q);
+      clearTimeout(serverDebounceRef.current);
 
-      clearTimeout(debounceRef.current);
-
-      if (q.length < minLen) {
+      if (!q) {
         setSuggestions([]);
         setOpen(false);
         setSuggestError('');
+        setLoading(false);
         return;
       }
 
-      debounceRef.current = setTimeout(async () => {
+      if (indexReady && addressEntries?.length) {
+        const local = runLocalSuggest(q);
+        setSuggestions(local);
+        setOpen(local.length > 0);
+        setActiveIndex(-1);
+        setLoading(false);
+        setSuggestError(local.length ? '' : 'No matches — try another street or number');
+        if (local.length) onSuggestReady?.();
+        return;
+      }
+
+      setLoading(true);
+      setSuggestError('');
+      serverDebounceRef.current = setTimeout(async () => {
         const reqId = ++requestRef.current;
-        setLoading(true);
-        setSuggestError('');
         try {
           const searchQ = normalizePilotSearchQuery(q, pilotTownHint);
           const results = await suggestAddresses(searchQ, 8);
@@ -59,27 +77,31 @@ export default function AddressInput({
           setSuggestions(results);
           setOpen(results.length > 0);
           setActiveIndex(-1);
-          if (results.length > 0) {
-            onSuggestReady?.();
-          } else {
-            setSuggestError('No matches — include town (e.g. Arlington MA) or try the demo button below.');
-          }
+          if (results.length) onSuggestReady?.();
+          else setSuggestError('No matches — pick from list or use demo button');
         } catch (err) {
           if (reqId !== requestRef.current) return;
           setSuggestions([]);
           setOpen(false);
-          setSuggestError(err?.message || 'Address search failed. Wait a moment and try again.');
+          setSuggestError(err?.message || 'Address search failed');
         } finally {
           if (reqId === requestRef.current) setLoading(false);
         }
-      }, DEBOUNCE_MS);
+      }, SERVER_DEBOUNCE_MS);
     },
-    [suggestEnabled, onSuggestReady, pilotTownHint],
+    [
+      suggestEnabled,
+      indexReady,
+      addressEntries,
+      runLocalSuggest,
+      onSuggestReady,
+      pilotTownHint,
+    ],
   );
 
   useEffect(() => {
-    fetchSuggestions(value);
-  }, [value, fetchSuggestions]);
+    runSuggest(value);
+  }, [value, runSuggest, indexReady, addressEntries]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -99,7 +121,6 @@ export default function AddressInput({
   function handleInputChange(e) {
     const next = e.target.value;
     onChange(next);
-    fetchSuggestions(next);
   }
 
   function pickSuggestion(item) {
@@ -128,12 +149,15 @@ export default function AddressInput({
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (activeIndex >= 0) pickSuggestion(suggestions[activeIndex]);
+      else if (suggestions[0]) pickSuggestion(suggestions[0]);
       else onSubmit?.();
     } else if (event.key === 'Escape') {
       setOpen(false);
       setActiveIndex(-1);
     }
   }
+
+  const showServerLoading = loading && !indexReady && value.trim().length > 0;
 
   return (
     <form
@@ -145,7 +169,7 @@ export default function AddressInput({
     >
       <div ref={rootRef} className="relative">
         <input
-          type="search"
+          type="text"
           enterKeyHint="search"
           role="combobox"
           aria-expanded={open && suggestions.length > 0}
@@ -157,24 +181,23 @@ export default function AddressInput({
           spellCheck={false}
           value={value}
           onChange={handleInputChange}
-          onInput={handleInputChange}
           onFocus={() => {
+            if (value.trim()) runSuggest(value);
             if (suggestions.length > 0) setOpen(true);
-            else if (value.trim().length >= minQueryLength(value)) fetchSuggestions(value);
           }}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="e.g. 29 walnut, Arlington MA — pick from dropdown"
+          placeholder="Start typing — e.g. 29 wal"
           className={`w-full px-5 py-4 rounded-xl bg-navy-light border-2 text-cream text-lg
                      placeholder:text-graytown/80 focus:outline-none focus:border-gold
-                     ${loading ? 'border-gold/70' : 'border-gold/40'}`}
+                     ${open ? 'border-gold/70' : 'border-gold/40'}`}
         />
 
-        {loading && value.trim().length >= minQueryLength(value) && (
-          <p className="mt-2 text-center text-xs text-gold animate-pulse">Searching addresses…</p>
+        {showServerLoading && (
+          <p className="mt-2 text-center text-xs text-graytown">Loading address list…</p>
         )}
 
-        {suggestError && !loading && (
+        {suggestError && !showServerLoading && value.trim() && (
           <p className="mt-2 text-center text-xs text-amber-300">{suggestError}</p>
         )}
 

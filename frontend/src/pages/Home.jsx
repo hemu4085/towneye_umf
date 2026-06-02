@@ -11,6 +11,7 @@ import {
   generateReport,
   resolveParcel,
 } from '../api';
+import { useAddressIndex } from '../hooks/useAddressIndex';
 import { DEMO_PROPERTY } from '../demoProperty';
 import { reportCacheKey, startReportPrefetch } from '../reportPrefetch';
 import { addressesMatch } from '../utils/address';
@@ -51,6 +52,7 @@ export default function Home() {
   const [apiOnline, setApiOnline] = useState(false);
   const [apiChecking, setApiChecking] = useState(true);
   const [pilotTown, setPilotTown] = useState('Arlington MA');
+  const { entries: addressEntries, ready: indexReady, error: indexError } = useAddressIndex();
 
   const refreshApiHealth = useCallback(async () => {
     setApiChecking(true);
@@ -218,13 +220,24 @@ export default function Home() {
             onSuggestReady={handleSuggestReady}
             onSelectSuggestion={handleSelectSuggestion}
             pilotTownHint={pilotTown}
+            addressEntries={addressEntries}
+            indexReady={indexReady}
             suggestEnabled
           />
 
           <p className="text-center text-xs text-graytown mt-2 max-w-lg">
-            Type a street number and name, then <strong className="text-cream">pick your address</strong>{' '}
-            from the dropdown. Reports use live assessor and zoning data for that parcel.
+            {indexReady ? (
+              <>
+                Suggestions appear <strong className="text-cream">as you type</strong> — pick one, then
+                choose your role and report.
+              </>
+            ) : (
+              <>Loading Arlington address list…</>
+            )}
           </p>
+          {indexError && (
+            <p className="text-center text-xs text-amber-300 mt-1">{indexError}</p>
+          )}
 
           <button
             type="button"

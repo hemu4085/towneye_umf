@@ -7,9 +7,12 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.config import get_settings
 from backend.utils.parcel_lookup import (
     ParcelNotFoundError,
     UnsupportedTownError,
+    _address_index_entries,
+    _town_display_name,
     resolve_address,
     suggest_addresses,
 )
@@ -27,6 +30,25 @@ class ResolveRequest(BaseModel):
 def suggest_parcel_addresses(q: str = "", limit: int = 8):
     safe_limit = max(1, min(limit, 20))
     return {"suggestions": suggest_addresses(q, limit=safe_limit)}
+
+
+@router.get("/address-index")
+def get_address_index():
+    """Compact street list for instant client-side autocomplete."""
+    towns = []
+    for slug in get_settings().town_slugs:
+        entries = _address_index_entries(slug)
+        towns.append(
+            {
+                "town_slug": slug,
+                "town_name": _town_display_name(slug),
+                "count": len(entries),
+                "entries": [
+                    {"address": addr, "parcel_id": pid} for addr, pid in entries
+                ],
+            },
+        )
+    return {"towns": towns}
 
 
 @router.post("/resolve")

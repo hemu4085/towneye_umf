@@ -139,6 +139,13 @@ export async function joinWaitlist(data) {
   return res.json();
 }
 
+export async function fetchAddressIndex() {
+  const res = await apiFetch('/parcels/address-index');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Address index failed');
+  return data;
+}
+
 export async function suggestAddresses(query, limit = 8) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
   const { signal, cancel } = fetchSignal(35000);
