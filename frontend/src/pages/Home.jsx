@@ -1,12 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AddressInput from '../components/AddressInput';
+import ApiStatusBar from '../components/ApiStatusBar';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
 import { checkApiHealth, fetchReportAvailability, generateReport, resolveParcel } from '../api';
+import { DEMO_PROPERTY } from '../demoProperty';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
+
+function parcelFromSuggestion(item) {
+  if (!item?.parcel_id) return null;
+  return {
+    address: item.address,
+    parcel_id: item.parcel_id,
+    town_slug: item.town_slug,
+    town_name: item.town_name,
+    lat: item.lat ?? null,
+    lng: item.lng ?? null,
+  };
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -19,7 +33,16 @@ export default function Home() {
   const [availability, setAvailability] = useState(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
-  const [apiOnline, setApiOnline] = useState(true);
+  const [apiOnline, setApiOnline] = useState(false);
+  const [apiChecking, setApiChecking] = useState(true);
+
+  const refreshApiHealth = useCallback(async () => {
+    setApiChecking(true);
+    const ok = await checkApiHealth();
+    setApiOnline(ok);
+    setApiChecking(false);
+    return ok;
+  }, []);
 
   useEffect(() => {
     if (location.state?.address) setAddress(location.state.address);
@@ -27,21 +50,40 @@ export default function Home() {
   }, [location.state]);
 
   useEffect(() => {
-    checkApiHealth().then((ok) => {
-      if (ok) setApiOnline(true);
-    });
-  }, []);
+    refreshApiHealth();
+  }, [refreshApiHealth]);
 
   function handleSuggestReady() {
     setApiOnline(true);
+    setApiChecking(false);
+  }
+
+  function handleSelectSuggestion(item) {
+    const p = parcelFromSuggestion(item);
+    if (p) setParcel(p);
+  }
+
+  function loadDemoProperty() {
+    setAddress(DEMO_PROPERTY.address);
+    setParcel({
+      address: DEMO_PROPERTY.address,
+      parcel_id: DEMO_PROPERTY.parcel_id,
+      town_slug: DEMO_PROPERTY.town_slug,
+      town_name: DEMO_PROPERTY.town_name,
+      lat: DEMO_PROPERTY.lat,
+      lng: DEMO_PROPERTY.lng,
+    });
+    setError('');
+    if (!userType) setUserType('agent');
   }
 
   useEffect(() => {
     const trimmed = address.trim();
     if (!userType || trimmed.length < 5) {
-      setParcel(null);
-      setAvailability(null);
-      setAvailabilityLoading(false);
+      if (trimmed.length < 5) {
+        setAvailability(null);
+        setAvailabilityLoading(false);
+      }
       return undefined;
     }
 
@@ -53,39 +95,41 @@ export default function Home() {
         setAvailability(data.reports);
         if (data.report_request_email) setRequestEmail(data.report_request_email);
         setError('');
+        setApiOnline(true);
       } catch (err) {
-        setParcel(null);
         setAvailability(null);
         setError(err.message);
       } finally {
         setAvailabilityLoading(false);
       }
-    }, 500);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [address, userType, apiOnline]);
+  }, [address, userType]);
 
   async function handleReportClick(report) {
     const status = availability?.[report.id];
     if (status && status.available === false) return;
 
     if (!address.trim()) {
-      setError('Enter a property address.');
+      setError('Enter a property address or use the demo property button.');
       return;
     }
     if (!userType) {
       setError('Select your role to choose a report.');
       return;
     }
-    if (!apiOnline) {
-      setError('Report API is waking up. Wait a few seconds and try again.');
-      return;
-    }
 
     setError('');
     setLoadingReportId(report.id);
     try {
-      const resolved = parcel || (await resolveParcel(address.trim()));
+      if (!apiOnline) {
+        await refreshApiHealth();
+      }
+      const resolved =
+        parcel ||
+        (await resolveParcel(address.trim()));
+      setParcel(resolved);
       const payload = {
         address: resolved.address,
         parcel_id: resolved.parcel_id,
@@ -127,8 +171,21 @@ export default function Home() {
             value={address}
             onChange={setAddress}
             onSuggestReady={handleSuggestReady}
+            onSelectSuggestion={handleSelectSuggestion}
             suggestEnabled
           />
+
+          <button
+            type="button"
+            onClick={loadDemoProperty}
+            className="mt-3 text-sm text-gold border border-gold/40 rounded-full px-4 py-2
+                       hover:bg-gold/10 transition-colors"
+          >
+            Load demo property — 29 Walnut St, Arlington
+          </button>
+
+          <ApiStatusBar online={apiOnline} checking={apiChecking} onRetry={refreshApiHealth} />
+
           <UserTypeSelector value={userType} onChange={setUserType} />
 
           {userType && (
@@ -136,12 +193,17 @@ export default function Home() {
               <h2 className="font-display text-lg text-cream text-center mt-6">
                 Choose a report to generate
               </h2>
+              {parcel && (
+                <p className="text-center text-xs text-graytown mt-2">
+                  Parcel {parcel.parcel_id} ready
+                </p>
+              )}
               <ReportGrid
                 userType={userType}
                 loadingId={loadingReportId}
                 onGenerate={handleReportClick}
                 availability={availability}
-                availabilityLoading={availabilityLoading && apiOnline === true}
+                availabilityLoading={availabilityLoading}
                 address={address.trim()}
                 parcel={parcel}
                 requestEmail={requestEmail}

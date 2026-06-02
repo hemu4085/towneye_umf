@@ -17,11 +17,13 @@ export default function AddressInput({
   disabled,
   suggestEnabled = true,
   onSuggestReady,
+  onSelectSuggestion,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
 
   const rootRef = useRef(null);
   const debounceRef = useRef(null);
@@ -40,23 +42,30 @@ export default function AddressInput({
       if (q.length < minLen) {
         setSuggestions([]);
         setOpen(false);
+        setSuggestError('');
         return;
       }
 
       debounceRef.current = setTimeout(async () => {
         const reqId = ++requestRef.current;
         setLoading(true);
+        setSuggestError('');
         try {
           const results = await suggestAddresses(q, 8);
           if (reqId !== requestRef.current) return;
           setSuggestions(results);
           setOpen(results.length > 0);
           setActiveIndex(-1);
-          if (results.length > 0) onSuggestReady?.();
-        } catch {
+          if (results.length > 0) {
+            onSuggestReady?.();
+          } else {
+            setSuggestError('No matches — include town (e.g. Arlington MA) or try the demo button below.');
+          }
+        } catch (err) {
           if (reqId !== requestRef.current) return;
           setSuggestions([]);
           setOpen(false);
+          setSuggestError(err?.message || 'Address search failed. Wait a moment and try again.');
         } finally {
           if (reqId === requestRef.current) setLoading(false);
         }
@@ -92,8 +101,10 @@ export default function AddressInput({
 
   function pickSuggestion(item) {
     onChange(item.address);
+    onSelectSuggestion?.(item);
     setOpen(false);
     setActiveIndex(-1);
+    setSuggestError('');
   }
 
   function handleKeyDown(event) {
@@ -148,13 +159,17 @@ export default function AddressInput({
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder="Enter a property address"
-          className="w-full px-5 py-4 rounded-xl bg-navy-light border-2 border-gold/40
-                     text-cream text-lg placeholder:text-graytown/80
-                     focus:outline-none focus:border-gold"
+          className={`w-full px-5 py-4 rounded-xl bg-navy-light border-2 text-cream text-lg
+                     placeholder:text-graytown/80 focus:outline-none focus:border-gold
+                     ${loading ? 'border-gold/70' : 'border-gold/40'}`}
         />
 
-        {loading && !open && value.trim().length >= minQueryLength(value) && (
-          <p className="mt-2 text-center text-xs text-graytown">Loading addresses…</p>
+        {loading && value.trim().length >= minQueryLength(value) && (
+          <p className="mt-2 text-center text-xs text-gold animate-pulse">Searching addresses…</p>
+        )}
+
+        {suggestError && !loading && (
+          <p className="mt-2 text-center text-xs text-amber-300">{suggestError}</p>
         )}
 
         {open && suggestions.length > 0 && (

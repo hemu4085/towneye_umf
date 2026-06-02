@@ -96,7 +96,7 @@ export default function ReportGrid({
           <button
             key={r.id}
             type="button"
-            disabled={!!loadingId || isChecking}
+            disabled={!!loadingId}
             onClick={() => onGenerate(r)}
             className={className}
           >

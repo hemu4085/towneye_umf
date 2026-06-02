@@ -18,11 +18,7 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
-function isReportPath(path) {
-  return path.startsWith('/reports/');
-}
-
-/** Report POSTs hit Render first — avoids Vercel ~60s proxy timeout on slow generation. */
+/** Same-origin /api first (avoids CORS); Render direct as fallback on 502/network errors. */
 function apiUrls(path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   const viaVercel = `${API_ROOT}${p}`;
@@ -30,9 +26,6 @@ function apiUrls(path) {
     return [viaVercel];
   }
   const viaRender = `${RENDER_API_ROOT}${p}`;
-  if (isReportPath(path)) {
-    return [viaRender, viaVercel];
-  }
   return [viaVercel, viaRender];
 }
 

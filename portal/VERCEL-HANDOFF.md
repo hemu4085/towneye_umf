@@ -1,5 +1,17 @@
 # TownEye Portal — Vercel + Render handoff
 
+## Demo UX fix (2026-06-02)
+
+**Symptom:** Address field feels dead; report cards click with no action.
+
+**Cause:** Report buttons were `disabled` while `fetchReportAvailability` ran (often 30–90s on cold API). Clicks did nothing with no feedback.
+
+**Fix:** Never disable cards during availability check; demo property button; API status bar; suggest errors visible; same-origin `/api` first (CORS-safe).
+
+**Investor path:** Click **Load demo property** → **RE Agent** → **Buildability Brief**.
+
+---
+
 ## Buildability report “Failed to fetch” (2026-06-02)
 
 **Cause:** Vercel’s `/api` proxy times out (~60s) while Render free tier runs a heavy brief + PDF.
