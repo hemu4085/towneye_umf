@@ -120,7 +120,7 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
           onFocus={() => suggestions.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Enter any Massachusetts property address..."
+          placeholder="e.g. 29 Walnut St, Arlington MA"
           className="w-full px-5 py-4 rounded-xl bg-navy-light border-2 border-gold/40
                      text-cream text-lg placeholder:text-graytown
                      focus:outline-none focus:border-gold"

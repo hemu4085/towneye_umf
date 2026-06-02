@@ -51,7 +51,10 @@ export async function joinWaitlist(data) {
 
 export async function suggestAddresses(query, limit = 8) {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  const res = await fetch(`${API_ROOT}/parcels/suggest?${params}`);
+  const res = await fetch(`${API_ROOT}/parcels/suggest?${params}`, {
+    signal: AbortSignal.timeout(45000),
+    cache: 'no-store',
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Address suggest failed');
   return data.suggestions || [];

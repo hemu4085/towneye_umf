@@ -29,6 +29,16 @@ def _street_tokens(addr: str) -> set[str]:
     return {t for t in _normalize_address(addr).split() if t not in stop and not t.isdigit()}
 
 
+def _query_tokens(query: str) -> set[str]:
+    """Tokens for suggest pre-filter (includes street numbers)."""
+    stop = {"ST", "STREET", "RD", "ROAD", "AVE", "AVENUE", "DR", "DRIVE", "LN", "LANE", "CT", "COURT", "MA"}
+    return {
+        t
+        for t in _normalize_address(query).split()
+        if t not in stop and (t.isdigit() or len(t) >= 2)
+    }
+
+
 def _load_town_config(town_slug: str) -> dict[str, Any]:
     path = get_settings().config_dir / town_slug / "config.yaml"
     with path.open(encoding="utf-8") as fh:
@@ -273,21 +283,44 @@ async def resolve_address(address: str) -> dict[str, Any]:
     return hit
 
 
-@lru_cache(maxsize=32)
-def _town_address_index(town_slug: str) -> tuple[tuple[str, str], ...]:
+@lru_cache(maxsize=8)
+def _parcel_address_df(town_slug: str) -> pd.DataFrame:
     path = get_settings().gold_data_path / town_slug / "parcel.parquet"
     if not path.exists():
-        return ()
+        return pd.DataFrame(columns=["address", "parcel_id"])
     df = pd.read_parquet(path, columns=["address", "parcel_id"])
-    if df.empty or "address" not in df.columns:
-        return ()
-    rows: list[tuple[str, str]] = []
-    for _, row in df.iterrows():
-        addr = str(row.get("address") or "").strip()
-        parcel_id = str(row.get("parcel_id") or "").strip()
-        if addr and parcel_id:
-            rows.append((addr, parcel_id))
-    return tuple(rows)
+    if df.empty:
+        return df
+    df = df.dropna(subset=["address", "parcel_id"]).copy()
+    df["address"] = df["address"].astype(str).str.strip()
+    df["parcel_id"] = df["parcel_id"].astype(str).str.strip()
+    return df[df["address"].astype(bool) & df["parcel_id"].astype(bool)]
+
+
+def _prefilter_suggest_df(df: pd.DataFrame, norm_q: str, q_tokens: set[str]) -> pd.DataFrame:
+    if df.empty:
+        return df
+    addr_upper = df["address"].str.upper()
+    if q_tokens:
+        mask = pd.Series(True, index=df.index)
+        for token in sorted(q_tokens, key=lambda t: (not t.isdigit(), t)):
+            mask &= addr_upper.str.contains(token, regex=False, na=False)
+        narrowed = df[mask]
+        if not narrowed.empty:
+            return narrowed.head(400)
+        # Fallback: match any token (e.g. typo on number)
+        mask = pd.Series(False, index=df.index)
+        for token in q_tokens:
+            mask |= addr_upper.str.contains(token, regex=False, na=False)
+        return df[mask].head(400)
+    if norm_q:
+        parts = [p for p in norm_q.split() if len(p) >= 2]
+        if parts:
+            mask = pd.Series(True, index=df.index)
+            for part in parts[:4]:
+                mask &= addr_upper.str.contains(part, regex=False, na=False)
+            return df[mask].head(400)
+    return df.head(0)
 
 
 def _format_suggestion_address(street: str, town_name: str) -> str:
@@ -309,17 +342,18 @@ def suggest_addresses(query: str, limit: int = 8) -> list[dict[str, Any]]:
     search_slugs = [town_slug] if town_slug else settings.town_slugs
 
     norm_q = _normalize_address(q)
-    q_tokens = _street_tokens(q)
+    q_tokens = _query_tokens(q)
     hits: list[tuple[float, str, str, str, str]] = []
 
     for slug in search_slugs:
         town_name = _town_display_name(slug)
-        for street, parcel_id in _town_address_index(slug):
-            norm_addr = _normalize_address(street)
+        df = _prefilter_suggest_df(_parcel_address_df(slug), norm_q, q_tokens)
+        for street, parcel_id in zip(df["address"], df["parcel_id"], strict=False):
             score = _score_match(q, street)
-            if q_tokens and q_tokens <= _street_tokens(street):
+            street_tokens = _street_tokens(street)
+            if q_tokens and q_tokens <= (street_tokens | {t for t in q_tokens if t.isdigit()}):
                 score = max(score, 0.92)
-            if norm_q and norm_q in norm_addr:
+            if norm_q and norm_q in _normalize_address(street):
                 score = max(score, 0.88)
             if score < 0.45:
                 continue
