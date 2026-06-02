@@ -77,7 +77,7 @@ export const REPORTS = [
     name: 'Buildability Brief',
     description:
       'Full zoning stack, overlay analysis, development options & permitting timeline',
-    time: '~2 seconds',
+    time: '~15–45 sec live',
     endpoint: 'buildability',
   },
   {
@@ -85,7 +85,7 @@ export const REPORTS = [
     icon: '📊',
     name: 'Market Snapshot',
     description: 'Median price, DOM, inventory & comps within 0.25mi',
-    time: '~8 seconds',
+    time: '~20–60 sec live',
     endpoint: 'market',
   },
   {
@@ -93,7 +93,7 @@ export const REPORTS = [
     icon: '⚠️',
     name: 'Risk & Constraints Report',
     description: 'Flood zone, wetlands, historic flags, violations & liens',
-    time: '~8 seconds',
+    time: '~20–60 sec live',
     endpoint: 'risk',
   },
   {
@@ -101,7 +101,7 @@ export const REPORTS = [
     icon: '💰',
     name: 'Development Pro Forma',
     description: 'Unit yield, construction cost estimate & indicative ROI',
-    time: '~12 seconds',
+    time: '~20–60 sec live',
     endpoint: 'proforma',
   },
   {

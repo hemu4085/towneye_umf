@@ -24,6 +24,8 @@ services:
         value: /tmp/towneye/reports
       - key: TOWNEYE_ENV
         value: production
+      - key: PORTAL_SKIP_PDF
+        value: "true"
       # Add in Render dashboard (secret):
       # - key: ANTHROPIC_API_KEY
       #   sync: false

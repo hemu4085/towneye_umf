@@ -1,0 +1,60 @@
+[
+  {
+    "properties": {
+      "OBJECTID": 8423,
+      "MAP_PAR_ID": "128.0-0003-0012.0",
+      "LOC_ID": "F_745334_2977843",
+      "POLY_TYPE": "FEE",
+      "AreaAcres": 0.07875833,
+      "AreaSqFt": 3430.71274188,
+      "Short_id": "128-3-12",
+      "created_user": null,
+      "created_date": null,
+      "last_edited_user": "GIS",
+      "last_edited_date": 1350896400000,
+      "ParcelStatus": "Current",
+      "CreationDate": 1693409944000,
+      "Creator": "ArlingtonMA_GIS",
+      "EditDate": 1693409944000,
+      "Editor": "ArlingtonMA_GIS",
+      "GlobalID": "afcf79ab-1310-4ff3-b981-0f3e98a05ba7",
+      "currentassessyear": 2024,
+      "CAMA_ID": "128.0-0003-0012.0",
+      "locunit": null,
+      "street_num": "29",
+      "street": "WALNUT ST                          ",
+      "fullstreet": "29  WALNUT ST                          ",
+      "loccity": "ARLINGTON",
+      "locationzip": "02476",
+      "Owners": "GHAI JESSICA & SANDEEP",
+      "m_addr_full": "29 WALNUT ST",
+      "m_city": "ARLINGTON",
+      "m_state": "MA",
+      "m_zip": "02476",
+      "m_country": null,
+      "luc": 101,
+      "lotacres": 0.06944,
+      "leg_ref": "69423-104",
+      "zoningcode": "R2  ",
+      "yearblt": 1927,
+      "BuildingType": "Old Style",
+      "CreationDate_1": 1693409948000,
+      "Creator_1": "ArlingtonMA_GIS",
+      "EditDate_1": 1693409948000,
+      "Editor_1": "ArlingtonMA_GIS",
+      "GlobalID_1": "7a04c6cd-927f-477a-b534-f96df1642b61"
+    },
+    "edges_ft": [
+      60.3,
+      57.2,
+      59.0,
+      57.8
+    ],
+    "perimeter_ft": 234.3,
+    "longest_edge_ft": 60.3,
+    "centroid": {
+      "lon": -71.1697441,
+      "lat": 42.4188902
+    }
+  }
+]

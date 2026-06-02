@@ -1,0 +1,36 @@
+ArlingtonPropertyScraper | SSL verification DISABLED (http.ssl_verify=false in config). Do not use this setting in production.
+
+=== GEOCODE ===
+  → saved data/29_walnut/geocode.json (175 bytes)
+
+=== ASSESSOR ===
+  → saved data/29_walnut/assessor.json (1,112 bytes)
+
+=== ARCGIS_INVENTORY ===
+  → saved data/29_walnut/arcgis_inventory.json (24,868 bytes)
+
+=== ZONING ===
+  → saved data/29_walnut/zoning.json (1,571 bytes)
+
+=== PARCEL ===
+  → saved data/29_walnut/parcel.json (1,981 bytes)
+
+=== PARCEL_BY_ID ===
+  → saved data/29_walnut/parcel_by_id.json (1,670 bytes)
+
+=== FEMA ===
+  → saved data/29_walnut/fema.json (127 bytes)
+
+=== MACRIS ===
+  → saved data/29_walnut/macris.json (34 bytes)
+
+=== NONCOMPLIANCE ===
+  → saved data/29_walnut/noncompliance.json (33 bytes)
+
+=== ENV_OVERLAYS ===
+  → saved data/29_walnut/env_overlays.json (179 bytes)
+
+=== ARL_HISTORIC ===
+  → saved data/29_walnut/arl_historic.json (257 bytes)
+
+✓ Done. Per-query results in data/29_walnut/

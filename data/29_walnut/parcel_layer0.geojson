@@ -1,0 +1,96 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": 8424,
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -71.1699329673995,
+              42.4188820499596
+            ],
+            [
+              -71.1697735761187,
+              42.4187782379179
+            ],
+            [
+              -71.1700029522804,
+              42.4186060423809
+            ],
+            [
+              -71.1702150525202,
+              42.4187483180319
+            ],
+            [
+              -71.1703564540175,
+              42.4188431688487
+            ],
+            [
+              -71.1704019856745,
+              42.4188744837709
+            ],
+            [
+              -71.1702136298478,
+              42.419020957982
+            ],
+            [
+              -71.1701846486219,
+              42.419044040774
+            ],
+            [
+              -71.1699329673995,
+              42.4188820499596
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "OBJECTID": 8424,
+        "MAP_PAR_ID": "128.0-0003-0013.0",
+        "LOC_ID": "F_745250_2977820",
+        "POLY_TYPE": "FEE",
+        "AreaAcres": 0.29167959,
+        "AreaSqFt": 12705.56276584,
+        "Short_id": "128-3-13",
+        "created_user": null,
+        "created_date": null,
+        "last_edited_user": "GIS",
+        "last_edited_date": 1350896400000,
+        "ParcelStatus": "Current",
+        "CreationDate": 1693409944000,
+        "Creator": "ArlingtonMA_GIS",
+        "EditDate": 1693409944000,
+        "Editor": "ArlingtonMA_GIS",
+        "GlobalID": "c8bf8eee-bf5e-4c03-940c-4638b266f751",
+        "currentassessyear": 2024,
+        "CAMA_ID": "128.0-0003-0013.0",
+        "locunit": null,
+        "street_num": "31",
+        "street": "WALNUT ST                          ",
+        "fullstreet": "31  WALNUT ST                          ",
+        "loccity": "ARLINGTON",
+        "locationzip": "02476",
+        "Owners": "GOODMAN BARBARA C/ TRUSTEE; RONALD S SENDER IRREVOCABLE; TRUST",
+        "m_addr_full": "31 WALNUT STREET",
+        "m_city": "ARLINGTON",
+        "m_state": "MA",
+        "m_zip": "02476",
+        "m_country": null,
+        "luc": 101,
+        "lotacres": 0.28650001,
+        "leg_ref": "75993-363",
+        "zoningcode": "R2  ",
+        "yearblt": 1890,
+        "BuildingType": "Old Style",
+        "CreationDate_1": 1693409948000,
+        "Creator_1": "ArlingtonMA_GIS",
+        "EditDate_1": 1693409948000,
+        "Editor_1": "ArlingtonMA_GIS",
+        "GlobalID_1": "ba89bd3c-6507-4ff3-a55f-c137a6f42a7b"
+      }
+    }
+  ]
+}

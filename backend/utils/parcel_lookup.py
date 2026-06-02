@@ -393,8 +393,52 @@ class UnsupportedTownError(Exception):
     pass
 
 
-async def resolve_address(address: str) -> dict[str, Any]:
+def _resolve_known_parcel(
+    town_slug: str,
+    parcel_id: str,
+    address: str,
+) -> dict[str, Any]:
+    row = _read_parcel_row(town_slug, parcel_id)
+    if row is None:
+        raise ParcelNotFoundError(
+            f"Parcel {parcel_id} not found in {town_slug.replace('-', ' ').title()}.",
+        )
+    md = row.get("metadata") or {}
+    if isinstance(md, str):
+        try:
+            md = json.loads(md)
+        except json.JSONDecodeError:
+            md = {}
+    display = str(row.get("address") or address).strip() or address
+    return {
+        "parcel_id": str(parcel_id),
+        "town_slug": town_slug,
+        "address": display,
+        "lat": float(row["centroid_lat"]) if pd.notna(row.get("centroid_lat")) else 0.0,
+        "lng": float(row["centroid_lon"]) if pd.notna(row.get("centroid_lon")) else 0.0,
+        "area_sqft": float(row["area_sqft"]) if pd.notna(row.get("area_sqft")) else None,
+        "match_score": 1.0,
+        "source": "parcel_id",
+        "metadata": md,
+    }
+
+
+async def resolve_address(
+    address: str,
+    *,
+    parcel_id: str | None = None,
+    town_slug: str | None = None,
+) -> dict[str, Any]:
     settings = get_settings()
+
+    if parcel_id and town_slug:
+        if town_slug not in settings.town_slugs:
+            raise UnsupportedTownError(_unsupported_town_message(settings.town_slugs))
+        hit = _resolve_known_parcel(town_slug, parcel_id, address)
+        hit["assessor_snapshot"] = _assessor_snapshot(town_slug, parcel_id)
+        hit["town_name"] = _town_display_name(town_slug)
+        return hit
+
     town_slug = detect_town_slug(address, settings.town_slugs)
     if not town_slug:
         raise UnsupportedTownError(_unsupported_town_message(settings.town_slugs))

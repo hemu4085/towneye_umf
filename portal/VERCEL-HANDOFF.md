@@ -10,6 +10,14 @@
 
 **Investor path:** Click **Load demo property** → **RE Agent** → **Buildability Brief**.
 
+## Pilot flow — any Arlington address (2026-06)
+
+1. Type `24 princeton` (town auto-appended for search) → **pick dropdown row**
+2. **RE Agent** or **Developer** → click **Buildability**, **Risk**, or **Market**
+3. Live data from Gold parquets; first request may take 15–60s on Render free tier
+4. Set `PORTAL_SKIP_PDF=true` on Render; add `ANTHROPIC_API_KEY` for richer Market/Pro Forma (fallback works without it)
+5. For capital demos: upgrade Render **Starter** + UptimeRobot ping `/api/health`
+
 ---
 
 ## Buildability report “Failed to fetch” (2026-06-02)

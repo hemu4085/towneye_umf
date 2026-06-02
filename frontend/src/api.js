@@ -115,13 +115,13 @@ export async function suggestAddresses(query, limit = 8) {
   }
 }
 
-export async function resolveParcel(address) {
+export async function resolveParcel({ address, parcel_id, town_slug }) {
   const { signal, cancel } = fetchSignal(90000);
   try {
     const res = await apiFetch('/parcels/resolve', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, parcel_id, town_slug }),
       signal,
     });
     const data = await res.json();
@@ -134,13 +134,13 @@ export async function resolveParcel(address) {
   }
 }
 
-export async function fetchReportAvailability(address) {
+export async function fetchReportAvailability({ address, parcel_id, town_slug }) {
   const { signal, cancel } = fetchSignal(25000);
   try {
     const res = await apiFetch('/reports/availability', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, parcel_id, town_slug }),
       signal,
     });
     const data = await res.json();

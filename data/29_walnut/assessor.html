@@ -1,0 +1,139 @@
+
+<html>
+<head>
+   <title></title>
+
+   <base target="bottom">
+   <style TYPE="text/css">
+        <!--
+        CAPTION  { font-family: Arial,Helvetica,sans-serif; padding: 0.25em 0 0 0; }
+        TD, TH   { font-family: Arial,Helvetica,sans-serif; font-size: 9pt; padding-left: 0.5em; padding-right: 0.5em; }
+        #T1 TH   { border-bottom: solid 1px #808080; }
+        #T1 TD   { border-bottom: solid 1px #cccccc; }
+        #T1 TD A { text-decoration: none; }
+        #T1 TD A:hover { text-decoration: underline; }
+	@media print {
+		TD, TH { font-size: 8pt; }
+	}
+        -->
+   </style>
+</head>
+
+<body>
+<!-- SELECT rptBankerTrades.AccountNumber as AccountNumber     , rptBankerTrades.ParcelID as ParcelID     , Owner1     , Owner2     , Owner3     , StreetName     , [Street#]     , [AltStreet#]     , [Unit]     , BuildType     , BuildType2     , BuildType3     , YearBuilt     , Bedrooms     , Fullbaths     , TotalAcres     , LegalRefDate     , SalePrice     , LegalReference     , FinArea     , rptBankerTrades.LUC as LUC     , TotalValue     , DataProperty.NBC as Neighborhood     , TableLandUse.Description as LandUseDescription  FROM rptBankerTrades  LEFT OUTER JOIN DataProperty    ON            DataProperty.AccountNumber = rptBankerTrades.AccountNumber   AND            DataProperty.CardNumber    = 1  LEFT OUTER JOIN TableLandUse    ON            TableLandUse.Code          = rptBankerTrades.LUC WHERE 1 = 1 AND StreetName          LIKE 'Walnut%' AND [Street#]           LIKE '29%' ORDER BY StreetName, [Street#], rptBankerTrades.ParcelID --><table width='100%'>
+<tr><td width='15%' align='left'></td>
+<td width='15%' align='left'></td>
+<td width='40%' align='center'><a href='#' target='bottom'><span onClick='window.print();'>Print page 1 of 1</span></a></td>
+<td width='15%' align='right'></td>
+<td width='15%' align='right'></td>
+</tr>
+</table>
+
+
+<TABLE ID="T1" ONSELECTSTART="return false" WIDTH=100% border="0" cellspacing="0" cellpadding="0">
+
+    <caption>
+	<B>
+	    Click on the Column Headings to sort accordingly.<br>
+	    Click on the Parcel ID to view the parcel detail.<br>&nbsp;
+	</B>
+    </caption>
+
+    <THEAD>  
+	<TR valign='bottom'>
+	    <TH align='left'  	    ><A HREF="SearchResults.asp?Sort=Parcel"	  target="bottom">Parcel ID</A></TH>
+	    <TH align='left'  	    ><A HREF="SearchResults.asp?Sort=Street"	  target="bottom">Location</A></TH>
+	    <TH align='left'  	    ><A HREF="SearchResults.asp?Sort=Owner"	  target="bottom">Owner</A></TH>
+	    <TH align='left'  	    ><A HREF="SearchResults.asp?Sort=YearBuilt"      target="bottom">Built</A><BR>
+				     <A HREF="SearchResults.asp?Sort=BuildingType"   target="bottom">Type</A></TD>
+	    <TH align='right' 	    ><A HREF="SearchResults.asp?Sort=TotalValue"     target="bottom">Total Value</A></TD>
+	    <TH align='center'	    ><A HREF="SearchResults.asp?Sort=Bedrooms"       target="bottom">Beds</A><br>
+			       	     <A HREF="SearchResults.asp?Sort=Bathrooms"      target="bottom">Baths</A></TH>
+	    <TH align='right' nowrap><A HREF="SearchResults.asp?Sort=LotSize"	  target="bottom">Lot size</A><br>
+				     <A HREF="SearchResults.asp?Sort=FinArea"        target="bottom">Fin area</A></TH>
+	    <TH align='left'	    ><A HREF="SearchResults.asp?Sort=LUC"		  target="bottom">LUC</A><br>
+				     <A HREF="SearchResults.asp?Sort=LUCDescription" target="bottom">Description</A></TH>
+	    <TH align='center'	    ><A HREF="SearchResults.asp?Sort=Neighborhood"	  target="bottom">NHood</A></TH>
+	    <TH align='right'	    ><A HREF="SearchResults.asp?Sort=SaleDate"	  target="bottom">Sale date</A><br>
+				     <A HREF="SearchResults.asp?Sort=SalePrice"	  target="bottom">Sale price</A></TH>
+	    <TH align='left'	    ><A HREF="SearchResults.asp?Sort=LegalRef"	  target="bottom">Book Page</A></TH>
+	</TR>
+    </THEAD>
+
+    <TBODY>
+
+
+	<TR valign='top'>
+	    <TD><A HREF="Summary.asp?AccountNumber=10037" target="_top">128.0-0003-0012.0</A></TD> 
+	    <TD>29&nbsp;
+	        <A HREF="SearchResults.asp?SearchStreetName=WALNUT+ST" target="bottom">WALNUT ST</A></TD> 
+	    <TD><A HREF="SearchResults.asp?SearchOwner=GHAI+JESSICA+%26+SANDEEP" target="bottom">GHAI JESSICA &amp; SANDEEP</A>
+		</TD>
+	     <TD><A HREF='SearchResults.asp?SearchYearBuilt=1927&amp;SearchYearBuiltThru=1927' target='bottom'>1927</A><br>
+		<A HREF="SearchResults.asp?SearchBuildingType=Old+Style" target="bottom">Old Style</A>
+		&nbsp;</TD>
+	    <TD align='right'>$1,002,300</TD>
+	    <TD align='center'>3<br>
+			       1</TD>
+	    <TD align='right'>3,023
+	       <br>1,490</TD>
+	    <TD align='left'><A HREF="SearchResults.asp?SearchLUC=101&amp;SearchLUCDescription=One+Family" target="bottom">101</a><br>
+			     <A HREF="SearchResults.asp?SearchLUC=101&amp;SearchLUCDescription=One+Family" target="bottom">One Family</a></TD>
+	    <TD align='center'><A HREF="SearchResults.asp?SearchNeighborhood=9" target="bottom">9</A></TD>
+	    <TD align='right'>6/13/<A HREF='SearchResults.asp?SearchSaleDate=01%2f01%2f2017&amp;SearchSaleDateThru=12%2f31%2f2017' target='bottom'>2017</A><br>
+			      $750,000</TD>
+	    <TD>69423-104</TD>
+	</TR>
+
+	<TR valign='top'>
+	    <TD><A HREF="Summary.asp?AccountNumber=10878" target="_top">141.0-0002-0011.0</A></TD> 
+	    <TD>29&nbsp;
+	        <A HREF="SearchResults.asp?SearchStreetName=WALNUT+TERR" target="bottom">WALNUT TERR</A></TD> 
+	    <TD><A HREF="SearchResults.asp?SearchOwner=SUDRICK+CHAITANYA" target="bottom">SUDRICK CHAITANYA</A>
+		<br><A HREF="SearchResults.asp?SearchOwner=NAIK+SHIVANGI" target="bottom">NAIK SHIVANGI</A></TD>
+	     <TD><A HREF='SearchResults.asp?SearchYearBuilt=1952&amp;SearchYearBuiltThru=1952' target='bottom'>1952</A><br>
+		<A HREF="SearchResults.asp?SearchBuildingType=Cape" target="bottom">Cape</A>
+		&nbsp;</TD>
+	    <TD align='right'>$1,080,000</TD>
+	    <TD align='center'>3<br>
+			       2</TD>
+	    <TD align='right'>7,627
+	       <br>1,754</TD>
+	    <TD align='left'><A HREF="SearchResults.asp?SearchLUC=101&amp;SearchLUCDescription=One+Family" target="bottom">101</a><br>
+			     <A HREF="SearchResults.asp?SearchLUC=101&amp;SearchLUCDescription=One+Family" target="bottom">One Family</a></TD>
+	    <TD align='center'><A HREF="SearchResults.asp?SearchNeighborhood=8" target="bottom">8</A></TD>
+	    <TD align='right'>11/15/<A HREF='SearchResults.asp?SearchSaleDate=01%2f01%2f2024&amp;SearchSaleDateThru=12%2f31%2f2024' target='bottom'>2024</A><br>
+			      $1,125,000</TD>
+	    <TD>83477-473</TD>
+	</TR>
+
+
+    </TBODY>
+</TABLE>
+
+<table width='100%'>
+<tr><td width='15%' align='left'></td>
+<td width='15%' align='left'></td>
+<td width='40%' align='center'><a href='#' target='bottom'><span onClick='window.print();'>Print page 1 of 1</span></a></td>
+<td width='15%' align='right'></td>
+<td width='15%' align='right'></td>
+</tr>
+</table>
+
+
+
+<script type="text/javascript">
+parent.middle.frmSearch.SearchParcel.value = '';parent.middle.frmSearch.SearchOwner.value = '';parent.middle.frmSearch.SearchStreetName.value = 'Walnut';parent.middle.frmSearch.SearchStreetNumber.value = '29';parent.middle.frmSearch.SearchBuildingType.value = '';parent.middle.frmSearch.SearchNeighborhood.value = '';parent.middle.frmSearch.SearchBook.value = '';parent.middle.frmSearch.SearchPage.value = '';parent.middle.frmSearch.SearchLUC.value = '';parent.middle.frmSearch.SearchLUCDescription.value = '';parent.middle.frmSearch.SearchSaleDate.value = '';parent.middle.frmSearch.SearchSaleDateThru.value = '';parent.middle.frmSearch.SearchYearBuilt.value = '';parent.middle.frmSearch.SearchYearBuiltThru.value = '';parent.middle.frmSearch.SearchBedrooms.value = '';parent.middle.frmSearch.SearchBedroomsThru.value = '';parent.middle.frmSearch.SearchBathrooms.value = '';parent.middle.frmSearch.SearchBathroomsThru.value = '';parent.middle.frmSearch.SearchLotSize.value = '';parent.middle.frmSearch.SearchLotSizeThru.value = '';parent.middle.frmSearch.SearchTotalValue.value = '';parent.middle.frmSearch.SearchTotalValueThru.value = '';parent.middle.frmSearch.SearchSalePrice.value = '';parent.middle.frmSearch.SearchSalePriceThru.value = '';
+
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-4142258-1");
+pageTracker._initData();
+pageTracker._trackPageview();
+</script>
+
+</body>
+</html>

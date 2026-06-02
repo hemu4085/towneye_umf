@@ -5,22 +5,17 @@ import ApiStatusBar from '../components/ApiStatusBar';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { checkApiHealth, fetchReportAvailability, generateReport, resolveParcel } from '../api';
+import {
+  checkApiHealth,
+  fetchReportAvailability,
+  generateReport,
+  resolveParcel,
+} from '../api';
 import { DEMO_PROPERTY } from '../demoProperty';
 import { reportCacheKey, startReportPrefetch } from '../reportPrefetch';
+import { addressesMatch } from '../utils/address';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
-
-/** Brief reports are always offered when a parcel is known (demo path). */
-const DEFAULT_AVAILABILITY = {
-  buildability: { available: true, reason: '' },
-  market: { available: true, reason: '' },
-  risk: { available: true, reason: '' },
-  proforma: { available: true, reason: '' },
-  zoning: { available: true, reason: '' },
-  neighborhood: { available: true, reason: '' },
-  lender: { available: true, reason: '' },
-};
 
 function parcelFromSuggestion(item) {
   if (!item?.parcel_id) return null;
@@ -31,6 +26,14 @@ function parcelFromSuggestion(item) {
     town_name: item.town_name,
     lat: item.lat ?? null,
     lng: item.lng ?? null,
+  };
+}
+
+function resolvePayload(address, parcel) {
+  return {
+    address: parcel?.address || address,
+    parcel_id: parcel?.parcel_id,
+    town_slug: parcel?.town_slug,
   };
 }
 
@@ -47,13 +50,27 @@ export default function Home() {
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
   const [apiOnline, setApiOnline] = useState(false);
   const [apiChecking, setApiChecking] = useState(true);
+  const [pilotTown, setPilotTown] = useState('Arlington MA');
 
   const refreshApiHealth = useCallback(async () => {
     setApiChecking(true);
-    const ok = await checkApiHealth();
-    setApiOnline(ok);
-    setApiChecking(false);
-    return ok;
+    try {
+      const res = await fetch('/api/health', { cache: 'no-store' });
+      const data = await res.json();
+      const ok = data?.status === 'ok';
+      setApiOnline(ok);
+      if (data?.towns?.[0]) {
+        const slug = data.towns[0];
+        const name = slug.split('-')[0];
+        setPilotTown(`${name.charAt(0).toUpperCase()}${name.slice(1)} MA`);
+      }
+      return ok;
+    } catch {
+      setApiOnline(false);
+      return false;
+    } finally {
+      setApiChecking(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -65,6 +82,14 @@ export default function Home() {
     refreshApiHealth();
   }, [refreshApiHealth]);
 
+  useEffect(() => {
+    if (!parcel?.parcel_id || !address.trim()) return;
+    if (!addressesMatch(address, parcel.address)) {
+      setParcel(null);
+      setAvailability(null);
+    }
+  }, [address, parcel]);
+
   function handleSuggestReady() {
     setApiOnline(true);
     setApiChecking(false);
@@ -74,7 +99,6 @@ export default function Home() {
     const p = parcelFromSuggestion(item);
     if (p) {
       setParcel(p);
-      setAvailability(DEFAULT_AVAILABILITY);
       setError('');
     }
   }
@@ -89,67 +113,64 @@ export default function Home() {
       lat: DEMO_PROPERTY.lat,
       lng: DEMO_PROPERTY.lng,
     });
-    setAvailability(DEFAULT_AVAILABILITY);
     setError('');
     if (!userType) setUserType('agent');
   }
 
   useEffect(() => {
     const trimmed = address.trim();
-    if (!userType || trimmed.length < 5) {
-      if (trimmed.length < 5) {
-        setAvailability(null);
-        setAvailabilityLoading(false);
-      }
-      return undefined;
-    }
-
-    if (parcel?.parcel_id) {
-      setAvailability((prev) => prev ?? DEFAULT_AVAILABILITY);
+    if (!userType || trimmed.length < 3 || !parcel?.parcel_id) {
       return undefined;
     }
 
     const timer = setTimeout(async () => {
       setAvailabilityLoading(true);
       try {
-        const data = await fetchReportAvailability(trimmed);
-        setParcel(data.parcel);
+        const data = await fetchReportAvailability(resolvePayload(trimmed, parcel));
         setAvailability(data.reports);
+        if (data.parcel) setParcel(data.parcel);
         if (data.report_request_email) setRequestEmail(data.report_request_email);
         setApiOnline(true);
       } catch {
-        setAvailability(DEFAULT_AVAILABILITY);
+        /* clicks still work — resolve happens on report generation */
       } finally {
         setAvailabilityLoading(false);
       }
-    }, 400);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [address, userType, parcel?.parcel_id]);
+  }, [address, userType, parcel?.parcel_id, parcel?.town_slug]);
 
   async function handleReportClick(report) {
     const status = availability?.[report.id];
     if (status && status.available === false) return;
 
     if (!address.trim()) {
-      setError('Enter a property address or use the demo property button.');
+      setError('Enter a property address in Arlington, or use the demo button.');
       return;
     }
     if (!userType) {
-      setError('Select your role to choose a report.');
+      setError('Select your role (RE Agent or Developer) to choose a report.');
       return;
     }
 
     setError('');
     setLoadingReportId(report.id);
     try {
-      if (!apiOnline) {
-        await refreshApiHealth();
+      if (!apiOnline) await refreshApiHealth();
+
+      let resolved = parcel?.parcel_id ? parcel : null;
+      if (!resolved) {
+        resolved = await resolveParcel({
+          address: address.trim(),
+          parcel_id: parcel?.parcel_id,
+          town_slug: parcel?.town_slug,
+        });
+      } else {
+        resolved = await resolveParcel(resolvePayload(address.trim(), resolved));
       }
-      const resolved = parcel?.parcel_id
-        ? parcel
-        : await resolveParcel(address.trim());
       setParcel(resolved);
+
       const payload = {
         address: resolved.address,
         parcel_id: resolved.parcel_id,
@@ -175,6 +196,8 @@ export default function Home() {
     }
   }
 
+  const parcelReady = Boolean(parcel?.parcel_id);
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="px-6 py-8 text-center border-b border-gold/20">
@@ -182,6 +205,7 @@ export default function Home() {
         <p className="text-graytown mt-2 text-lg">
           AI-Powered Real Estate Intelligence for Massachusetts
         </p>
+        <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
       </header>
 
       <main className="flex-1 flex flex-col items-center px-6 py-12">
@@ -193,8 +217,14 @@ export default function Home() {
             onChange={setAddress}
             onSuggestReady={handleSuggestReady}
             onSelectSuggestion={handleSelectSuggestion}
+            pilotTownHint={pilotTown}
             suggestEnabled
           />
+
+          <p className="text-center text-xs text-graytown mt-2 max-w-lg">
+            Type a street number and name, then <strong className="text-cream">pick your address</strong>{' '}
+            from the dropdown. Reports use live assessor and zoning data for that parcel.
+          </p>
 
           <button
             type="button"
@@ -202,7 +232,7 @@ export default function Home() {
             className="mt-3 text-sm text-gold border border-gold/40 rounded-full px-4 py-2
                        hover:bg-gold/10 transition-colors"
           >
-            Load demo property — 29 Walnut St, Arlington
+            Quick demo — 29 Walnut St
           </button>
 
           <ApiStatusBar online={apiOnline} checking={apiChecking} onRetry={refreshApiHealth} />
@@ -214,9 +244,13 @@ export default function Home() {
               <h2 className="font-display text-lg text-cream text-center mt-6">
                 Choose a report to generate
               </h2>
-              {parcel?.parcel_id && (
-                <p className="text-center text-xs text-graytown mt-2">
-                  Parcel {parcel.parcel_id} ready — click a report to generate
+              {parcelReady ? (
+                <p className="text-center text-xs text-green-400/90 mt-2">
+                  Live parcel {parcel.parcel_id} — {parcel.address}
+                </p>
+              ) : (
+                <p className="text-center text-xs text-amber-300/90 mt-2">
+                  Select an address from the dropdown to lock the parcel
                 </p>
               )}
               <ReportGrid

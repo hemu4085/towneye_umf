@@ -1,0 +1,53 @@
+{
+  "layers": [
+    {
+      "id": 0,
+      "name": "Zoning Overlay Districts",
+      "geometryType": "esriGeometryPolygon"
+    },
+    {
+      "id": 1,
+      "name": "Zoning Districts",
+      "geometryType": "esriGeometryPolygon"
+    }
+  ],
+  "features_per_layer": {
+    "Zoning Overlay Districts": [
+      {
+        "OverlayID": 9,
+        "OverlayType": "Multi-Family",
+        "OverlayAbbr": "NMF",
+        "OverlayDistrict": "Neighborhood Multi-Family Housing",
+        "DateEst": 1715144400000,
+        "DateMod": "9/11/2024; 10/2/2025",
+        "TMA": "Article 39 4/2025",
+        "Notes": "Approved by Town Meeting May 8, 2024. 5-7 Winter St added by AG approval 9/11/2024, 17 Palmer St added by AG approval 10/2/25",
+        "created_user": "GIS",
+        "created_date": 1721253811000,
+        "last_edited_user": "ArlingtonMA_GIS",
+        "last_edited_date": 1762525424805,
+        "GlobalID": "9472b023-cbd8-485b-837e-d41d607a586e",
+        "OBJECTID": 408,
+        "Shape__Area": 522520.34765625,
+        "Shape__Length": 28557.882213183213
+      }
+    ],
+    "Zoning Districts": [
+      {
+        "OBJECTID": 114,
+        "ZoningId": 114,
+        "ZoneName": "R2: Two Family",
+        "ZoneCode": "R2",
+        "ZoneDesc": "Two Family",
+        "Notes": null,
+        "created_user": null,
+        "created_date": 1331614800000,
+        "last_edited_user": null,
+        "last_edited_date": null,
+        "GlobalID": "077c16a1-080d-491c-9f9d-43dd36b4bd52",
+        "Shape__Area": 270749.265625,
+        "Shape__Length": 3817.7199921376427
+      }
+    ]
+  }
+}

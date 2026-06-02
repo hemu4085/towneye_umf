@@ -1,0 +1,2 @@
+{"suggestions":[{"address":"29 WALNUT ST, Arlington MA","town_slug":"arlington-ma","town_name":"Arlington","parcel_id":"128.0-0003-0012.0","score":0.95},{"address":"29 WALNUT TERR, Arlington MA","town_slug":"arlington-ma","town_name":"Arlington","parcel_id":"141.0-0002-0011.0","score":0.95}]}
+HTTP:200 time:2.305156s

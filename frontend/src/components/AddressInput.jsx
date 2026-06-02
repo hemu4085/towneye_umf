@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
+import { normalizePilotSearchQuery } from '../utils/address';
 
 const DEBOUNCE_MS = 50;
 
@@ -18,6 +19,7 @@ export default function AddressInput({
   suggestEnabled = true,
   onSuggestReady,
   onSelectSuggestion,
+  pilotTownHint = 'Arlington MA',
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -51,7 +53,8 @@ export default function AddressInput({
         setLoading(true);
         setSuggestError('');
         try {
-          const results = await suggestAddresses(q, 8);
+          const searchQ = normalizePilotSearchQuery(q, pilotTownHint);
+          const results = await suggestAddresses(searchQ, 8);
           if (reqId !== requestRef.current) return;
           setSuggestions(results);
           setOpen(results.length > 0);
@@ -71,7 +74,7 @@ export default function AddressInput({
         }
       }, DEBOUNCE_MS);
     },
-    [suggestEnabled, onSuggestReady],
+    [suggestEnabled, onSuggestReady, pilotTownHint],
   );
 
   useEffect(() => {

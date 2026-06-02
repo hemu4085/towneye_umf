@@ -63,10 +63,12 @@ def _warm_address_index() -> None:
 
 @app.get("/api/health")
 def health():
+    settings = get_settings()
     return {
         "status": "ok",
-        "towns": get_settings().town_slugs,
-        "portal_url": get_settings().portal_public_url,
+        "towns": settings.town_slugs,
+        "portal_url": settings.portal_public_url,
+        "llm_configured": bool(settings.anthropic_api_key.strip()),
     }
 
 

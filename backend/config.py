@@ -47,6 +47,7 @@ class Settings:
     cors_origins: tuple[str, ...]
     serve_frontend: bool
     frontend_dist_path: Path
+    portal_skip_pdf: bool
 
     @property
     def town_slugs(self) -> list[str]:
@@ -96,4 +97,5 @@ def get_settings() -> Settings:
         frontend_dist_path=Path(
             os.getenv("FRONTEND_DIST_PATH", str(REPO_ROOT / "frontend" / "dist")),
         ),
+        portal_skip_pdf=os.getenv("PORTAL_SKIP_PDF", "").lower() in ("1", "true", "yes"),
     )

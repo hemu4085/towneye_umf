@@ -1,0 +1,311 @@
+# configs/newton-ma/config.yaml
+# Tier 6 — Newton MA onboarding (MassGIS L3 + MassGIS MCMOD MBTA overlay + MACRIS).
+# Date: 2026-05-08
+#
+# Zoning overlay source: MassGIS ``MCMOD`` FeatureServer (MBTA Communities
+# Multi-Family Overlay District) — single polygon layer (id=1), geometry-only
+# attributes (OBJECTID / shape metrics).  Overlay type is inferred from the
+# layer display name in ``zoning_overlay_scraper``.  Base zoning district
+# polygons are not yet wired; extend ``zoning_overlay_arcgis_url`` to a
+# multi-layer Newton-hosted service when the city publishes a public
+# FeatureServer (see ``gisweb.newtonma.gov`` MapServer inventory).
+
+town_slug: newton-ma
+town_name: Newton
+state: MA
+county: Middlesex
+fips_code: "2501745560"
+population_tier: "large"
+
+geo_hash: "7zzzzz"
+
+default_source: "newton-ma-opengov"
+version: "1.0.0"
+updated_by: "UMF_System"
+default_confidence: 1.0
+
+expansion_metadata:
+  onboarded_by: "tier6_newton_onboarding"
+  rationale: "MassGIS L3 parcels + MCMOD MBTA overlay + MACRIS; local historic TBD"
+  lat: 42.337
+  lon: -71.209
+  llm_model: "manual-config"
+
+source_mappings:
+  census:           "census_api_2026"
+  tax-assessor:     "newton-ma-tax-assessor"
+  permits:          "newton-ma-permits"
+  voters:           "newton-ma-elections"
+  property_tax:     "invoice-cloud"
+  civic-meetings:   "newton-ma-civic-meetings"
+  community-events: "newton-ma-community-events"
+  311-seeclickfix:  "newton-ma-311-seeclickfix"
+  mbta-alerts:      "newton-ma-mbta-alerts"
+  school_calendar:  "newton-ma-schools-ics"
+  zoning_bylaws:    "newton-ma-zoning-json"
+  market_dynamics:  "mls-trends-bq"
+  infra_friction:   "newton-ma-dpw-capital-plans"
+  connectivity:     "fcc-broadband-fabric"
+  climate_resilience: "fema-flood-maps"
+  social_equity:    "ej-burden-indices"
+
+  parcel_geometry:    "ma-massgis-l3-parcels"
+  zoning_overlay:     "newton-ma-massgis-mcmod"
+  historic_resources: "ma-mhc-macris"
+  # local_historic: omitted — add ``local_historic`` + ``local_historic_arcgis_urls``
+  # when a public Newton historic-inventory FeatureServer is confirmed.
+  # noncompliance / environmental_overlay: omitted (skipped in master loop).
+
+scraper_urls:
+  property_assessor:   "https://newtonma.patriotproperties.com/SearchResults.asp"
+  civic_meetings:      "https://www.newtonma.gov/government/calendar-0"
+  community_events:    "https://www.newtonma.gov/government/calendar-0"
+  seeclickfix_311:     "https://seeclickfix.com/api/v2/issues"
+  mbta_alerts:         "https://api-v3.mbta.com/alerts"
+  school_calendar_ics: "https://www.newton.k12.ma.us/calendar/calendar_353.ics"
+  zoning_bylaws_json:  "https://www.newtonma.gov/government/planning/zoning-maps"
+  dpw_capital_plans_pdf: "https://www.newtonma.gov/government/public-works"
+  ejscreen_api:        "DEAD_SINCE_2025-02-05"
+  fema_nfhl_wfs:       "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query"
+  fcc_broadband_api:   "https://broadbandmap.fcc.gov/api/public/map/listAvailability"
+  permits_api:         "https://www.newtonma.gov/government/building-permits"
+  zillow_zhvi_csv:     "https://files.zillowstatic.com/research/public_csvs/zhvi/Zip_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv"
+
+  parcels_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/Massachusetts_Property_Tax_Parcels/FeatureServer"
+
+  zoning_overlay_arcgis_url:
+    "https://services5.arcgis.com/M3HWiWPZtHfjKOLc/arcgis/rest/services/MCMOD/FeatureServer"
+
+http:
+  ssl_verify: true
+
+scraper_column_map:
+  source_id_col: "parcel_id"
+  legal_name_col: "owner"
+  data_table_idx:     1
+  header_col_offset:  0
+  source_id_col_idx:  0
+
+scraper_search_params:
+  SearchOwner: ""
+
+scraper_page_param: "page"
+scraper_max_pages: 5
+
+party_type_org_keywords:
+  - "LLC"
+  - "LLP"
+  - "INC"
+  - "CORP"
+  - "TRUST"
+  - "TRS"
+  - "TR"
+  - "TRUS"
+  - "REALTY"
+  - "PROPERTIES"
+  - "INVESTMENTS"
+  - "ASSOCIATES"
+  - "ASSOCIATION"
+  - "NOMINEE"
+  - "ESTATE"
+  - "COMMISSION"
+  - "BOARD"
+  - "AUTHORITY"
+  - "FOUNDATION"
+  - "PARTNERS"
+  - "GROUP"
+
+town_pulse:
+  civic_meetings:
+    calendar_category: "Boards & Committees"
+    lookahead_days: 90
+  community_events:
+    calendar_category: "Community Events"
+    lookahead_days: 30
+  seeclickfix:
+    place_url: "NO_SCF_COVERAGE"
+    statuses:
+      - "open"
+      - "acknowledged"
+      - "in_progress"
+    per_page: 100
+    event_type: "311_REQUEST"
+  mbta:
+    routes: ["57", "59", "553", "554"]
+    activities:
+      - "BOARD"
+      - "EXIT"
+      - "RIDE"
+    api_key_env: "MBTA_API_KEY"
+    event_type: "TRANSIT_ALERT"
+
+market_dynamics:
+  zip_codes:
+    - "02458"
+    - "02459"
+    - "02460"
+    - "02461"
+    - "02462"
+    - "02464"
+    - "02465"
+    - "02466"
+    - "02467"
+    - "02468"
+  geo_level: "ZIPCODE"
+  metrics:
+    MEDIAN_RENT_1BR:    {baseline: 2200, monthly_drift: 0.005}
+    MEDIAN_RENT_2BR:    {baseline: 2800, monthly_drift: 0.005}
+    MEDIAN_RENT_3BR:    {baseline: 3500, monthly_drift: 0.004}
+    MEDIAN_SALE_PRICE:  {baseline: 1200000, monthly_drift: 0.003}
+    AVG_DAYS_ON_MARKET: {baseline: 22, monthly_drift: -0.01}
+    MONTHS_OF_SUPPLY:   {baseline: 1.4, monthly_drift: -0.02}
+    PRICE_PER_SQFT:     {baseline: 650, monthly_drift: 0.004}
+  history_months: 12
+  random_seed: 42
+  bigquery_project: "towneye-umf"
+  bigquery_dataset: "market_dynamics"
+  bigquery_table:   "mls_trends"
+
+equity_census_tracts: []
+equity_indicators:
+  CANCER_RISK_PERCENTILE:          {mean: 42.0, std: 8.0}
+  PM25_PERCENTILE:                 {mean: 50.0, std: 6.0}
+  LEAD_PAINT_PERCENTILE:           {mean: 55.0, std: 10.0}
+  TRAFFIC_PROXIMITY_PERCENTILE:    {mean: 60.0, std: 12.0}
+  SUPERFUND_PERCENTILE:            {mean: 35.0, std: 9.0}
+  WASTEWATER_PERCENTILE:           {mean: 40.0, std: 7.0}
+  LOW_INCOME_PERCENTILE:           {mean: 35.0, std: 14.0}
+  LINGUISTIC_ISOLATION_PERCENTILE: {mean: 18.0, std: 8.0}
+  LESS_HS_ED_PERCENTILE:           {mean: 22.0, std: 9.0}
+  UNEMPLOYMENT_PERCENTILE:         {mean: 31.0, std: 11.0}
+equity_disadvantaged_threshold: 65.0
+equity_index_names:
+  - "EPA_EJSCREEN"
+equity_random_seed: 42
+
+climate_flood_zone_map:
+  "AE":       {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "AH":       {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "AO":       {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "A":        {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "VE":       {zone_type: "FLOOD_100YR",    risk_level: "HIGH"}
+  "X":        {zone_type: "FLOOD_500YR",    risk_level: "MODERATE"}
+  "FLOODWAY": {zone_type: "FLOOD_FLOODWAY", risk_level: "HIGH"}
+  "D":        {zone_type: "FLOOD_100YR",    risk_level: "UNDETERMINED"}
+  "OPEN_WATER": {zone_type: "WETLAND",      risk_level: "LOW"}
+
+climate_fema_wfs_params:
+  where:      "1=1"
+  out_fields: "FLD_ZONE,SFHA_TF,DFIRM_ID,ZONE_SUBTY"
+  bbox:       "-71.32,42.28,-71.15,42.37"
+
+broadband_csv_column_map:
+  provider_name: "brand_name"
+  fcc_tech_code: "technology"
+  max_down_mbps: "max_advertised_download_speed"
+  max_up_mbps:   "max_advertised_upload_speed"
+  geo_value:     "location_id"
+  low_latency:   "low_latency"
+  biz_res_code:  "business_residential_code"
+
+broadband_tech_code_map:
+  "10": "DSL"
+  "40": "CABLE"
+  "50": "FIBER"
+  "60": "SATELLITE"
+  "70": "FIXED_W"
+  "30": "LTE"
+  "31": "NR"
+  "300": "OTHER"
+
+# ============================================================================
+# Tier 2 (Domain 14-19)
+# ============================================================================
+
+parcels:
+  where_clause: "TOWN_ID=207"
+
+  id_field_candidates:
+    - "MAP_PAR_ID"
+    - "LOC_ID"
+    - "PROP_ID"
+    - "PARCEL_ID"
+
+  address_field_candidates:
+    - "SITE_ADDR"
+    - "FULL_STR"
+    - "ADDRESS"
+    - "FULL_ADDR"
+    - "FULLADDR"
+
+  page_size:                1000
+  max_features:            100000
+  request_timeout_s:          60
+  output_spatial_reference: 4326
+
+zoning_overlay:
+  include_layer_ids: [1]
+
+  code_field_candidates:
+    - "ZONING"
+    - "ZoneCode"
+    - "ZONE_CODE"
+    - "MCMOD_CODE"
+    - "OVERLAY_CODE"
+
+  type_field_candidates:
+    - "OverlayType"
+    - "Overlay_Type"
+    - "TYPE"
+
+  name_field_candidates:
+    - "District"
+    - "DistrictName"
+    - "NAME"
+    - "ZoneName"
+
+  page_size:                 500
+  max_features:              5000
+  request_timeout_s:          60
+  output_spatial_reference: 4326
+
+historic_resources:
+  macris_arcgis_url:
+    "https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/MHC_Inventory_GDB/FeatureServer"
+  macris_town_name: "Newton"
+
+macris:
+  exclude_layer_ids: [2]
+
+  town_filter_field_candidates:
+    - "TOWN_NAME"
+    - "TOWN"
+    - "MUNICIPALITY"
+
+  mhcn_field_candidates:                ["MHCN"]
+  resource_kind_field_candidates:       ["TYPE"]
+  legend_field_candidates:              ["LEGEND"]
+  designation_field_candidates:         ["DESIGNATIO", "DESIGNATION"]
+  designation_date_field_candidates:    ["D_DATE", "DESIGNATION_DATE"]
+  historic_name_field_candidates:       ["HISTORIC_N", "HISTORIC_NAME"]
+  common_name_field_candidates:         ["COMMON_NAM", "COMMON_NAME"]
+  address_field_candidates:             ["ADDRESS", "STREET_ADDRESS"]
+  construction_date_field_candidates:   ["CONSTRUCTI", "CONSTRUCTION_DATE"]
+  architectural_style_field_candidates: ["ARCHITECTU", "ARCH"]
+  architect_field_candidates:           ["MAKER", "ARCHITECT"]
+  use_type_field_candidates:            ["USE_TYPE"]
+  significance_field_candidates:        ["SIGNIFICAN", "SIGNIFICANCE"]
+  demolished_field_candidates:          ["DEMOLISHED"]
+
+  page_size:                1000
+  max_features:            50000
+  request_timeout_s:          30
+  output_spatial_reference: 4326
+
+assessor_to_zoning_map: {}
+
+zoning:
+  bylaw_year: "2025"
+  arcgis_layer_url:
+    "https://services5.arcgis.com/M3HWiWPZtHfjKOLc/arcgis/rest/services/MCMOD/FeatureServer/1/query"

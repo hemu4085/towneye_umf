@@ -1,0 +1,37 @@
+{
+  "status": 200,
+  "len": 8587,
+  "saved_html": "data/29_walnut/assessor.html",
+  "parsed_29_records": [
+    {
+      "parcel_id": "128.0-0003-0012.0",
+      "location": "29 WALNUT ST",
+      "owner": "GHAI JESSICA & SANDEEP",
+      "built_type": "1927 Old Style",
+      "total_value": "$1,002,300",
+      "beds_baths": "3 1",
+      "lot_size_fin_area": "3,023 1,490",
+      "luc_description": "101 One Family",
+      "nhood": "9",
+      "sale_date_sale_price": "6/13/ 2017 $750,000",
+      "book_page": "69423-104",
+      "te_source": "arlington-ma-tax-assessor",
+      "te_geo_hash": "drt2zh"
+    },
+    {
+      "parcel_id": "141.0-0002-0011.0",
+      "location": "29 WALNUT TERR",
+      "owner": "SUDRICK CHAITANYA NAIK SHIVANGI",
+      "built_type": "1952 Cape",
+      "total_value": "$1,080,000",
+      "beds_baths": "3 2",
+      "lot_size_fin_area": "7,627 1,754",
+      "luc_description": "101 One Family",
+      "nhood": "8",
+      "sale_date_sale_price": "11/15/ 2024 $1,125,000",
+      "book_page": "83477-473",
+      "te_source": "arlington-ma-tax-assessor",
+      "te_geo_hash": "drt2zh"
+    }
+  ]
+}

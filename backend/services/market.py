@@ -22,7 +22,39 @@ def _town_market_context(town_slug: str) -> dict:
     return {k: (None if pd.isna(v) else v) for k, v in row.items()}
 
 
+def _market_fallback(data: BriefData) -> dict:
+    ctx = _town_market_context(data.inputs.town_slug)
+    assessed = data.parcel.assessed_value
+    lot = data.parcel.area_sqft
+    return {
+        "summary": (
+            f"Market snapshot for {data.parcel.address} from TownEye Gold assessor and town "
+            f"layers. Zoning verdict: {data.headline_verdict_text}."
+        ),
+        "median_price": ctx.get("median_sale_price") or assessed,
+        "days_on_market": ctx.get("median_dom"),
+        "inventory_months": ctx.get("months_of_inventory"),
+        "comps_radius_mi": 0.25,
+        "comps": [
+            {
+                "address": "Comparable sales — pilot MLS integration pending",
+                "price": assessed,
+                "sf": lot,
+            },
+        ],
+        "trends": [
+            f"Lot size: {lot:,} sf" if lot else "Lot size: see assessor record",
+            f"Base zoning stack: {', '.join(h.code for h in data.base_zoning_hits[:3]) or '—'}",
+            "Live assessor + zoning data; comp radius 0.25 mi at full launch",
+        ],
+        "data_sources": ["TownEye Gold property.parquet", "market-trends.parquet"],
+        "fallback": True,
+    }
+
+
 def generate_market_report(data: BriefData) -> dict:
+    if not get_settings().anthropic_api_key.strip():
+        return _market_fallback(data)
     ctx = _town_market_context(data.inputs.town_slug)
     prompt = f"""Generate a Massachusetts real estate Market Snapshot JSON for:
 Address: {data.parcel.address}

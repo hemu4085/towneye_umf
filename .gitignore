@@ -50,3 +50,4 @@ Thumbs.db
 
 # Temp probe/audit scripts (one-offs)
 /tmp/
+.vercel

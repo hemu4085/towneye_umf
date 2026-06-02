@@ -1,0 +1,580 @@
+{
+  "folders": [],
+  "services": [
+    {
+      "name": "1960_CensusTractsArl",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/1960_CensusTractsArl/FeatureServer"
+    },
+    {
+      "name": "ACS_5Year_Estimate",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ACS_5Year_Estimate/FeatureServer"
+    },
+    {
+      "name": "AreasRequiringFurtherStudy",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/AreasRequiringFurtherStudy/FeatureServer"
+    },
+    {
+      "name": "Arlington_Addresses_current_view",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Addresses_current_view/FeatureServer"
+    },
+    {
+      "name": "Arlington_Flood_Zones",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Flood_Zones/FeatureServer"
+    },
+    {
+      "name": "Arlington_Housing_Authority_Owned___parcel",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Housing_Authority_Owned___parcel/FeatureServer"
+    },
+    {
+      "name": "Arlington_Parcels_with_Current_Site_Address_(view)",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Parcels_with_Current_Site_Address_(view)/FeatureServer"
+    },
+    {
+      "name": "Arlington_Street_Poles",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Street_Poles/FeatureServer"
+    },
+    {
+      "name": "Arlington_Structures_(view)",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Structures_(view)/FeatureServer"
+    },
+    {
+      "name": "Arlington_Zoning_Districts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Zoning_Districts/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_SchoolDistrict",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_SchoolDistrict/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_TownBoundary",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_TownBoundary/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_TrashDay",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_TrashDay/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_VotingPrecinct",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_VotingPrecinct/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_Water_line",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_Water_line/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_Water_Polygon",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_Water_Polygon/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_Wetlands",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_Wetlands/FeatureServer"
+    },
+    {
+      "name": "ArlingtonMA_Zoning",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ArlingtonMA_Zoning/FeatureServer"
+    },
+    {
+      "name": "Asian_Population_as_Ratio_Total_Population___Census_2020",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Asian_Population_as_Ratio_Total_Population___Census_2020/FeatureServer"
+    },
+    {
+      "name": "BikeRack",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/BikeRack/FeatureServer"
+    },
+    {
+      "name": "BIPOC_Population_as_Ratio_of_Total_Population_Census_2020",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/BIPOC_Population_as_Ratio_of_Total_Population_Census_2020/FeatureServer"
+    },
+    {
+      "name": "Black_Population_as_Ratio_of_Total_Population_Census_2020",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Black_Population_as_Ratio_of_Total_Population_Census_2020/FeatureServer"
+    },
+    {
+      "name": "BusinessDistricts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/BusinessDistricts/FeatureServer"
+    },
+    {
+      "name": "Census_Block_Groups",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Census_Block_Groups/FeatureServer"
+    },
+    {
+      "name": "Census_Blocks_2020___From_Secretary_of_State",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Census_Blocks_2020___From_Secretary_of_State/FeatureServer"
+    },
+    {
+      "name": "Change_in_Arlington_Tree_Cover_2011_to_2021",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Change_in_Arlington_Tree_Cover_2011_to_2021/FeatureServer"
+    },
+    {
+      "name": "Current_Arlington_Address_Points_(view)",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Current_Arlington_Address_Points_(view)/FeatureServer"
+    },
+    {
+      "name": "Deviation_from_Towns_Median_HH_Income___120K___Connect_Arlington_2018",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Deviation_from_Towns_Median_HH_Income___120K___Connect_Arlington_2018/FeatureServer"
+    },
+    {
+      "name": "disability_status_acs_ct",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/disability_status_acs_ct/FeatureServer"
+    },
+    {
+      "name": "Flood_Zone_Changes_2023",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Flood_Zone_Changes_2023/FeatureServer"
+    },
+    {
+      "name": "Flood_Zones_Preliminary_Changes_2023",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Flood_Zones_Preliminary_Changes_2023/FeatureServer"
+    },
+    {
+      "name": "Hispanic_Population_as_Ratio_of_Total_Population___Census_2020",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Hispanic_Population_as_Ratio_of_Total_Population___Census_2020/FeatureServer"
+    },
+    {
+      "name": "Hispanic_Population_as_Ratio_of_Total_Population___Census_2020_NEW",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Hispanic_Population_as_Ratio_of_Total_Population___Census_2020_NEW/FeatureServer"
+    },
+    {
+      "name": "Historic_Commission_Inventory_view",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Historic_Commission_Inventory_view/FeatureServer"
+    },
+    {
+      "name": "Historic_District",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Historic_District/FeatureServer"
+    },
+    {
+      "name": "Historic_Overlay_Districts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Historic_Overlay_Districts/FeatureServer"
+    },
+    {
+      "name": "Hot_Spot_Analysis_of_Change_in_Arlington_Tree_Cover_2011_to_2021",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Hot_Spot_Analysis_of_Change_in_Arlington_Tree_Cover_2011_to_2021/FeatureServer"
+    },
+    {
+      "name": "HouseDistricts_Proposed",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/HouseDistricts_Proposed/FeatureServer"
+    },
+    {
+      "name": "HydroState",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/HydroState/FeatureServer"
+    },
+    {
+      "name": "LandUse_NonCompliance",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/LandUse_NonCompliance/FeatureServer"
+    },
+    {
+      "name": "Local_Historic_District",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Local_Historic_District/FeatureServer"
+    },
+    {
+      "name": "M010Assess_2023_TownOwned_Parcels",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/M010Assess_2023_TownOwned_Parcels/FeatureServer"
+    },
+    {
+      "name": "Map_book_Index",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Map_book_Index/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_BostonMarathon_Route",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_BostonMarathon_Route/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_Charles_River",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_Charles_River/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_FlightLines_2014",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_FlightLines_2014/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_FlightLines_2015",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_FlightLines_2015/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_obstacles",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_obstacles/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_Participants",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_Participants/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_SampleImagery",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_SampleImagery/FeatureServer"
+    },
+    {
+      "name": "MassOrtho_SubRegions",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/MassOrtho_SubRegions/FeatureServer"
+    },
+    {
+      "name": "Median_Household_Income___Connect_Arlington_2018",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Median_Household_Income___Connect_Arlington_2018/FeatureServer"
+    },
+    {
+      "name": "National_Historic_District",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/National_Historic_District/FeatureServer"
+    },
+    {
+      "name": "OpenSpaceState",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/OpenSpaceState/FeatureServer"
+    },
+    {
+      "name": "OS_Zoning_WFL1",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/OS_Zoning_WFL1/FeatureServer"
+    },
+    {
+      "name": "Parcels with CAMA",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Parcels with CAMA/FeatureServer"
+    },
+    {
+      "name": "Parcels_with_Current_and_Pending_Addresses",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Parcels_with_Current_and_Pending_Addresses/FeatureServer"
+    },
+    {
+      "name": "Plow_Routes",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Plow_Routes/FeatureServer"
+    },
+    {
+      "name": "PollingLocations",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/PollingLocations/FeatureServer"
+    },
+    {
+      "name": "Proposed_House_Districts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Proposed_House_Districts/FeatureServer"
+    },
+    {
+      "name": "Public_Requests",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Public_Requests/FeatureServer"
+    },
+    {
+      "name": "Ratio_of_Renters_to_Owners___Connect_Arlington_Study_2018",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Ratio_of_Renters_to_Owners___Connect_Arlington_Study_2018/FeatureServer"
+    },
+    {
+      "name": "RecreationFacilities",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/RecreationFacilities/FeatureServer"
+    },
+    {
+      "name": "Requests_public_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Requests_public_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "Requests_reporter_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Requests_reporter_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "Requests_submit_46429fca67824e0db4178d249c3be6ab",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Requests_submit_46429fca67824e0db4178d249c3be6ab/FeatureServer"
+    },
+    {
+      "name": "Requests_survey_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Requests_survey_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "Residential_Units_Per_Parcel___Assessor_2021",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Residential_Units_Per_Parcel___Assessor_2021/FeatureServer"
+    },
+    {
+      "name": "SatisfactionSurveys_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/SatisfactionSurveys_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "SatisfactionSurveys_public_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/SatisfactionSurveys_public_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "SatisfactionSurveys_submit_0417dcfca14540d39775a4f0f8387dff",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/SatisfactionSurveys_submit_0417dcfca14540d39775a4f0f8387dff/FeatureServer"
+    },
+    {
+      "name": "Secretary_Census2020Block_Final",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Secretary_Census2020Block_Final/FeatureServer"
+    },
+    {
+      "name": "service_aae29d21e308405983b0fcc4ac9b26a9",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/service_aae29d21e308405983b0fcc4ac9b26a9/FeatureServer"
+    },
+    {
+      "name": "Town_Owned_Parcels",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Town_Owned_Parcels/FeatureServer"
+    },
+    {
+      "name": "Town_Owned_Parcels_Dissolved",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Town_Owned_Parcels_Dissolved/FeatureServer"
+    },
+    {
+      "name": "TownBoundaryLine",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/TownBoundaryLine/FeatureServer"
+    },
+    {
+      "name": "townhall_doorways",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/townhall_doorways/FeatureServer"
+    },
+    {
+      "name": "townhall_firstfloor",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/townhall_firstfloor/FeatureServer"
+    },
+    {
+      "name": "TownOwnedBuildings",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/TownOwnedBuildings/FeatureServer"
+    },
+    {
+      "name": "TownPolyMask",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/TownPolyMask/FeatureServer"
+    },
+    {
+      "name": "TrailPoint",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/TrailPoint/FeatureServer"
+    },
+    {
+      "name": "Trails",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Trails/FeatureServer"
+    },
+    {
+      "name": "TrashBarrels",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/TrashBarrels/FeatureServer"
+    },
+    {
+      "name": "Trees_public_46429fca67824e0db4178d249c3be6ab",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Trees_public_46429fca67824e0db4178d249c3be6ab/FeatureServer"
+    },
+    {
+      "name": "ViewLayer_Plan16Precincts_Equity_v4",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ViewLayer_Plan16Precincts_Equity_v4/FeatureServer"
+    },
+    {
+      "name": "ViewLayer1_Plan16Precincts_Equity_v4",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/ViewLayer1_Plan16Precincts_Equity_v4/FeatureServer"
+    },
+    {
+      "name": "Voter_Precincts_with_Town_Meeting_Members",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Voter_Precincts_with_Town_Meeting_Members/FeatureServer"
+    },
+    {
+      "name": "VoterPrecinct_existing",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/VoterPrecinct_existing/FeatureServer"
+    },
+    {
+      "name": "Voting21Precincts_ExistingBoundaries",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Voting21Precincts_ExistingBoundaries/FeatureServer"
+    },
+    {
+      "name": "WaterBody",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/WaterBody/FeatureServer"
+    },
+    {
+      "name": "Water_Service_Material_Survey",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Water_Service_Material_Survey/FeatureServer"
+    },
+    {
+      "name": "Current_Arlington_Addresses",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Current_Arlington_Addresses/FeatureServer"
+    },
+    {
+      "name": "Arlington_Schools",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Schools/FeatureServer"
+    },
+    {
+      "name": "Public_Requests1",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Public_Requests1/FeatureServer"
+    },
+    {
+      "name": "Public_Shade_Trees",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Public_Shade_Trees/FeatureServer"
+    },
+    {
+      "name": "Public_Shade_Trees_view",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Public_Shade_Trees_view/FeatureServer"
+    },
+    {
+      "name": "Electrify_Arlington_pt_1",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Electrify_Arlington_pt_1/FeatureServer"
+    },
+    {
+      "name": "Q1_2025_SEI_Leaks_Data_(5)",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Q1_2025_SEI_Leaks_Data_(5)/FeatureServer"
+    },
+    {
+      "name": "Electrify_Arlington_Contacts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Electrify_Arlington_Contacts/FeatureServer"
+    },
+    {
+      "name": "Heating_Fuel_Type_by_Type_of_Home",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Heating_Fuel_Type_by_Type_of_Home/FeatureServer"
+    },
+    {
+      "name": "Arlington_Landlords",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Landlords/FeatureServer"
+    },
+    {
+      "name": "Non_Arlington_Landlords",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Non_Arlington_Landlords/FeatureServer"
+    },
+    {
+      "name": "Arlington_Roads",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Roads/FeatureServer"
+    },
+    {
+      "name": "Arlington_Public_School_Zones",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Public_School_Zones/FeatureServer"
+    },
+    {
+      "name": "Single Family Layer",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Single Family Layer/FeatureServer"
+    },
+    {
+      "name": "2 to 4 Non Condos",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/2 to 4 Non Condos/FeatureServer"
+    },
+    {
+      "name": "2 to 4 Units Condos",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/2 to 4 Units Condos/FeatureServer"
+    },
+    {
+      "name": "Parcel_Mailing_Addresses",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Parcel_Mailing_Addresses/FeatureServer"
+    },
+    {
+      "name": "Zoning_and_Overlay_Districts",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Zoning_and_Overlay_Districts/FeatureServer"
+    },
+    {
+      "name": "Arlington_Open_Space",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Open_Space/FeatureServer"
+    },
+    {
+      "name": "Arlington_Roads_Dissolved",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Roads_Dissolved/FeatureServer"
+    },
+    {
+      "name": "Arlington_Voter_Info",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Voter_Info/FeatureServer"
+    },
+    {
+      "name": "Parcels_with_Assessor_Info",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Parcels_with_Assessor_Info/FeatureServer"
+    },
+    {
+      "name": "Arlington_Addresses",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Arlington_Addresses/FeatureServer"
+    },
+    {
+      "name": "Public_Shade_Trees_Adopted",
+      "type": "FeatureServer",
+      "url": "https://services2.arcgis.com/s1Sh73K7qtP9JdrG/arcgis/rest/services/Public_Shade_Trees_Adopted/FeatureServer"
+    }
+  ]
+}

@@ -2,11 +2,47 @@
 
 from __future__ import annotations
 
+from backend.config import get_settings
 from backend.services.llm import generate_json_report
 from reports.buildability_brief import BriefData
 
 
+def _proforma_fallback(data: BriefData) -> dict:
+    scenarios = []
+    for e in data.envelopes[:3]:
+        hard = (e.max_gfa_sqft or 0) * 475
+        scenarios.append({
+            "name": e.label,
+            "units": max(1, int((e.max_gfa_sqft or 0) // 900)),
+            "total_gfa": e.max_gfa_sqft,
+            "hard_cost": hard,
+            "roi_pct": round(min(28.0, max(8.0, (e.max_far or 0.4) * 40)), 1),
+            "notes": e.rationale or "Envelope from live zoning stack",
+        })
+    if not scenarios:
+        scenarios.append({
+            "name": "Base",
+            "units": 1,
+            "total_gfa": data.parcel.area_sqft,
+            "hard_cost": (data.parcel.area_sqft or 0) * 475,
+            "roi_pct": 12.0,
+            "notes": "Derived from parcel area — refine with full envelope",
+        })
+    return {
+        "scenarios": scenarios,
+        "assumptions": [
+            "Hard cost $475/sf (RSMeans MA indicative, pilot)",
+            "Live zoning envelopes from TownEye Gold",
+            "Sale pricing not connected to MLS in pilot",
+        ],
+        "sensitivity": {"low": 8.0, "mid": 14.0, "high": 22.0},
+        "fallback": True,
+    }
+
+
 def generate_proforma(data: BriefData) -> dict:
+    if not get_settings().anthropic_api_key.strip():
+        return _proforma_fallback(data)
     env_lines = []
     for e in data.envelopes:
         env_lines.append(

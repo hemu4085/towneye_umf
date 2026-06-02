@@ -54,6 +54,26 @@ When you’re ready for reports, we’ll add Railway + `VITE_API_URL`.
 
 ---
 
+## Build failed on Vercel (vite / node_modules error)
+
+If you see `Cannot find module vite/dist/node/cli.js`:
+
+**Cause:** `frontend/node_modules` was accidentally committed to GitHub. Vercel then breaks when reinstalling.
+
+**Fix** — run in WSL:
+
+```bash
+cd ~/projects/fine_tuned_models/towneye_umf
+git rm -r --cached frontend/node_modules
+git add .gitignore vercel.json frontend/package.json frontend/.nvmrc frontend/package-lock.json
+git commit -m "Fix Vercel build: remove node_modules from git, pin Node 20"
+git push origin main
+```
+
+Then **Redeploy** on Vercel.
+
+---
+
 ## If something fails
 
 | Problem | What to do |
