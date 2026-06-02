@@ -9,7 +9,7 @@ services:
     name: towneye-api
     runtime: docker
     dockerfilePath: ./Dockerfile.api
-    plan: free
+    plan: standard
     healthCheckPath: /api/health
     envVars:
       - key: PORTAL_PUBLIC_URL

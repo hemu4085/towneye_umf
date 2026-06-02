@@ -14,9 +14,9 @@
 
 1. Type `24 princeton` (town auto-appended for search) → **pick dropdown row**
 2. **RE Agent** or **Developer** → click **Buildability**, **Risk**, or **Market**
-3. Live data from Gold parquets; first request may take 15–60s on Render free tier
-4. Set `PORTAL_SKIP_PDF=true` on Render; add `ANTHROPIC_API_KEY` for richer Market/Pro Forma (fallback works without it)
-5. For capital demos: upgrade Render **Starter** + UptimeRobot ping `/api/health`
+3. Live data from Gold parquets; on **Render Standard** expect ~5–30s per live report, suggest ~1–5s when warm
+4. `PORTAL_SKIP_PDF=true` on Render; optional `ANTHROPIC_API_KEY` for richer Market/Pro Forma
+5. **Production API:** Render **Standard** (2 GB, always-on) — `render.yaml` → `plan: standard`
 
 ---
 
@@ -75,7 +75,7 @@ Wait for Render to rebuild (~5–10 min).
 1. Open https://vercel.com → project **towneye-umf**
 2. **Settings → Git** → Connect **hemu4085/towneye_umf**, branch **main**
 3. **Root Directory:** leave **empty** (repo root — `vercel.json` at root)
-4. **Do not set** `VITE_API_URL` in Vercel (or remove it if present). Production uses same-origin `/api`; root `vercel.json` proxies to Render.
+4. **Do not set** `VITE_API_URL` in Vercel (or remove it if present). Production uses same-origin `/api`; root `vercel.json` proxies to Render. If set wrongly, address search shows `Unexpected token '<'` (HTML instead of JSON).
 5. **Deployments → Create Deployment** (or push triggers auto-deploy)
 6. Confirm build log shows `vite build` (~2s+, not 93ms)
 

@@ -1,5 +1,5 @@
 /**
- * API client — Vercel proxies /api to Render; long report jobs call Render directly.
+ * API client — same-origin /api via Vercel proxy; Render fallback when response isn't JSON.
  */
 
 const RENDER_API_ROOT = 'https://towneye-umf.onrender.com/api';
@@ -18,7 +18,7 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
-/** Same-origin /api first (avoids CORS); Render direct as fallback on 502/network errors. */
+/** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   const viaVercel = `${API_ROOT}${p}`;
@@ -29,17 +29,36 @@ function apiUrls(path) {
   return [viaVercel, viaRender];
 }
 
+function looksLikeHtml(text) {
+  const t = text.trim().toLowerCase();
+  return t.startsWith('<!doctype') || t.startsWith('<html');
+}
+
+function shouldTryNextUrl(res, bodyText) {
+  if (res.status === 502 || res.status === 503 || res.status === 504) return true;
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) return false;
+  if (looksLikeHtml(bodyText)) return true;
+  if (bodyText.trim() && !bodyText.trim().startsWith('{') && !bodyText.trim().startsWith('[')) {
+    return true;
+  }
+  return false;
+}
+
 function friendlyFetchError(err, context) {
   if (err?.name === 'AbortError') {
     return new Error(
-      `${context} timed out while the server was waking up. Wait 30 seconds and try again.`,
+      `${context} timed out. Wait a few seconds and try again.`,
     );
   }
   const msg = err?.message || '';
-  if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed')) {
+  if (msg.includes('Unexpected token') && msg.includes('DOCTYPE')) {
     return new Error(
-      `${context} could not reach the API. The server may be starting (Render free tier) — try again shortly.`,
+      `${context} received a web page instead of API data. Hard refresh (Ctrl+Shift+R) or try again in a moment.`,
     );
+  }
+  if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return new Error(`${context} could not reach the API — try again shortly.`);
   }
   return err instanceof Error ? err : new Error(String(err));
 }
@@ -50,18 +69,36 @@ async function apiFetch(path, init = {}) {
     ...init,
     cache: 'no-store',
     credentials: 'omit',
-    headers: { ...(init.headers || {}), 'Cache-Control': 'no-cache' },
+    headers: {
+      Accept: 'application/json',
+      ...(init.headers || {}),
+      'Cache-Control': 'no-cache',
+    },
   };
 
   let lastError = null;
   for (const url of urls) {
     try {
       const res = await fetch(url, mergedInit);
-      if (res.status === 502 || res.status === 503) {
-        lastError = new Error(`HTTP ${res.status}`);
+      const bodyText = await res.text();
+      if (shouldTryNextUrl(res, bodyText)) {
+        lastError = new Error(`Non-JSON from ${url} (HTTP ${res.status})`);
         continue;
       }
-      return res;
+      return {
+        ok: res.ok,
+        status: res.status,
+        headers: res.headers,
+        async json() {
+          try {
+            return JSON.parse(bodyText);
+          } catch (e) {
+            throw new Error(
+              `Invalid JSON from API (HTTP ${res.status}). Hard refresh the page.`,
+            );
+          }
+        },
+      };
     } catch (err) {
       lastError = err;
     }
@@ -110,6 +147,8 @@ export async function suggestAddresses(query, limit = 8) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Address suggest failed');
     return data.suggestions || [];
+  } catch (err) {
+    throw friendlyFetchError(err, 'Address search');
   } finally {
     cancel();
   }
