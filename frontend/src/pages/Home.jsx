@@ -4,7 +4,7 @@ import AddressInput from '../components/AddressInput';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { checkApiHealth, fetchReportAvailability, resolveParcel, suggestAddresses } from '../api';
+import { checkApiHealth, fetchReportAvailability, resolveParcel } from '../api';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
 
@@ -29,7 +29,10 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    suggestAddresses('29', 3).catch(() => {});
+    const stopChecking = setTimeout(() => {
+      if (!cancelled) setApiChecking(false);
+    }, 6000);
+
     (async () => {
       const ok = await checkApiHealth();
       if (!cancelled) {
@@ -37,8 +40,10 @@ export default function Home() {
         setApiChecking(false);
       }
     })();
+
     return () => {
       cancelled = true;
+      clearTimeout(stopChecking);
     };
   }, []);
 

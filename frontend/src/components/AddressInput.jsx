@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { suggestAddresses } from '../api';
 
-const DEBOUNCE_MS = 100;
+const DEBOUNCE_MS = 80;
 
 function minQueryLength(query) {
   const q = query.trim();
@@ -14,34 +14,48 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+
   const rootRef = useRef(null);
+  const debounceRef = useRef(null);
+  const requestRef = useRef(0);
   const listId = 'address-suggestions';
 
-  useEffect(() => {
-    const q = value.trim();
-    const minLen = minQueryLength(q);
+  const fetchSuggestions = useCallback(
+    (raw) => {
+      if (!suggestEnabled) return;
 
-    if (!suggestEnabled || q.length < minLen) {
-      setSuggestions([]);
-      setOpen(false);
-      setActiveIndex(-1);
-      return undefined;
-    }
+      const q = raw.trim();
+      const minLen = minQueryLength(q);
 
-    const timer = setTimeout(async () => {
-      try {
-        const results = await suggestAddresses(q, 8);
-        setSuggestions(results);
-        setOpen(results.length > 0);
-        setActiveIndex(-1);
-      } catch {
+      clearTimeout(debounceRef.current);
+
+      if (q.length < minLen) {
         setSuggestions([]);
         setOpen(false);
+        return;
       }
-    }, DEBOUNCE_MS);
 
-    return () => clearTimeout(timer);
-  }, [value, suggestEnabled]);
+      debounceRef.current = setTimeout(async () => {
+        const reqId = ++requestRef.current;
+        try {
+          const results = await suggestAddresses(q, 8);
+          if (reqId !== requestRef.current) return;
+          setSuggestions(results);
+          setOpen(results.length > 0);
+          setActiveIndex(-1);
+        } catch {
+          if (reqId !== requestRef.current) return;
+          setSuggestions([]);
+          setOpen(false);
+        }
+      }, DEBOUNCE_MS);
+    },
+    [suggestEnabled],
+  );
+
+  useEffect(() => {
+    fetchSuggestions(value);
+  }, [value, fetchSuggestions]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -51,8 +65,18 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
+
+  function handleInputChange(e) {
+    const next = e.target.value;
+    onChange(next);
+    fetchSuggestions(next);
+  }
 
   function pickSuggestion(item) {
     onChange(item.address);
@@ -95,14 +119,19 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
     >
       <div ref={rootRef} className="relative">
         <input
-          type="text"
+          type="search"
+          enterKeyHint="search"
           role="combobox"
           aria-expanded={open && suggestions.length > 0}
           aria-controls={listId}
           aria-autocomplete="list"
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleInputChange}
+          onInput={handleInputChange}
           onFocus={() => suggestions.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
@@ -124,6 +153,10 @@ export default function AddressInput({ value, onChange, onSubmit, disabled, sugg
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    pickSuggestion(item);
+                  }}
                   onClick={() => pickSuggestion(item)}
                   className={`w-full text-left px-4 py-2.5 text-[15px] transition-colors ${
                     index === activeIndex ? 'bg-gold/15 text-cream' : 'text-cream/95 hover:bg-white/5'
