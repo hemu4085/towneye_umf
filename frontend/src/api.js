@@ -60,6 +60,14 @@ export async function suggestAddresses(query, limit = 8, signal) {
   return data.suggestions || [];
 }
 
+/** Preload parcel index on Render so first keystroke is fast. */
+export function warmSuggestCache() {
+  return Promise.allSettled([
+    fetch(`${API_ROOT}/health`, { cache: 'no-store' }),
+    suggestAddresses('29', 5),
+  ]);
+}
+
 export async function resolveParcel(address) {
   const res = await fetch(`${API_ROOT}/parcels/resolve`, {
     method: 'POST',

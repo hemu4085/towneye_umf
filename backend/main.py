@@ -45,6 +45,18 @@ app.include_router(reports.router)
 app.include_router(auth.router)
 
 
+@app.on_event("startup")
+def _warm_parcel_index() -> None:
+    """Load parcel parquets at boot so first suggest is not a 10s cold read."""
+    from backend.utils.parcel_lookup import _parcel_address_df
+
+    for slug in get_settings().town_slugs:
+        try:
+            _parcel_address_df(slug)
+        except OSError:
+            pass
+
+
 @app.get("/api/health")
 def health():
     return {
