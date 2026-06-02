@@ -77,7 +77,7 @@ export const REPORTS = [
     name: 'Buildability Brief',
     description:
       'Full zoning stack, overlay analysis, development options & permitting timeline',
-    time: '~5 seconds (demo)',
+    time: '~2 seconds',
     endpoint: 'buildability',
   },
   {

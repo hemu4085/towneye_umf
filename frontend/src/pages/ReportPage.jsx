@@ -17,6 +17,7 @@ export default function ReportPage() {
   const report = state?.report;
   const parcel = state?.parcel;
   const preparedFor = state?.preparedFor;
+  const reportPrefetch = state?.reportPrefetch;
 
   useEffect(() => {
     if (!report || !parcel) {
@@ -33,21 +34,20 @@ export default function ReportPage() {
       lng: parcel.lng,
     };
 
-    (async () => {
-      try {
-        const data = await generateReport(report.endpoint, payload);
-        setResult(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [report, parcel, preparedFor, navigate]);
+    const load =
+      reportPrefetch && typeof reportPrefetch.then === 'function'
+        ? reportPrefetch
+        : generateReport(report.endpoint, payload);
+
+    load
+      .then((data) => setResult(data))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [report, parcel, preparedFor, reportPrefetch, navigate]);
 
   async function handleShare() {
     if (!result?.download_url) {
-      setShareNotice('PDF is not ready to share yet.');
+      setShareNotice('PDF download is optional in the demo — the brief preview above is the full report.');
       return;
     }
     const url = absoluteUrl(result.download_url);

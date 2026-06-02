@@ -4,7 +4,7 @@ import AddressInput from '../components/AddressInput';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
-import { checkApiHealth, fetchReportAvailability, resolveParcel } from '../api';
+import { checkApiHealth, fetchReportAvailability, generateReport, resolveParcel } from '../api';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
 
@@ -86,12 +86,21 @@ export default function Home() {
     setLoadingReportId(report.id);
     try {
       const resolved = parcel || (await resolveParcel(address.trim()));
+      const payload = {
+        address: resolved.address,
+        parcel_id: resolved.parcel_id,
+        town_slug: resolved.town_slug,
+        lat: resolved.lat,
+        lng: resolved.lng,
+      };
+      const reportPrefetch = generateReport(report.endpoint, payload);
       navigate(`/report/${report.id}`, {
         state: {
           report,
           parcel: resolved,
           userType,
           address: address.trim(),
+          reportPrefetch,
         },
       });
     } catch (err) {

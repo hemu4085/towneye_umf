@@ -74,20 +74,23 @@ def _report_response(
     html: str,
     payload: dict[str, Any] | None,
     req: ReportRequest,
+    *,
+    skip_pdf: bool = False,
 ) -> dict[str, Any]:
     download_url = None
     pdf_path = None
-    try:
-        pdf_path, download_url = export_portal_pdf(
-            html,
-            town_slug=req.town_slug,
-            parcel_id=req.parcel_id,
-            report_type=report_type,
-            address=req.address,
-            prepared_for=req.prepared_for,
-        )
-    except Exception:
-        pass
+    if not skip_pdf:
+        try:
+            pdf_path, download_url = export_portal_pdf(
+                html,
+                town_slug=req.town_slug,
+                parcel_id=req.parcel_id,
+                report_type=report_type,
+                address=req.address,
+                prepared_for=req.prepared_for,
+            )
+        except Exception:
+            pass
 
     return {
         "report_type": report_type,
@@ -102,11 +105,12 @@ def _report_response(
 def report_buildability(req: ReportRequest):
     try:
         html = get_demo_report_html(req.town_slug, req.parcel_id, "buildability")
+        from_cache = html is not None
         if html is None:
             html = buildability.generate_buildability_html(
                 req.town_slug, req.parcel_id, req.prepared_for,
             )
-        return _report_response("buildability", html, None, req)
+        return _report_response("buildability", html, None, req, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

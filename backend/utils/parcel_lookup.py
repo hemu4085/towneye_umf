@@ -6,6 +6,7 @@ import json
 import re
 from difflib import SequenceMatcher
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -148,7 +149,64 @@ def _score_match(query: str, candidate: str) -> float:
     return SequenceMatcher(None, q, c).ratio()
 
 
+def _lookup_address_index(town_slug: str, address: str) -> Optional[dict[str, Any]]:
+    """Resolve via compact address-index.json (avoids scanning full parcel.parquet)."""
+    entries = _address_index_entries(town_slug)
+    if not entries:
+        return None
+
+    q_tokens = _query_tokens(address)
+    norm_q = _normalize_address(address)
+    best_street: str | None = None
+    best_pid: str | None = None
+    best_score = 0.0
+
+    for street, parcel_id in entries:
+        if q_tokens and not _address_matches_query(street, q_tokens):
+            continue
+        if not q_tokens and norm_q:
+            parts = [p for p in norm_q.split() if len(p) >= 2][:4]
+            if parts and not all(part in _normalize_address(street) for part in parts):
+                continue
+        score = _suggest_score(address, street, q_tokens)
+        if score > best_score:
+            best_score = score
+            best_street = street
+            best_pid = parcel_id
+
+    if best_pid is None or best_score < 0.55:
+        return None
+
+    row = _read_parcel_row(town_slug, best_pid)
+    if row is None:
+        return None
+
+    md = row.get("metadata") or {}
+    if isinstance(md, str):
+        try:
+            md = json.loads(md)
+        except json.JSONDecodeError:
+            md = {}
+
+    display = str(row.get("address") or best_street or address)
+    return {
+        "parcel_id": str(best_pid),
+        "town_slug": town_slug,
+        "address": display,
+        "lat": float(row["centroid_lat"]) if pd.notna(row.get("centroid_lat")) else 0.0,
+        "lng": float(row["centroid_lon"]) if pd.notna(row.get("centroid_lon")) else 0.0,
+        "area_sqft": float(row["area_sqft"]) if pd.notna(row.get("area_sqft")) else None,
+        "match_score": best_score,
+        "source": "address_index",
+        "metadata": md,
+    }
+
+
 def _lookup_parquet(town_slug: str, address: str) -> Optional[dict[str, Any]]:
+    indexed = _lookup_address_index(town_slug, address)
+    if indexed is not None:
+        return indexed
+
     path = get_settings().gold_data_path / town_slug / "parcel.parquet"
     if not path.exists():
         return None
@@ -251,30 +309,44 @@ async def _lookup_gis(town_slug: str, address: str) -> Optional[dict[str, Any]]:
     return None
 
 
+def _read_parquet_row_by_id(path: Path, parcel_id: str, columns: list[str]) -> Optional[pd.Series]:
+    if not path.is_file():
+        return None
+    try:
+        df = pd.read_parquet(path, columns=columns, filters=[("parcel_id", "==", parcel_id)])
+    except Exception:
+        df = pd.read_parquet(path, columns=columns)
+        df = df[df["parcel_id"].astype(str) == parcel_id]
+    if df.empty:
+        return None
+    return df.iloc[0]
+
+
 def _read_property_row(town_slug: str, parcel_id: str) -> Optional[pd.Series]:
     path = get_settings().gold_data_path / town_slug / "property.parquet"
-    if not path.exists():
-        return None
-    df = pd.read_parquet(path)
-    if df.empty or "parcel_id" not in df.columns:
-        return None
-    hit = df[df["parcel_id"] == parcel_id]
-    if hit.empty:
-        return None
-    return hit.iloc[0]
+    cols = [
+        "parcel_id",
+        "lot_size_sqft",
+        "owner_name",
+        "year_built",
+        "assessed_value",
+        "luc_description",
+        "luc",
+    ]
+    return _read_parquet_row_by_id(path, parcel_id, cols)
 
 
 def _read_parcel_row(town_slug: str, parcel_id: str) -> Optional[pd.Series]:
     path = get_settings().gold_data_path / town_slug / "parcel.parquet"
-    if not path.exists():
-        return None
-    df = pd.read_parquet(path, columns=["parcel_id", "address", "area_sqft"])
-    if df.empty:
-        return None
-    hit = df[df["parcel_id"] == parcel_id]
-    if hit.empty:
-        return None
-    return hit.iloc[0]
+    cols = [
+        "parcel_id",
+        "address",
+        "area_sqft",
+        "centroid_lat",
+        "centroid_lon",
+        "metadata",
+    ]
+    return _read_parquet_row_by_id(path, parcel_id, cols)
 
 
 def _assessor_snapshot(town_slug: str, parcel_id: str) -> dict[str, Any]:
