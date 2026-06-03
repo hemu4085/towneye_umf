@@ -18,6 +18,8 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
+const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender|ask)/;
+
 /** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -26,6 +28,9 @@ function apiUrls(path) {
     return [viaVercel];
   }
   const viaRender = `${RENDER_API_ROOT}${p}`;
+  if (SLOW_REPORT_PATH.test(p)) {
+    return [viaRender, viaVercel];
+  }
   return [viaVercel, viaRender];
 }
 

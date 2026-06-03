@@ -10,6 +10,17 @@
 
 **Investor path:** Click **Load demo property** → **RE Agent** → **Buildability Brief**.
 
+**Homeowner path:** Pick address → **Homeowner** → **Full Property Report** (~1–2 min live). **Ask about this property** chat appears once the parcel is locked (home page) and on the report viewer page.
+
+## Homeowner Full Report + property Q&A (2026-06-02)
+
+| Feature | API | Notes |
+|---------|-----|--------|
+| Full Property Report | `POST /api/reports/homeowner-full` | Facts, zoning, buildability, risk, market in one HTML doc; PDF skipped (`PORTAL_SKIP_PDF`) |
+| Property chat | `POST /api/reports/ask` | Starters: ADU, by-right, zoning verdict, flood/historic. With `ANTHROPIC_API_KEY` on Render → Claude; else rule-based fallback |
+
+Production: long report + chat POSTs try **Render first** (`frontend/src/api.js`) to avoid Vercel ~60s proxy timeout.
+
 ## Pilot flow — any Arlington address (2026-06)
 
 1. Type `24 princeton` (town auto-appended for search) → **pick dropdown row**
