@@ -57,6 +57,7 @@ export default function Home() {
     entries: addressEntries,
     townName,
     ready: indexReady,
+    loading: indexLoading,
     error: indexError,
   } = useAddressIndex();
   const pilotTownShort = townName || pilotTown.split(',')[0]?.trim() || 'town';
@@ -236,6 +237,8 @@ export default function Home() {
             pilotTownHint={pilotTown}
             addressEntries={addressEntries}
             indexReady={indexReady}
+            indexLoading={indexLoading}
+            indexFailed={Boolean(indexError)}
             suggestEnabled
           />
 

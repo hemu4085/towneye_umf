@@ -16,6 +16,8 @@ export default function AddressInput({
   pilotTownHint = 'Arlington MA',
   addressEntries = null,
   indexReady = false,
+  indexLoading = false,
+  indexFailed = false,
 }) {
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -55,6 +57,14 @@ export default function AddressInput({
         return;
       }
 
+      if (indexLoading) {
+        setLoading(true);
+        setSuggestError('');
+        setSuggestions([]);
+        setOpen(false);
+        return;
+      }
+
       if (hasLocalIndex) {
         try {
           const local = runLocalSuggest(q);
@@ -68,6 +78,12 @@ export default function AddressInput({
           setSuggestError('Address suggestions unavailable — try again');
           setLoading(false);
         }
+        return;
+      }
+
+      if (!indexFailed) {
+        setLoading(true);
+        setSuggestError('');
         return;
       }
 
@@ -97,6 +113,8 @@ export default function AddressInput({
     [
       suggestEnabled,
       hasLocalIndex,
+      indexLoading,
+      indexFailed,
       addressEntries,
       runLocalSuggest,
       onSuggestReady,
@@ -106,7 +124,7 @@ export default function AddressInput({
 
   useEffect(() => {
     runSuggest(value);
-  }, [value, runSuggest, indexReady, addressEntries]);
+  }, [value, runSuggest, indexReady, addressEntries, indexLoading, indexFailed]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -162,7 +180,8 @@ export default function AddressInput({
     }
   }
 
-  const showServerLoading = loading && !hasLocalIndex && value.trim().length > 0;
+  const showIndexLoading = indexLoading && value.trim().length > 0;
+  const showServerLoading = loading && !hasLocalIndex && !indexLoading && value.trim().length > 0;
 
   return (
     <form
@@ -198,11 +217,15 @@ export default function AddressInput({
                      ${open ? 'border-gold/70' : 'border-gold/40'}`}
         />
 
-        {showServerLoading && (
+        {showIndexLoading && (
           <p className="mt-2 text-center text-xs text-graytown">Loading address list…</p>
         )}
 
-        {suggestError && !showServerLoading && value.trim() && (
+        {showServerLoading && (
+          <p className="mt-2 text-center text-xs text-graytown">Searching addresses…</p>
+        )}
+
+        {suggestError && !showIndexLoading && !showServerLoading && value.trim() && (
           <p className="mt-2 text-center text-xs text-amber-300">{suggestError}</p>
         )}
 

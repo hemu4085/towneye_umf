@@ -19,6 +19,7 @@ function fetchSignal(ms) {
 }
 
 const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender|ask)/;
+const RENDER_FIRST_PATH = /^\/parcels\/(address-index|suggest)/;
 
 /** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
@@ -28,7 +29,7 @@ function apiUrls(path) {
     return [viaVercel];
   }
   const viaRender = `${RENDER_API_ROOT}${p}`;
-  if (SLOW_REPORT_PATH.test(p)) {
+  if (SLOW_REPORT_PATH.test(p) || RENDER_FIRST_PATH.test(p)) {
     return [viaRender, viaVercel];
   }
   return [viaVercel, viaRender];
