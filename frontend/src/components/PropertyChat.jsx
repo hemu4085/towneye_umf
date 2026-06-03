@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { askPropertyQuestion } from '../api';
-import { answerPropertyQuestionLocal } from '../utils/propertyChatLocal';
 import { loadChatMessages, storeChatMessages } from '../utils/chatStorage';
 
 const STARTERS = [
   'Can I add an ADU?',
-  'What is by-right?',
   'What is the zoning verdict?',
+  'Can I add a garage?',
   'Any flood or historic constraints?',
 ];
+
+function formatAnswer(text) {
+  return (text || '').replace(/\*\*/g, '');
+}
 
 export default function PropertyChat({ parcel, disabled }) {
   const parcelId = parcel?.parcel_id ?? null;
@@ -49,19 +52,17 @@ export default function PropertyChat({ parcel, disabled }) {
       });
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: data.answer, source: data.source },
-      ]);
-    } catch {
-      const local = answerPropertyQuestionLocal(q, parcel);
-      setMessages((prev) => [
-        ...prev,
         {
           role: 'assistant',
-          content: local,
-          source: 'local',
+          content: formatAnswer(data.answer),
+          source: data.source,
         },
       ]);
-      setError('');
+    } catch (err) {
+      setError(
+        err?.message ||
+          'Could not reach property Q&A. Wait a moment and try again, or generate a Buildability Brief.',
+      );
     } finally {
       setLoading(false);
     }
@@ -85,10 +86,10 @@ export default function PropertyChat({ parcel, disabled }) {
       <h3 className="font-display text-lg text-cream mt-2">Ask about this property</h3>
       <p className="text-sm text-graytown mt-1">
         {parcelReady
-          ? 'Zoning, ADU, by-right, flood & historic — grounded in TownEye data for this parcel.'
+          ? 'Answers use live zoning, assessor, and constraint data for this parcel — not generic search.'
           : 'Pick an address from the dropdown (or Quick demo) to unlock Q&A.'}
       </p>
-      <p className="text-xs text-gold mt-3">~5–30 sec per answer</p>
+      <p className="text-xs text-gold mt-3">Grounded in TownEye Gold data</p>
 
       <div className="flex flex-wrap gap-1.5 mt-3">
         {STARTERS.map((s) => (
@@ -106,7 +107,7 @@ export default function PropertyChat({ parcel, disabled }) {
       </div>
 
       {messages.length > 0 && (
-        <ul className="mt-3 max-h-36 overflow-y-auto space-y-2 text-sm flex-1 min-h-0">
+        <ul className="mt-3 max-h-48 overflow-y-auto space-y-2 text-sm flex-1 min-h-0">
           {messages.map((m, i) => (
             <li
               key={`${m.role}-${i}`}
@@ -137,7 +138,7 @@ export default function PropertyChat({ parcel, disabled }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={inputDisabled}
-          placeholder={parcelReady ? 'Your question…' : 'Select a parcel first'}
+          placeholder={parcelReady ? 'e.g. Can I add a garage?' : 'Select a parcel first'}
           className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-navy-light border border-gold/40 text-cream text-sm
                      focus:outline-none focus:border-gold"
         />

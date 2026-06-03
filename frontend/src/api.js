@@ -21,8 +21,8 @@ function fetchSignal(ms) {
 /** Long report POSTs — Render first to avoid Vercel ~60s proxy timeout. */
 const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender)/;
 const RENDER_FIRST_PATH = /^\/parcels\/(address-index|suggest)/;
-/** Property Q&A — same-origin only (Vercel serverless or dev FastAPI). */
-const SAME_ORIGIN_ONLY_PATH = /^\/(portal-ask|reports\/ask)$/;
+/** Property Q&A — Vercel serverless at api/reports/ask.js (not Render rewrite). */
+const SAME_ORIGIN_ONLY_PATH = /^\/reports\/ask$/;
 
 /** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
@@ -218,15 +218,10 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
   }
 }
 
-function propertyAskPath() {
-  return import.meta.env.PROD ? '/portal-ask' : '/reports/ask';
-}
-
 export async function askPropertyQuestion({ address, parcel_id, town_slug, question, history = [] }) {
   const { signal, cancel } = fetchSignal(90000);
-  const path = propertyAskPath();
   try {
-    const res = await apiFetch(path, {
+    const res = await apiFetch('/reports/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
