@@ -1,34 +1,88 @@
-{
-  "$schema": "https://openapi.vercel.com/vercel.json",
-  "installCommand": "cd frontend && npm install",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
-  "framework": null,
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://towneye-umf.onrender.com/api/:path*"
-    },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/address-index/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
-      ]
-    },
-    {
-      "source": "/api/parcels/address-index",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
-      ]
-    },
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
-    }
-  ]
-}
+{
+  "$schema": "https://openapi.vercel.com/vercel.json",
+  "installCommand": "cd frontend && npm install",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "framework": null,
+  "functions": {
+    "api/property-ask.js": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/health",
+      "destination": "https://towneye-umf.onrender.com/api/health"
+    },
+    {
+      "source": "/api/parcels/:path*",
+      "destination": "https://towneye-umf.onrender.com/api/parcels/:path*"
+    },
+    {
+      "source": "/api/reports/availability",
+      "destination": "https://towneye-umf.onrender.com/api/reports/availability"
+    },
+    {
+      "source": "/api/reports/buildability",
+      "destination": "https://towneye-umf.onrender.com/api/reports/buildability"
+    },
+    {
+      "source": "/api/reports/zoning",
+      "destination": "https://towneye-umf.onrender.com/api/reports/zoning"
+    },
+    {
+      "source": "/api/reports/risk",
+      "destination": "https://towneye-umf.onrender.com/api/reports/risk"
+    },
+    {
+      "source": "/api/reports/market",
+      "destination": "https://towneye-umf.onrender.com/api/reports/market"
+    },
+    {
+      "source": "/api/reports/proforma",
+      "destination": "https://towneye-umf.onrender.com/api/reports/proforma"
+    },
+    {
+      "source": "/api/reports/neighborhood",
+      "destination": "https://towneye-umf.onrender.com/api/reports/neighborhood"
+    },
+    {
+      "source": "/api/reports/lender",
+      "destination": "https://towneye-umf.onrender.com/api/reports/lender"
+    },
+    {
+      "source": "/api/reports/homeowner-full",
+      "destination": "https://towneye-umf.onrender.com/api/reports/homeowner-full"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "destination": "https://towneye-umf.onrender.com/api/auth/:path*"
+    },
+    {
+      "source": "/api/files/:path*",
+      "destination": "https://towneye-umf.onrender.com/api/files/:path*"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/address-index/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+      ]
+    },
+    {
+      "source": "/api/parcels/address-index",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
+      ]
+    }
+  ]
+}
+

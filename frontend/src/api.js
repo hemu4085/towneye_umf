@@ -21,8 +21,8 @@ function fetchSignal(ms) {
 /** Long report POSTs — Render first to avoid Vercel ~60s proxy timeout. */
 const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender)/;
 const RENDER_FIRST_PATH = /^\/parcels\/(address-index|suggest)/;
-/** Property Q&A — Vercel serverless at api/reports/ask.js (not Render rewrite). */
-const SAME_ORIGIN_ONLY_PATH = /^\/reports\/ask$/;
+/** Property Q&A — Vercel serverless /api/property-ask (excluded from Render rewrites). */
+const SAME_ORIGIN_ONLY_PATH = /^\/property-ask$/;
 
 /** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
@@ -47,14 +47,14 @@ function looksLikeHtml(text) {
 }
 
 function shouldTryNextUrl(res, bodyText) {
+  const trimmed = bodyText.trim();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return false;
   if (res.status === 401 || res.status === 403) return true;
   if (res.status === 502 || res.status === 503 || res.status === 504) return true;
   const ct = (res.headers.get('content-type') || '').toLowerCase();
   if (ct.includes('application/json')) return false;
   if (looksLikeHtml(bodyText)) return true;
-  if (bodyText.trim() && !bodyText.trim().startsWith('{') && !bodyText.trim().startsWith('[')) {
-    return true;
-  }
+  if (trimmed) return true;
   return false;
 }
 
@@ -221,7 +221,7 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
 export async function askPropertyQuestion({ address, parcel_id, town_slug, question, history = [] }) {
   const { signal, cancel } = fetchSignal(90000);
   try {
-    const res = await apiFetch('/reports/ask', {
+    const res = await apiFetch('/property-ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

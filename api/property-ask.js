@@ -1,11 +1,13 @@
 /**
- * Vercel serverless handler for POST /api/reports/ask
- * Overrides the /api/* → Render rewrite so property Q&A reaches FastAPI reliably.
+ * POST /api/property-ask — property Q&A (not proxied by vercel.json).
+ * Server-side call to Render avoids browser 401 on /api/reports/ask rewrite.
  */
 const RENDER_ASK_URL =
   process.env.RENDER_ASK_URL || 'https://towneye-umf.onrender.com/api/reports/ask';
 
 async function handler(req, res) {
+  res.setHeader('Content-Type', 'application/json');
+
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -29,6 +31,7 @@ async function handler(req, res) {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
+    'User-Agent': 'TownEye-Vercel-PropertyAsk/1.0',
   };
   const bearer = process.env.RENDER_SERVICE_BEARER || '';
   if (bearer) {
@@ -42,13 +45,26 @@ async function handler(req, res) {
       body: JSON.stringify(body),
     });
     const text = await upstream.text();
-    const ct = upstream.headers.get('content-type') || 'application/json';
-    res.status(upstream.status);
-    res.setHeader('Content-Type', ct);
-    return res.send(text);
+    const trimmed = text.trim();
+
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        const data = JSON.parse(trimmed);
+        return res.status(upstream.status).json(data);
+      } catch {
+        /* fall through */
+      }
+    }
+
+    return res.status(502).json({
+      detail:
+        `Property Q&A upstream returned HTTP ${upstream.status} (non-JSON). ` +
+        'Redeploy Render from latest main and confirm /api/reports/ask exists.',
+      upstream_status: upstream.status,
+    });
   } catch (err) {
     return res.status(502).json({
-      detail: err?.message || 'Upstream API unavailable',
+      detail: err?.message || 'Could not reach Render API for property Q&A',
     });
   }
 }
