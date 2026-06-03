@@ -6,11 +6,6 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api/property-ask': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api\/property-ask/, '/api/reports/ask'),
-      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

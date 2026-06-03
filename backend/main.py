@@ -35,6 +35,9 @@ _settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(_settings.cors_origins),
+    allow_origin_regex=(
+        r"https://(.*\.)?(vercel\.app|demo\.towneye\.ai|towneye\.ai)(:\d+)?$"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

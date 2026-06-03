@@ -7,9 +7,9 @@ import ReportGrid from '../components/ReportGrid';
 import UserTypeSelector from '../components/UserTypeSelector';
 import { useParcel } from '../context/ParcelContext';
 import {
-  checkApiHealth,
   fetchReportAvailability,
   generateReport,
+  getApiHealth,
   resolveParcel,
 } from '../api';
 import { useAddressIndex } from '../hooks/useAddressIndex';
@@ -65,8 +65,7 @@ export default function Home() {
   const refreshApiHealth = useCallback(async () => {
     setApiChecking(true);
     try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
-      const data = await res.json();
+      const data = await getApiHealth();
       const ok = data?.status === 'ok';
       setApiOnline(ok);
       if (data?.towns?.[0]) {

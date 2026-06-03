@@ -6,7 +6,9 @@
 
 **Cause:** Report buttons were `disabled` while `fetchReportAvailability` ran (often 30–90s on cold API). Clicks did nothing with no feedback.
 
-**Fix:** Never disable cards during availability check; demo property button; API status bar; suggest errors visible; same-origin `/api` first (CORS-safe).
+**Fix:** Never disable cards during availability check; demo property button; API status bar; suggest errors visible.
+
+**Production API (2026-06-02):** Browser calls **Render directly** (`https://towneye-umf.onrender.com/api`) — not same-origin `/api`. Avoids Vercel **Deployment Protection** returning HTTP 401 HTML on `/api/*` (symptom: `Non-JSON from /api/property-ask`, report resolve “could not reach the API”). Optional override: `VITE_API_URL=https://towneye-umf.onrender.com` at build time.
 
 **Investor path:** Click **Load demo property** → **RE Agent** → **Buildability Brief**.
 
@@ -19,7 +21,7 @@
 | Full Property Report | `POST /api/reports/homeowner-full` | Facts, zoning, buildability, risk, market in one HTML doc; PDF skipped (`PORTAL_SKIP_PDF`) |
 | Property chat | `POST /api/reports/ask` | Starters: ADU, by-right, zoning verdict, flood/historic. With `ANTHROPIC_API_KEY` on Render → Claude; else rule-based fallback |
 
-Production: long report + chat POSTs try **Render first** (`frontend/src/api.js`) to avoid Vercel ~60s proxy timeout.
+Production: all API calls go to **Render** (`frontend/src/api.js` → `API_ROOT` on `towneye-umf.onrender.com`). Vercel `/api` rewrite remains for curl/tools only.
 
 **Sticky property chat (`7b2569f+`):** `AppShell` footer + `ParcelContext` / `parcelStorage.js` — chat stays on home and `/report/*`; messages per parcel in `chatStorage.js`. Regenerate demo cache includes `homeowner-full.html` for 29 Walnut (`scripts/generate_demo_report_cache.py`).
 
@@ -52,6 +54,39 @@ git add demo-data/reports/
 
 ---
 
+## Deploy not updating? (2026-06-02)
+
+**Cause:** Fixes were only on disk — Vercel/Render deploy from **GitHub `main`**, not your local WSL folder.
+
+**Fix:**
+
+```bash
+cd ~/projects/fine_tuned_models/towneye_umf
+git status -sb                    # must not show unpushed portal commits
+git log -1 --oneline              # e.g. bb998ca Portal UX: ...
+git push origin main              # if behind
+./scripts/deploy_portal.sh        # checklist
+```
+
+| Check | What to see |
+|-------|-------------|
+| GitHub | https://github.com/hemu4085/towneye_umf/commits/main — latest commit matches local |
+| Render | Dashboard → **towneye-umf** (or towneye-api) → Deploys → building from latest SHA |
+| Vercel | Project **towneye-umf** → Deployments → commit SHA = `bb998ca` (or newer) |
+| Browser | Hard refresh `Ctrl+Shift+R` — old JS bundle is cached easily |
+
+**Vercel still shows old UI:**
+
+1. **Root Directory** must be **empty** (repo root). If set to `frontend/`, Vercel uses `frontend/vercel.json` (SPA only, **no `/api` proxy**) → broken suggest.
+2. Do **not** set `VITE_API_URL` unless you intend a non-default API host (default prod build uses Render URL baked in `api.js`).
+3. If same-origin `/api` still returns **401 HTML**, disable **Vercel Deployment Protection** on Production, or rely on direct Render calls (current `main`).
+4. **Redeploy** → Build log must include `cd frontend && npm run build` and take **seconds**, not ~93ms.
+5. **demo.towneye.ai** must be on project **towneye-umf**, not old **towneye**.
+
+**Render still old API:** Only changes under `backend/` or `Dockerfile.api` redeploy Render; pure frontend commits skip API rebuild (that is OK for UI-only fixes).
+
+---
+
 ## Status (2026-06-01)
 
 | Layer | URL | Status |
@@ -59,7 +94,7 @@ git add demo-data/reports/
 | Render API | https://towneye-umf.onrender.com | Live — `/api/health` OK |
 | Vercel UI | https://towneye-umf.vercel.app | **404 — no production deploy** |
 | Demo domain | https://demo.towneye.ai | Still on old `towneye` Vercel project |
-| GitHub | https://github.com/hemu4085/towneye_umf | Demo gold data pushed (`1f156fb`) |
+| GitHub | https://github.com/hemu4085/towneye_umf | Latest portal UX: `bb998ca` on `main` |
 
 ---
 

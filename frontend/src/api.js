@@ -1,12 +1,14 @@
 /**
- * API client — same-origin /api via Vercel proxy; Render fallback when response isn't JSON.
+ * API client — production calls Render directly (avoids Vercel /api 401 from Deployment Protection).
  */
 
-const RENDER_API_ROOT = 'https://towneye-umf.onrender.com/api';
+export const RENDER_ORIGIN = 'https://towneye-umf.onrender.com';
 
 function resolveApiBase() {
-  if (import.meta.env.PROD) return '';
-  return (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+  const fromEnv = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+  if (fromEnv) return fromEnv;
+  if (import.meta.env.PROD) return RENDER_ORIGIN;
+  return '';
 }
 
 export const API_BASE = resolveApiBase();
@@ -18,70 +20,37 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
-/** Long report POSTs — Render first to avoid Vercel ~60s proxy timeout. */
-const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender)/;
-const RENDER_FIRST_PATH = /^\/parcels\/(address-index|suggest)/;
-/** Property Q&A — Vercel serverless /api/property-ask (excluded from Render rewrites). */
-const SAME_ORIGIN_ONLY_PATH = /^\/property-ask$/;
-
-/** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
-function apiUrls(path) {
-  const p = path.startsWith('/') ? path : `/${path}`;
-  const viaVercel = `${API_ROOT}${p}`;
-  if (!import.meta.env.PROD || viaVercel.startsWith('http')) {
-    return [viaVercel];
-  }
-  if (SAME_ORIGIN_ONLY_PATH.test(p)) {
-    return [viaVercel];
-  }
-  const viaRender = `${RENDER_API_ROOT}${p}`;
-  if (SLOW_REPORT_PATH.test(p) || RENDER_FIRST_PATH.test(p)) {
-    return [viaRender, viaVercel];
-  }
-  return [viaVercel, viaRender];
-}
-
 function looksLikeHtml(text) {
   const t = text.trim().toLowerCase();
   return t.startsWith('<!doctype') || t.startsWith('<html');
 }
 
-function shouldTryNextUrl(res, bodyText) {
-  const trimmed = bodyText.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return false;
-  if (res.status === 401 || res.status === 403) return true;
-  if (res.status === 502 || res.status === 503 || res.status === 504) return true;
-  const ct = (res.headers.get('content-type') || '').toLowerCase();
-  if (ct.includes('application/json')) return false;
-  if (looksLikeHtml(bodyText)) return true;
-  if (trimmed) return true;
-  return false;
-}
-
 function friendlyFetchError(err, context) {
   if (err?.name === 'AbortError') {
-    return new Error(
-      `${context} timed out. Wait a few seconds and try again.`,
-    );
+    return new Error(`${context} timed out. Wait a few seconds and try again.`);
   }
   const msg = err?.message || '';
   if (msg.includes('Unexpected token') && msg.includes('DOCTYPE')) {
     return new Error(
-      `${context} received a web page instead of API data. Hard refresh (Ctrl+Shift+R) or try again in a moment.`,
+      `${context} received a web page instead of API data. Hard refresh (Ctrl+Shift+R).`,
     );
   }
   if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('Load failed')) {
-    return new Error(`${context} could not reach the API — try again shortly.`);
+    return new Error(
+      `${context} could not reach the API — check your connection or try again in a moment.`,
+    );
   }
   return err instanceof Error ? err : new Error(String(err));
 }
 
 async function apiFetch(path, init = {}) {
-  const urls = apiUrls(path);
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const url = `${API_ROOT}${p}`;
   const mergedInit = {
     ...init,
     cache: 'no-store',
     credentials: 'omit',
+    mode: 'cors',
     headers: {
       Accept: 'application/json',
       ...(init.headers || {}),
@@ -89,54 +58,56 @@ async function apiFetch(path, init = {}) {
     },
   };
 
-  let lastError = null;
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, mergedInit);
-      const bodyText = await res.text();
-      if (shouldTryNextUrl(res, bodyText)) {
-        lastError = new Error(`Non-JSON from ${url} (HTTP ${res.status})`);
-        continue;
-      }
-      let parsed = null;
-      try {
-        parsed = bodyText.trim() ? JSON.parse(bodyText) : null;
-      } catch {
-        if (urls.length > 1) {
-          lastError = new Error(`Invalid JSON from ${url} (HTTP ${res.status})`);
-          continue;
-        }
-        throw new Error(
-          `Invalid JSON from API (HTTP ${res.status}). Hard refresh the page.`,
-        );
-      }
-      return {
-        ok: res.ok,
-        status: res.status,
-        headers: res.headers,
-        async json() {
-          return parsed;
-        },
-      };
-    } catch (err) {
-      lastError = err;
-    }
+  const res = await fetch(url, mergedInit);
+  const bodyText = await res.text();
+
+  if (looksLikeHtml(bodyText)) {
+    throw new Error(
+      `${contextLabel(path)} received a login page instead of API data (HTTP ${res.status}). ` +
+        'If this persists, the API host may be misconfigured.',
+    );
   }
-  throw lastError ?? new Error('API unavailable');
+
+  let parsed = null;
+  try {
+    parsed = bodyText.trim() ? JSON.parse(bodyText) : null;
+  } catch {
+    throw new Error(`Invalid JSON from API (HTTP ${res.status}).`);
+  }
+
+  return {
+    ok: res.ok,
+    status: res.status,
+    headers: res.headers,
+    async json() {
+      return parsed;
+    },
+  };
 }
 
-export async function checkApiHealth() {
+function contextLabel(path) {
+  if (path.includes('property-ask') || path.includes('reports/ask')) return 'Property Q&A';
+  if (path.includes('resolve')) return 'Address lookup';
+  if (path.includes('reports')) return 'Report generation';
+  return 'API request';
+}
+
+export async function getApiHealth() {
   const { signal, cancel } = fetchSignal(12000);
   try {
     const res = await apiFetch('/health', { signal });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data?.status === 'ok';
+    if (!res.ok) return null;
+    return res.json();
   } catch {
-    return false;
+    return null;
   } finally {
     cancel();
   }
+}
+
+export async function checkApiHealth() {
+  const data = await getApiHealth();
+  return data?.status === 'ok';
 }
 
 export async function checkAccess(email) {
@@ -221,7 +192,7 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
 export async function askPropertyQuestion({ address, parcel_id, town_slug, question, history = [] }) {
   const { signal, cancel } = fetchSignal(90000);
   try {
-    const res = await apiFetch('/property-ask', {
+    const res = await apiFetch('/reports/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -235,8 +206,7 @@ export async function askPropertyQuestion({ address, parcel_id, town_slug, quest
     });
     const data = await res.json();
     if (!res.ok) {
-      const detail = data?.detail || `Could not answer question (HTTP ${res.status})`;
-      throw new Error(detail);
+      throw new Error(data?.detail || `Could not answer question (HTTP ${res.status})`);
     }
     return data;
   } catch (err) {
