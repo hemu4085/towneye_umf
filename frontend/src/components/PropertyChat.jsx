@@ -14,11 +14,12 @@ export default function PropertyChat({ parcel, disabled }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (!parcel?.parcel_id) return null;
+  const parcelReady = Boolean(parcel?.parcel_id);
+  const inputDisabled = disabled || loading || !parcelReady;
 
   async function sendQuestion(text) {
     const q = text.trim();
-    if (!q || loading) return;
+    if (!q || inputDisabled) return;
 
     setError('');
     setLoading(true);
@@ -46,18 +47,24 @@ export default function PropertyChat({ parcel, disabled }) {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto mt-8 card border border-gold/30">
+    <div className="w-full max-w-2xl mx-auto card border border-gold/30">
       <h3 className="font-display text-lg text-gold">Ask about this property</h3>
-      <p className="text-xs text-graytown mt-1">
-        Answers use TownEye zoning, assessor &amp; constraint data for this parcel.
-      </p>
+      {parcelReady ? (
+        <p className="text-xs text-graytown mt-1">
+          {parcel.address} — answers use TownEye zoning, assessor &amp; constraint data for this parcel.
+        </p>
+      ) : (
+        <p className="text-xs text-amber-300/90 mt-1">
+          Pick an address from the dropdown (or use Quick demo) to unlock Q&amp;A for that parcel.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2 mt-3">
         {STARTERS.map((s) => (
           <button
             key={s}
             type="button"
-            disabled={disabled || loading}
+            disabled={inputDisabled}
             onClick={() => sendQuestion(s)}
             className="text-xs px-3 py-1 rounded-full border border-gold/40 text-gold hover:bg-gold/10
                        disabled:opacity-50"
@@ -98,12 +105,18 @@ export default function PropertyChat({ parcel, disabled }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={disabled || loading}
-          placeholder="e.g. Can I build a second story?"
+          disabled={inputDisabled}
+          placeholder={
+            parcelReady ? 'e.g. Can I build a second story?' : 'Select a parcel from the address dropdown first'
+          }
           className="flex-1 px-4 py-2 rounded-lg bg-navy-light border border-gold/40 text-cream
                      focus:outline-none focus:border-gold"
         />
-        <button type="submit" disabled={disabled || loading || !input.trim()} className="btn-gold shrink-0">
+        <button
+          type="submit"
+          disabled={inputDisabled || !input.trim()}
+          className="btn-gold shrink-0"
+        >
           {loading ? '…' : 'Ask'}
         </button>
       </form>

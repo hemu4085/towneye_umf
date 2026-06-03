@@ -4,8 +4,8 @@ import AddressInput from '../components/AddressInput';
 import ApiStatusBar from '../components/ApiStatusBar';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
-import PropertyChat from '../components/PropertyChat';
 import UserTypeSelector from '../components/UserTypeSelector';
+import { useParcel } from '../context/ParcelContext';
 import {
   checkApiHealth,
   fetchReportAvailability,
@@ -46,7 +46,7 @@ export default function Home() {
   const [userType, setUserType] = useState(location.state?.userType || null);
   const [error, setError] = useState('');
   const [loadingReportId, setLoadingReportId] = useState(null);
-  const [parcel, setParcel] = useState(null);
+  const { parcel, setParcel } = useParcel();
   const [availability, setAvailability] = useState(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [requestEmail, setRequestEmail] = useState(DEFAULT_REQUEST_EMAIL);
@@ -79,19 +79,25 @@ export default function Home() {
   useEffect(() => {
     if (location.state?.address) setAddress(location.state.address);
     if (location.state?.userType) setUserType(location.state.userType);
-  }, [location.state]);
+    if (location.state?.parcel?.parcel_id) {
+      setParcel(location.state.parcel);
+      if (!location.state?.address) {
+        setAddress(location.state.parcel.address);
+      }
+    }
+  }, [location.state, setParcel]);
 
   useEffect(() => {
     refreshApiHealth();
   }, [refreshApiHealth]);
 
-  useEffect(() => {
-    if (!parcel?.parcel_id || !address.trim()) return;
-    if (!addressesMatch(address, parcel.address)) {
+  function handleAddressChange(value) {
+    setAddress(value);
+    if (parcel?.parcel_id && value.trim() && !addressesMatch(value, parcel.address)) {
       setParcel(null);
       setAvailability(null);
     }
-  }, [address, parcel]);
+  }
 
   function handleSuggestReady() {
     setApiOnline(true);
@@ -102,6 +108,7 @@ export default function Home() {
     const p = parcelFromSuggestion(item);
     if (p) {
       setParcel(p);
+      if (item.address) setAddress(item.address);
       setError('');
     }
   }
@@ -202,7 +209,7 @@ export default function Home() {
   const parcelReady = Boolean(parcel?.parcel_id);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <>
       <header className="px-6 py-8 text-center border-b border-gold/20">
         <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
         <p className="text-graytown mt-2 text-lg">
@@ -211,13 +218,13 @@ export default function Home() {
         <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
       </header>
 
-      <main className="flex-1 flex flex-col items-center px-6 py-12">
+      <main className="flex-1 flex flex-col items-center px-6 py-12 pb-48">
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
           <AddressInput
             value={address}
-            onChange={setAddress}
+            onChange={handleAddressChange}
             onSuggestReady={handleSuggestReady}
             onSelectSuggestion={handleSelectSuggestion}
             pilotTownHint={pilotTown}
@@ -281,11 +288,9 @@ export default function Home() {
             </div>
           )}
 
-          {parcelReady && <PropertyChat parcel={parcel} disabled={!!loadingReportId} />}
-
-          {error && <p className="text-red-400 mt-4 text-center max-w-xl">{error}</p>}
+          {error && <p className="text-red-400 mt-4 text-center max-w-xl pb-4">{error}</p>}
         </div>
       </main>
-    </div>
+    </>
   );
 }

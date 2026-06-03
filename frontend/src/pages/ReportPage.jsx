@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
-import PropertyChat from '../components/PropertyChat';
 import ReportViewer from '../components/ReportViewer';
+import { useParcel } from '../context/ParcelContext';
 import { generateReport } from '../api';
 import { consumeReportPrefetch } from '../reportPrefetch';
 import { absoluteUrl, copyToClipboard } from '../utils/share';
@@ -16,10 +16,17 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [shareNotice, setShareNotice] = useState('');
 
+  const { parcel: storedParcel, setParcel } = useParcel();
   const report = state?.report;
-  const parcel = state?.parcel;
+  const parcel = state?.parcel || storedParcel;
   const preparedFor = state?.preparedFor;
   const reportCacheKey = state?.reportCacheKey;
+
+  useEffect(() => {
+    if (state?.parcel?.parcel_id) {
+      setParcel(state.parcel);
+    }
+  }, [state?.parcel, setParcel]);
 
   useEffect(() => {
     if (!report || !parcel) {
@@ -63,7 +70,11 @@ export default function ReportPage() {
 
       <Link
         to="/"
-        state={{ address: state?.address || parcel?.address, userType: state?.userType }}
+        state={{
+          address: state?.address || parcel?.address,
+          userType: state?.userType,
+          parcel,
+        }}
         className="text-gold text-sm hover:underline"
       >
         ← Back to reports
@@ -87,16 +98,15 @@ export default function ReportPage() {
       )}
 
       {result && !loading && (
-        <>
-          <ReportViewer
-            html={result.html}
-            downloadUrl={result.download_url}
-            onShare={handleShare}
-            shareNotice={shareNotice}
-          />
-          <PropertyChat parcel={parcel} />
-        </>
+        <ReportViewer
+          html={result.html}
+          downloadUrl={result.download_url}
+          onShare={handleShare}
+          shareNotice={shareNotice}
+        />
       )}
+
+      <div className="pb-48" aria-hidden />
     </div>
   );
 }
