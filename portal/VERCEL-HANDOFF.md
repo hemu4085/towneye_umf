@@ -21,6 +21,8 @@
 
 Production: long report + chat POSTs try **Render first** (`frontend/src/api.js`) to avoid Vercel ~60s proxy timeout.
 
+**Sticky property chat (`7b2569f+`):** `AppShell` footer + `ParcelContext` / `parcelStorage.js` — chat stays on home and `/report/*`; messages per parcel in `chatStorage.js`. Regenerate demo cache includes `homeowner-full.html` for 29 Walnut (`scripts/generate_demo_report_cache.py`).
+
 ## Pilot flow — any Arlington address (2026-06)
 
 1. Type `24 princeton` (town auto-appended for search) → **pick dropdown row**

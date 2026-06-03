@@ -53,7 +53,13 @@ export default function Home() {
   const [apiOnline, setApiOnline] = useState(false);
   const [apiChecking, setApiChecking] = useState(true);
   const [pilotTown, setPilotTown] = useState('Arlington MA');
-  const { entries: addressEntries, ready: indexReady, error: indexError } = useAddressIndex();
+  const {
+    entries: addressEntries,
+    townName,
+    ready: indexReady,
+    error: indexError,
+  } = useAddressIndex();
+  const pilotTownShort = townName || pilotTown.split(',')[0]?.trim() || 'town';
 
   const refreshApiHealth = useCallback(async () => {
     setApiChecking(true);
@@ -156,7 +162,7 @@ export default function Home() {
     if (status && status.available === false) return;
 
     if (!address.trim()) {
-      setError('Enter a property address in Arlington, or use the demo button.');
+      setError(`Enter a property address in ${pilotTownShort}, or use the demo button.`);
       return;
     }
     if (!userType) {
@@ -218,7 +224,7 @@ export default function Home() {
         <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
       </header>
 
-      <main className="flex-1 flex flex-col items-center px-6 py-12 pb-48">
+      <main className="flex-1 flex flex-col items-center px-6 py-12">
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
@@ -240,7 +246,7 @@ export default function Home() {
                 choose your role and report.
               </>
             ) : (
-              <>Loading Arlington address list…</>
+              <>Loading {pilotTownShort} address list…</>
             )}
           </p>
           {indexError && (
@@ -284,6 +290,7 @@ export default function Home() {
                 parcel={parcel}
                 requestEmail={requestEmail}
                 apiOnline={apiOnline}
+                chatDisabled={!!loadingReportId}
               />
             </div>
           )}

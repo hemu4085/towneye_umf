@@ -106,7 +106,6 @@ export default function ReportPage() {
         />
       )}
 
-      <div className="pb-48" aria-hidden />
     </div>
   );
 }

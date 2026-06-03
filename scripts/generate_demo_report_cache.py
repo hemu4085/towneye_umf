@@ -18,18 +18,26 @@ else:
     os.environ.setdefault("GOLD_DATA_PATH", str(_full_gold))
 
 from backend.services.buildability import generate_buildability_html  # noqa: E402
+from backend.services.homeowner_full import generate_homeowner_full_html  # noqa: E402
 
 DEMO_PARCEL = "128.0-0003-0012.0"
 DEMO_TOWN = "arlington-ma"
 DEMO_ADDRESS = "29 WALNUT ST, Arlington MA"
 
+REPORT_WRITERS = {
+    "buildability": generate_buildability_html,
+    "homeowner-full": generate_homeowner_full_html,
+}
+
 
 def main() -> None:
-    dest = ROOT / "demo-data" / "reports" / DEMO_TOWN / DEMO_PARCEL / "buildability.html"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    html = generate_buildability_html(DEMO_TOWN, DEMO_PARCEL, None)
-    dest.write_text(html, encoding="utf-8")
-    print(f"OK: {dest} ({len(html)} bytes) — {DEMO_ADDRESS}")
+    out_dir = ROOT / "demo-data" / "reports" / DEMO_TOWN / DEMO_PARCEL
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for report_type, writer in REPORT_WRITERS.items():
+        dest = out_dir / f"{report_type}.html"
+        html = writer(DEMO_TOWN, DEMO_PARCEL, None)
+        dest.write_text(html, encoding="utf-8")
+        print(f"OK: {dest} ({len(html)} bytes) — {DEMO_ADDRESS}")
 
 
 if __name__ == "__main__":

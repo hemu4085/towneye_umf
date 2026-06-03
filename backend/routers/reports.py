@@ -200,9 +200,11 @@ def report_lender(req: ReportRequest):
 @router.post("/homeowner-full")
 def report_homeowner_full(req: ReportRequest):
     try:
-        html = homeowner_full.generate_homeowner_full_html(
-            req.town_slug, req.parcel_id, req.prepared_for,
-        )
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "homeowner-full")
+        if html is None:
+            html = homeowner_full.generate_homeowner_full_html(
+                req.town_slug, req.parcel_id, req.prepared_for,
+            )
         return _report_response("homeowner-full", html, None, req, skip_pdf=True)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

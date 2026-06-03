@@ -2,6 +2,8 @@
  * Instant client-side address filter (Google-style) — mirrors backend street matching.
  */
 
+import { formatDisplayAddress, parsePilotTownHint } from './address';
+
 const STREET_STOP = new Set([
   'ST', 'STREET', 'RD', 'ROAD', 'AVE', 'AVENUE', 'DR', 'DRIVE', 'LN', 'LANE', 'CT', 'COURT',
 ]);
@@ -79,23 +81,15 @@ function scoreMatch(query, street, tokens) {
   return score;
 }
 
-function formatLabel(street, townName) {
-  const s = street.trim().replace(/,+$/, '');
-  if (new RegExp(townName, 'i').test(s)) {
-    return /\bMA\b/i.test(s) ? s : `${s}, MA`;
-  }
-  return `${s}, ${townName} MA`;
-}
-
 /**
  * @param {Array<{address:string,parcel_id:string,town_slug?:string}>} entries
  */
-export function filterLocalSuggestions(entries, query, townName, limit = 8) {
+export function filterLocalSuggestions(entries, query, townHint = 'Arlington MA', limit = 8) {
   const q = query.trim();
   if (!q || !entries?.length) return [];
 
-  const townNames = [townName, 'Arlington'];
-  const tokens = queryTokens(q, townNames);
+  const { town } = parsePilotTownHint(townHint);
+  const tokens = queryTokens(q, [town]);
   if (!tokens.size) return [];
 
   const hits = [];
@@ -109,10 +103,10 @@ export function filterLocalSuggestions(entries, query, townName, limit = 8) {
     if (score < 0.4) continue;
     hits.push({
       score,
-      address: formatLabel(street, townName),
+      address: formatDisplayAddress(street, townHint),
       parcel_id: pid,
       town_slug: row.town_slug || 'arlington-ma',
-      town_name: townName,
+      town_name: town,
     });
   }
 

@@ -28,16 +28,16 @@ export default function AddressInput({
   const requestRef = useRef(0);
   const listId = 'address-suggestions';
 
-  const townName = pilotTownHint.split(',')[0]?.trim() || 'Arlington';
+  const hasLocalIndex = Boolean(addressEntries?.length);
 
   const runLocalSuggest = useCallback(
     (raw) => {
       const q = raw.trim();
       if (!q || !addressEntries?.length) return [];
 
-      return filterLocalSuggestions(addressEntries, q, townName, 8);
+      return filterLocalSuggestions(addressEntries, q, pilotTownHint, 8);
     },
-    [addressEntries, townName],
+    [addressEntries, pilotTownHint],
   );
 
   const runSuggest = useCallback(
@@ -55,14 +55,19 @@ export default function AddressInput({
         return;
       }
 
-      if (indexReady && addressEntries?.length) {
-        const local = runLocalSuggest(q);
-        setSuggestions(local);
-        setOpen(local.length > 0);
-        setActiveIndex(-1);
-        setLoading(false);
-        setSuggestError(local.length ? '' : 'No matches — try another street or number');
-        if (local.length) onSuggestReady?.();
+      if (hasLocalIndex) {
+        try {
+          const local = runLocalSuggest(q);
+          setSuggestions(local);
+          setOpen(local.length > 0);
+          setActiveIndex(-1);
+          setLoading(false);
+          setSuggestError(local.length ? '' : 'No matches — try another street or number');
+          if (local.length) onSuggestReady?.();
+        } catch {
+          setSuggestError('Address suggestions unavailable — try again');
+          setLoading(false);
+        }
         return;
       }
 
@@ -91,7 +96,7 @@ export default function AddressInput({
     },
     [
       suggestEnabled,
-      indexReady,
+      hasLocalIndex,
       addressEntries,
       runLocalSuggest,
       onSuggestReady,
@@ -157,7 +162,7 @@ export default function AddressInput({
     }
   }
 
-  const showServerLoading = loading && !indexReady && value.trim().length > 0;
+  const showServerLoading = loading && !hasLocalIndex && value.trim().length > 0;
 
   return (
     <form

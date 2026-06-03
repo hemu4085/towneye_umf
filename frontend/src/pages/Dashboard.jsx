@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
+import { useParcel } from '../context/ParcelContext';
 import { resolveParcel } from '../api';
 
 export default function Dashboard() {
   const { state } = useLocation();
   const navigate = useNavigate();
-  const [parcel, setParcel] = useState(null);
+  const { parcel, setParcel } = useParcel();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -22,17 +23,18 @@ export default function Dashboard() {
     }
     (async () => {
       try {
-        const data = await resolveParcel(address);
+        const data = await resolveParcel({ address });
         setParcel(data);
-        sessionStorage.setItem('towneye_parcel', JSON.stringify(data));
-        sessionStorage.setItem('towneye_prepared_for', preparedFor || '');
+        if (preparedFor) {
+          sessionStorage.setItem('towneye_prepared_for', preparedFor);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
         setLoading(false);
       }
     })();
-  }, [address, navigate, preparedFor]);
+  }, [address, navigate, preparedFor, setParcel]);
 
   function handleGenerate(report) {
     navigate(`/report/${report.id}`, {
