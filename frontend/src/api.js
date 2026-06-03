@@ -18,14 +18,20 @@ function fetchSignal(ms) {
   return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
 }
 
-const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender|ask)/;
+/** Long report POSTs — Render first to avoid Vercel ~60s proxy timeout. */
+const SLOW_REPORT_PATH = /^\/reports\/(homeowner-full|buildability|market|risk|proforma|lender)/;
 const RENDER_FIRST_PATH = /^\/parcels\/(address-index|suggest)/;
+/** Browser must use same-origin proxy (Render direct returns 401 HTML cross-origin). */
+const SAME_ORIGIN_ONLY_PATH = /^\/reports\/ask$/;
 
 /** Same-origin /api first; Render direct when proxy returns HTML or 5xx. */
 function apiUrls(path) {
   const p = path.startsWith('/') ? path : `/${path}`;
   const viaVercel = `${API_ROOT}${p}`;
   if (!import.meta.env.PROD || viaVercel.startsWith('http')) {
+    return [viaVercel];
+  }
+  if (SAME_ORIGIN_ONLY_PATH.test(p)) {
     return [viaVercel];
   }
   const viaRender = `${RENDER_API_ROOT}${p}`;
@@ -41,6 +47,7 @@ function looksLikeHtml(text) {
 }
 
 function shouldTryNextUrl(res, bodyText) {
+  if (res.status === 401 || res.status === 403) return true;
   if (res.status === 502 || res.status === 503 || res.status === 504) return true;
   const ct = (res.headers.get('content-type') || '').toLowerCase();
   if (ct.includes('application/json')) return false;
@@ -91,18 +98,24 @@ async function apiFetch(path, init = {}) {
         lastError = new Error(`Non-JSON from ${url} (HTTP ${res.status})`);
         continue;
       }
+      let parsed = null;
+      try {
+        parsed = bodyText.trim() ? JSON.parse(bodyText) : null;
+      } catch {
+        if (urls.length > 1) {
+          lastError = new Error(`Invalid JSON from ${url} (HTTP ${res.status})`);
+          continue;
+        }
+        throw new Error(
+          `Invalid JSON from API (HTTP ${res.status}). Hard refresh the page.`,
+        );
+      }
       return {
         ok: res.ok,
         status: res.status,
         headers: res.headers,
         async json() {
-          try {
-            return JSON.parse(bodyText);
-          } catch (e) {
-            throw new Error(
-              `Invalid JSON from API (HTTP ${res.status}). Hard refresh the page.`,
-            );
-          }
+          return parsed;
         },
       };
     } catch (err) {
