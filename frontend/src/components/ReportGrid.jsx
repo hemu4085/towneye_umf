@@ -18,7 +18,6 @@ export default function ReportGrid({
   parcel,
   requestEmail,
   apiOnline,
-  parcel,
   chatDisabled,
 }) {
   const visibleReports = reportsForUserType(userType);
