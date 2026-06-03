@@ -43,14 +43,15 @@ def _adu_answer(data: BriefData) -> str:
 
 
 def _by_right_answer(data: BriefData) -> str:
+    base = ", ".join(h.label for h in data.base_zoning_hits) or "—"
+    overlays = ", ".join(h.label for h in data.overlay_zoning_hits) or "none"
     return (
         "**By-right** (sometimes written *by right*) means you may proceed with a use or structure "
         "that conforms to the zoning code **without** a special permit, variance, or zoning relief. "
         "If a proposed project (e.g. an addition or ADU) is not listed as allowed by-right, you "
         "typically need a special permit, variance, or other approval.\n\n"
-        f"For this parcel ({data.parcel.address}), TownEye's stack is "
-        f"{', '.join(h.label for h in data.base_zoning_hits) or '—')} "
-        f"with overlays {', '.join(h.label for h in data.overlay_zoning_hits) or 'none'}. "
+        f"For this parcel ({data.parcel.address}), TownEye's stack is {base} "
+        f"with overlays {overlays}. "
         f"Summary verdict: **{data.headline_verdict_text}**"
     )
 
@@ -71,11 +72,9 @@ def _fallback_answer(question: str, data: BriefData) -> str:
         rows = [f"• {w.label}: {w.status} — {w.detail}" for w in data.wraparound]
         return "Risk & constraint layers:\n" + ("\n".join(rows) or "No overlay hits in TownEye data.")
     if "zoning" in q or "zone" in q:
-        return (
-            f"Zoning: base {', '.join(h.label for h in data.base_zoning_hits)}; "
-            f"overlays {', '.join(h.label for h in data.overlay_zoning_hits) or 'none'}. "
-            f"{data.headline_verdict_text}"
-        )
+        base = ", ".join(h.label for h in data.base_zoning_hits) or "—"
+        overlays = ", ".join(h.label for h in data.overlay_zoning_hits) or "none"
+        return f"Zoning: base {base}; overlays {overlays}. {data.headline_verdict_text}"
     return (
         f"TownEye has assessor, zoning, and constraint data for **{data.parcel.address}**. "
         f"Verdict: {data.headline_verdict_text}. "
