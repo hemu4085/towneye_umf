@@ -4,6 +4,7 @@ import AddressInput from '../components/AddressInput';
 import ApiStatusBar from '../components/ApiStatusBar';
 import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
+import PropertyChat from '../components/PropertyChat';
 import UserTypeSelector from '../components/UserTypeSelector';
 import {
   checkApiHealth,
@@ -279,6 +280,8 @@ export default function Home() {
               />
             </div>
           )}
+
+          {parcelReady && <PropertyChat parcel={parcel} disabled={!!loadingReportId} />}
 
           {error && <p className="text-red-400 mt-4 text-center max-w-xl">{error}</p>}
         </div>

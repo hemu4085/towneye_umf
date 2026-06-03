@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
+import PropertyChat from '../components/PropertyChat';
 import ReportViewer from '../components/ReportViewer';
 import { generateReport } from '../api';
 import { consumeReportPrefetch } from '../reportPrefetch';
@@ -86,12 +87,15 @@ export default function ReportPage() {
       )}
 
       {result && !loading && (
-        <ReportViewer
-          html={result.html}
-          downloadUrl={result.download_url}
-          onShare={handleShare}
-          shareNotice={shareNotice}
-        />
+        <>
+          <ReportViewer
+            html={result.html}
+            downloadUrl={result.download_url}
+            onShare={handleShare}
+            shareNotice={shareNotice}
+          />
+          <PropertyChat parcel={parcel} />
+        </>
       )}
     </div>
   );

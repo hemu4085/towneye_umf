@@ -60,8 +60,9 @@ export const REPORT_ACCESS = {
     lender: 'must',
   },
   homeowner: {
-    buildability: 'must',
-    market: 'must',
+    'homeowner-full': 'must',
+    buildability: 'useful',
+    market: 'useful',
     risk: 'useful',
     proforma: null,
     zoning: null,
@@ -71,6 +72,15 @@ export const REPORT_ACCESS = {
 };
 
 export const REPORTS = [
+  {
+    id: 'homeowner-full',
+    icon: '🏠',
+    name: 'Full Property Report',
+    description:
+      'Complete home intelligence: facts, zoning, buildability, risks & market — like a professional house report',
+    time: '~1–2 min live',
+    endpoint: 'homeowner-full',
+  },
   {
     id: 'buildability',
     icon: '🏗️',

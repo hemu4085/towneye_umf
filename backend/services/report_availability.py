@@ -10,7 +10,8 @@ from backend.config import get_settings
 
 LLM_REPORTS = frozenset({"market", "proforma", "neighborhood"})
 BRIEF_REPORTS = frozenset({"buildability", "zoning", "risk", "lender"})
-ALL_REPORTS = BRIEF_REPORTS | LLM_REPORTS
+PORTAL_REPORTS = frozenset({"homeowner-full"})
+ALL_REPORTS = BRIEF_REPORTS | LLM_REPORTS | PORTAL_REPORTS
 
 
 def _parquet_has_parcel_id(path, parcel_id: str) -> bool:

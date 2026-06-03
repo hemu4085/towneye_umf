@@ -8,7 +8,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, lender, market, neighborhood, proforma, risk, zoning
+from backend.services import buildability, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
+from backend.services.property_chat import ask_about_property
 from backend.services.buildability import collect_brief_data
 from backend.services.demo_reports import get_demo_report_html
 from backend.services.report_availability import get_report_availability
@@ -29,6 +30,7 @@ ReportType = Literal[
     "zoning",
     "neighborhood",
     "lender",
+    "homeowner-full",
 ]
 
 
@@ -45,6 +47,15 @@ class AvailabilityRequest(BaseModel):
     address: str = Field(..., min_length=3)
     parcel_id: Optional[str] = None
     town_slug: Optional[str] = None
+
+
+class PropertyAskRequest(BaseModel):
+    address: str
+    parcel_id: str
+    town_slug: str
+    question: str = Field(..., min_length=2)
+    prepared_for: Optional[str] = None
+    history: list[dict[str, str]] = Field(default_factory=list)
 
 
 @router.post("/availability")
@@ -182,5 +193,30 @@ def report_lender(req: ReportRequest):
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         html = lender.generate_lender_html(data, req.prepared_for)
         return _report_response("lender", html, None, req)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/homeowner-full")
+def report_homeowner_full(req: ReportRequest):
+    try:
+        html = homeowner_full.generate_homeowner_full_html(
+            req.town_slug, req.parcel_id, req.prepared_for,
+        )
+        return _report_response("homeowner-full", html, None, req, skip_pdf=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/ask")
+def report_ask_property(body: PropertyAskRequest):
+    try:
+        return ask_about_property(
+            body.town_slug,
+            body.parcel_id,
+            body.question,
+            prepared_for=body.prepared_for,
+            history=body.history,
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

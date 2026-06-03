@@ -199,6 +199,31 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
   }
 }
 
+export async function askPropertyQuestion({ address, parcel_id, town_slug, question, history = [] }) {
+  const { signal, cancel } = fetchSignal(90000);
+  try {
+    const res = await apiFetch('/reports/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address,
+        parcel_id,
+        town_slug,
+        question,
+        history,
+      }),
+      signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not answer question');
+    return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Property Q&A');
+  } finally {
+    cancel();
+  }
+}
+
 export async function generateReport(reportType, payload) {
   const { signal, cancel } = fetchSignal(180000);
   try {
