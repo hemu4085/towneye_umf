@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { askPropertyQuestion } from '../api';
+import { answerPropertyQuestionLocal } from '../utils/propertyChatLocal';
 import { loadChatMessages, storeChatMessages } from '../utils/chatStorage';
 
 const STARTERS = [
@@ -50,8 +51,17 @@ export default function PropertyChat({ parcel, disabled }) {
         ...prev,
         { role: 'assistant', content: data.answer, source: data.source },
       ]);
-    } catch (err) {
-      setError(err.message);
+    } catch {
+      const local = answerPropertyQuestionLocal(q, parcel);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: local,
+          source: 'local',
+        },
+      ]);
+      setError('');
     } finally {
       setLoading(false);
     }
