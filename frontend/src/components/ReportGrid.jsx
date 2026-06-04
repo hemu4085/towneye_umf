@@ -1,4 +1,3 @@
-import PropertyChat from './PropertyChat';
 import { reportTier, reportsForUserType } from '../reportCatalog';
 import { buildReportRequestMailto } from '../utils/reportRequest';
 
@@ -18,7 +17,6 @@ export default function ReportGrid({
   parcel,
   requestEmail,
   apiOnline,
-  chatDisabled,
 }) {
   const visibleReports = reportsForUserType(userType);
 
@@ -30,7 +28,6 @@ export default function ReportGrid({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6 items-stretch">
-      <PropertyChat parcel={parcel} disabled={chatDisabled} />
       {visibleReports.map((r) => {
         const tier = reportTier(userType, r.id);
         const badge = tier ? TIER_BADGE[tier] : null;

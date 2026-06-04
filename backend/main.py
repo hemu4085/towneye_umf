@@ -72,7 +72,6 @@ def health():
         "towns": settings.town_slugs,
         "portal_url": settings.portal_public_url,
         "llm_configured": bool(settings.anthropic_api_key.strip()),
-        "property_chat": bool(settings.anthropic_api_key.strip()),
     }
 
 

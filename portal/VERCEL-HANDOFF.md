@@ -8,22 +8,21 @@
 
 **Fix:** Never disable cards during availability check; demo property button; API status bar; suggest errors visible.
 
-**Production API (2026-06-02):** Browser calls **Render directly** (`https://towneye-umf.onrender.com/api`) — not same-origin `/api`. Avoids Vercel **Deployment Protection** returning HTTP 401 HTML on `/api/*` (symptom: `Non-JSON from /api/property-ask`, report resolve “could not reach the API”). Optional override: `VITE_API_URL=https://towneye-umf.onrender.com` at build time.
+**Production API (2026-06-02):** Browser calls **Render directly** (`https://towneye-umf.onrender.com/api`) — not same-origin `/api`. Avoids Vercel **Deployment Protection** returning HTTP 401 HTML on `/api/*` (symptom: non-JSON API responses, report resolve “could not reach the API”). Optional override: `VITE_API_URL=https://towneye-umf.onrender.com` at build time.
 
 **Investor path:** Click **Load demo property** → **RE Agent** → **Buildability Brief**.
 
-**Homeowner path:** Pick address → **Homeowner** → **Full Property Report** (~1–2 min live). **Ask about this property** chat appears once the parcel is locked (home page) and on the report viewer page.
+**Homeowner path:** Pick address → **Homeowner** → **Full Property Report** (~1–2 min live).
 
-## Homeowner Full Report + property Q&A (2026-06-02)
+## Homeowner Full Report (2026-06-02)
 
 | Feature | API | Notes |
 |---------|-----|--------|
 | Full Property Report | `POST /api/reports/homeowner-full` | Facts, zoning, buildability, risk, market in one HTML doc; PDF skipped (`PORTAL_SKIP_PDF`) |
-| Property chat | `POST /api/reports/ask` | Starters: ADU, by-right, zoning verdict, flood/historic. With `ANTHROPIC_API_KEY` on Render → Claude; else rule-based fallback |
 
 Production: all API calls go to **Render** (`frontend/src/api.js` → `API_ROOT` on `towneye-umf.onrender.com`). Vercel `/api` rewrite remains for curl/tools only.
 
-**Sticky property chat (`7b2569f+`):** `AppShell` footer + `ParcelContext` / `parcelStorage.js` — chat stays on home and `/report/*`; messages per parcel in `chatStorage.js`. Regenerate demo cache includes `homeowner-full.html` for 29 Walnut (`scripts/generate_demo_report_cache.py`).
+Regenerate demo cache includes `homeowner-full.html` for 29 Walnut (`scripts/generate_demo_report_cache.py`).
 
 ## Pilot flow — any Arlington address (2026-06)
 

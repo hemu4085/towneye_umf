@@ -292,7 +292,6 @@ export default function Home() {
                 parcel={parcel}
                 requestEmail={requestEmail}
                 apiOnline={apiOnline}
-                chatDisabled={!!loadingReportId}
               />
             </div>
           )}
