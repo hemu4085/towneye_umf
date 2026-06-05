@@ -1425,7 +1425,17 @@ lender_report:
   permit_lookback_years: 10
   comps_radius_mi: 0.25
   comps_max: 8
-  property_tax_portal_url: "https://www.invoicecloud.com/portal/(S(placeholder))/2/CustomerLanding.aspx?BillerGUID=placeholder"
+  property_tax_portal_url: "https://www.invoicecloud.com/arlingtonma"
+  # Live guest lookup — backend/services/invoice_cloud_client.py
+  invoice_cloud:
+    enabled: true
+    vanity_url: "https://www.invoicecloud.com/arlingtonma"
+    biller_guid: "5e51c1b1-f981-4a8c-ad97-3ffd74eacb9b"
+    invoice_type_id: 8          # Real Estate Tax (customerlocator iti)
+    virtual_site_item_id: 346   # Real Estate menu item (vsii)
+    lookup_mode: "parcel_id"    # Arlington treasurer: Parcel ID or Service Address
+    cache_ttl_hours: 24
+    request_timeout_s: 25
   registry_search_url: "https://www.masslandrecords.com/MiddlesexSouth/D/Default.aspx"
   isd_portal_url: "https://www.arlingtonma.gov/departments/inspectional-services"
   property_tax_records:

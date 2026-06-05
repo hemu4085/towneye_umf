@@ -135,13 +135,45 @@ def _filter_parcel_records(
     return [r for r in records if str(r.get(parcel_field) or "") == parcel_id]
 
 
+def _property_tax_records(
+    data: BriefData,
+    town_cfg: dict[str, Any],
+) -> list[dict[str, Any]]:
+    town_slug = data.inputs.town_slug
+    parcel_id = data.inputs.parcel_id
+    ic = _lender_cfg(town_cfg).get("invoice_cloud") or {}
+    if isinstance(ic, dict) and ic.get("enabled"):
+        try:
+            from backend.services.invoice_cloud_client import fetch_and_cache_property_tax
+
+            live = fetch_and_cache_property_tax(
+                town_slug,
+                town_cfg,
+                parcel_id,
+                data.parcel.address,
+            )
+            if live:
+                return live
+        except Exception:
+            pass
+    return _load_domain_records(
+        town_slug, "property-tax", town_cfg, "property_tax_records",
+    )
+
+
 def _analyze_property_tax(data: BriefData, town_cfg: dict[str, Any]) -> dict[str, Any]:
     parcel_id = data.inputs.parcel_id
-    records = _load_domain_records(
-        data.inputs.town_slug, "property-tax", town_cfg, "property_tax_records",
-    )
+    records = _property_tax_records(data, town_cfg)
     hits = _filter_parcel_records(records, parcel_id)
-    portal = _lender_cfg(town_cfg).get("property_tax_portal_url") or ""
+    portal = ""
+    try:
+        from backend.services.invoice_cloud_client import portal_url
+
+        portal = portal_url(town_cfg)
+    except Exception:
+        portal = ""
+    if not portal:
+        portal = _lender_cfg(town_cfg).get("property_tax_portal_url") or ""
 
     if not hits:
         return {

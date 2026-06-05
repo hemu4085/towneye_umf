@@ -1270,7 +1270,7 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   <li>Zoning rules: zoning.parquet from town zoning bylaw JSON.</li>
   <li>Permits: permits.parquet — matched by parcel_id and address (ISD / OpenGov feed).</li>
   <li>Infrastructure: infra-projects.parquet — active CIP rows matched by street/corridor tokens.</li>
-  <li>Property tax: property-tax.parquet or lender_report.property_tax_records (Invoice Cloud).</li>
+  <li>Property tax: live Invoice Cloud guest lookup (cached property-tax.parquet) or config fixtures.</li>
   <li>Registry: registry-records.parquet or lender_report.registry_records (Middlesex South).</li>
   <li>Violations: code-violation fixtures, 311.parquet, ISD portal records.</li>
   <li>Comps: spatial join property + parcel CAMA last-sale fields — not MLS.</li>
