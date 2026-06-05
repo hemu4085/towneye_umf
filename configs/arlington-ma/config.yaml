@@ -68,6 +68,8 @@ source_mappings:
   noncompliance:      "arlington-ma-landuse-noncompliance"
   # Domain 18 — Local Historic Resources (Arlington-hosted aggregate of LHD/NHD/Overlay/AHC)
   local_historic:     "arlington-ma-local-historic"
+  # Lender Phase 3 — optional Gold domain source IDs (parquet or config fixtures)
+  registry:           "middlesex-south-registry-deeds"
   # Domain 19 — Environmental Overlays (wetlands + flood-effective + flood-preliminary)
   environmental_overlay: "arlington-ma-environmental-overlay"
 
@@ -1421,6 +1423,42 @@ scraper_max_pages: 5
 # Lender Due Diligence Pack — report runtime knobs (backend/services/lender.py).
 lender_report:
   permit_lookback_years: 10
+  comps_radius_mi: 0.25
+  comps_max: 8
+  property_tax_portal_url: "https://www.invoicecloud.com/portal/(S(placeholder))/2/CustomerLanding.aspx?BillerGUID=placeholder"
+  registry_search_url: "https://www.masslandrecords.com/MiddlesexSouth/D/Default.aspx"
+  isd_portal_url: "https://www.arlingtonma.gov/departments/inspectional-services"
+  property_tax_records:
+    - parcel_id: "128.0-0003-0012.0"
+      fiscal_year: 2026
+      status: "CURRENT"
+      balance_due: 0
+      due_date: "2026-02-01"
+      last_payment_date: "2026-01-15"
+      bill_type: "Real estate"
+    - parcel_id: "001.0-0004-0012.0"
+      fiscal_year: 2026
+      status: "CURRENT"
+      balance_due: 0
+      bill_type: "Real estate"
+  registry_records:
+    - parcel_id: "128.0-0003-0012.0"
+      record_type: "MORTGAGE"
+      status: "ACTIVE"
+      recording_date: "2019-06-14"
+      amount: 612000
+      book_page: "12345 / 178"
+      grantee: "Sample Federal Credit Union"
+      grantor: "Prior Owner"
+    - parcel_id: "128.0-0003-0012.0"
+      record_type: "DISCHARGE"
+      status: "RELEASED"
+      recording_date: "2019-06-10"
+      amount: 0
+      book_page: "12340 / 90"
+      grantee: "—"
+      grantor: "Prior Lender"
+  code_violation_records: []
   # Street/corridor aliases for matching DPW CIP location_description to parcel addresses.
   infra_street_aliases:
     MASSACHUSETTS:

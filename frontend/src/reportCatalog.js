@@ -135,7 +135,7 @@ export const REPORTS = [
     icon: '🏦',
     name: 'Lender Due Diligence Pack',
     description:
-      'Collateral memo: flood, historic, zoning, permits, nearby DPW projects, envelope math & market',
+      'Full collateral memo: tax, liens, violations, assessor comps, zoning, permits & market',
     time: '~20–45 sec live',
     endpoint: 'lender',
   },

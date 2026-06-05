@@ -12,6 +12,12 @@ from typing import Any
 import pandas as pd
 
 from backend.config import get_settings
+from backend.services.lender_phase3 import (
+    _analyze_property_tax,
+    _analyze_registry,
+    _analyze_sale_comps,
+    _analyze_violations,
+)
 from backend.services.risk import generate_risk_json
 from backend.services.zoning import generate_zoning_json
 from backend.utils.parcel_lookup import _load_town_config, _town_display_name
@@ -714,12 +720,21 @@ def _overall_grade(
     risk: dict,
     permits: dict | None = None,
     infra: dict | None = None,
+    tax: dict | None = None,
+    registry: dict | None = None,
+    violations: dict | None = None,
 ) -> tuple[str, str]:
     statuses = [flood["status"], historic["status"], conformity["status"], risk["overall_status"]]
     if permits:
         statuses.append(permits["status"])
     if infra:
         statuses.append(infra["status"])
+    if tax:
+        statuses.append(tax["status"])
+    if registry:
+        statuses.append(registry["status"])
+    if violations:
+        statuses.append(violations["status"])
     if "flagged" in statuses:
         return "escalate", "One or more material collateral flags require senior review."
     if "caution" in statuses:
@@ -857,7 +872,13 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
     conformity = _analyze_conformity(data)
     permits = _analyze_permits(data, town_cfg)
     infra = _analyze_infra(data, town_cfg)
-    grade, grade_note = _overall_grade(flood, historic, conformity, risk, permits, infra)
+    tax = _analyze_property_tax(data, town_cfg)
+    registry = _analyze_registry(data, town_cfg)
+    violations = _analyze_violations(data, town_cfg)
+    comps = _analyze_sale_comps(data, town_cfg)
+    grade, grade_note = _overall_grade(
+        flood, historic, conformity, risk, permits, infra, tax, registry, violations,
+    )
 
     address = data.parcel.address or data.inputs.parcel_id
     zipcode = _zip_from_address(address)
@@ -985,6 +1006,45 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
         for r in infra["nearby_rows"]
     )
 
+    tax_rows = "".join(
+        f"""<tr>
+          <td>{_esc(r['fiscal_year'])}</td><td>{_esc(r['status'])}</td>
+          <td>{r['balance_due']}</td><td>{_esc(r['due_date'])}</td>
+          <td>{_esc(r['last_payment'])}</td><td>{_esc(r['bill_type'])}</td>
+        </tr>"""
+        for r in tax["rows"]
+    )
+
+    registry_rows = "".join(
+        f"""<tr>
+          <td>{_esc(r['record_type'])}</td><td>{_esc(r['status'])}</td>
+          <td>{_esc(r['recording_date'])}</td><td>{r['amount']}</td>
+          <td>{_esc(r['book_page'])}</td><td class="small">{_esc(r['grantee'])}</td>
+        </tr>"""
+        for r in registry["rows"]
+    )
+
+    violation_rows = "".join(
+        f"""<tr>
+          <td>{_esc(r['source'])}</td><td>{_esc(r['violation_type'])}</td>
+          <td>{_esc(r['status'])}</td><td>{_esc(r['opened'])}</td>
+          <td class="small">{_esc(r['detail'])}</td>
+        </tr>"""
+        for r in violations["rows"]
+    )
+
+    comp_rows = "".join(
+        f"""<tr>
+          <td class="small">{_esc(c['address'])}</td>
+          <td>{_fmt_int(c['distance_ft'])} ft</td>
+          <td>{_fmt_money(c['sale_price'])}</td>
+          <td>{_esc(c['sale_date'])}</td>
+          <td>{_fmt_int(c['finished_sf'])} sf</td>
+          <td>{_fmt_money(c['price_per_sf']) if c['price_per_sf'] else '—'}</td>
+        </tr>"""
+        for c in comps["rows"]
+    )
+
     infra_tokens_note = ""
     if infra.get("match_tokens"):
         infra_tokens_note = (
@@ -1074,6 +1134,26 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
     <p>{_pill(infra['status'])} · {len(infra['nearby_rows'])} match(es)</p>
     <p class="small">{infra['town_active_count']} active town-wide in CIP dataset</p>
   </div>
+  <div class="summary-card">
+    <h3>Property tax</h3>
+    <p>{_pill(tax['status'])}</p>
+    <p class="small">{len(tax['rows'])} fiscal year row(s) matched</p>
+  </div>
+  <div class="summary-card">
+    <h3>Registry &amp; liens</h3>
+    <p>{_pill(registry['status'])} · {registry['active_liens']} active</p>
+    <p class="small">{len(registry['rows'])} instrument(s) on record</p>
+  </div>
+  <div class="summary-card">
+    <h3>Violations</h3>
+    <p>{_pill(violations['status'])} · {violations['open_count']} open</p>
+    <p class="small">{len(violations['rows'])} total matched</p>
+  </div>
+  <div class="summary-card">
+    <h3>Assessor comps</h3>
+    <p>{_pill(comps['status'])} · {len(comps['rows'])} within {comps['radius_mi']} mi</p>
+    <p class="small">Median {_fmt_money(comps['median_ppsf'])}/sf (CAMA sales)</p>
+  </div>
 </div>
 <div class="verdict">{_esc(data.headline_verdict_text)}</div>
 
@@ -1147,8 +1227,35 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
 </table>''' if infra_rows else '<p class="small">No active CIP projects matched streets near this address. See town-wide count in summary above.</p>'}
 <p class="small">Sources: {', '.join(_esc(s) for s in infra['sources'])}</p>
 
-<h2 class="page-break">10 · Collateral value &amp; market context</h2>
-<p class="small">Indicative only — not an appraisal. Grounded in assessor record and town market-trends Gold data.</p>
+<h2>10 · Property tax &amp; payment status</h2>
+<div class="callout {'bad' if tax['status'] == 'flagged' else ('warn' if tax['status'] == 'caution' else 'ok')}">{_esc(tax['note'])}</div>
+{f'<p class="small">Payment portal: <a href="{_esc(tax["portal_url"])}">{_esc(tax["portal_url"])}</a></p>' if tax.get('portal_url') else ''}
+{f'''<table><tr><th>FY</th><th>Status</th><th>Balance due</th><th>Due date</th><th>Last payment</th><th>Bill type</th></tr>{tax_rows}</table>''' if tax_rows else ''}
+<p class="small">Sources: {', '.join(_esc(s) for s in tax['sources'])}</p>
+
+<h2>11 · Registry filings &amp; encumbrances</h2>
+<div class="callout {'warn' if registry['active_liens'] else ('warn' if registry['status'] == 'caution' else 'ok')}">{_esc(registry['note'])}</div>
+{f'<p class="small">Registry search: <a href="{_esc(registry["search_url"])}">{_esc(registry["search_url"])}</a></p>' if registry.get('search_url') else ''}
+{f'''<table><tr><th>Instrument</th><th>Status</th><th>Recorded</th><th>Amount</th><th>Book/Page</th><th>Grantee</th></tr>{registry_rows}</table>''' if registry_rows else ''}
+<p class="small">Sources: {', '.join(_esc(s) for s in registry['sources'])} — not a title report.</p>
+
+<h2>12 · Code violations &amp; ISD / 311 orders</h2>
+<div class="callout {'bad' if violations['status'] == 'flagged' else ('warn' if violations['open_count'] else 'ok')}">{_esc(violations['note'])}</div>
+{f'<p class="small">ISD portal: <a href="{_esc(violations["isd_url"])}">{_esc(violations["isd_url"])}</a></p>' if violations.get('isd_url') else ''}
+{f'''<table><tr><th>Source</th><th>Type</th><th>Status</th><th>Opened</th><th>Detail</th></tr>{violation_rows}</table>''' if violation_rows else '<p class="small">No matched violation rows.</p>'}
+<p class="small">Sources: {', '.join(_esc(s) for s in violations['sources'])}</p>
+
+<h2>13 · Comparable sales (assessor / CAMA, {comps['radius_mi']} mi)</h2>
+<div class="callout {'warn' if not comps['rows'] else 'ok'}">{_esc(comps['note'])}</div>
+{f'''<table>
+  <tr><th>Address</th><th>Distance</th><th>Sale price</th><th>Sale date</th><th>Finished sf</th><th>$/sf</th></tr>
+  {comp_rows}
+</table>
+<p class="small">Median comparable $/sf: <strong>{_fmt_money(comps['median_ppsf'])}</strong></p>''' if comp_rows else ''}
+<p class="small">Sources: {', '.join(_esc(s) for s in comps['sources'])}</p>
+
+<h2 class="page-break">14 · Collateral value &amp; market context</h2>
+<p class="small">Indicative only — not an appraisal. Zip trends from market-trends; comps in §13 from CAMA transfers.</p>
 <table class="facts">
   <tr><th>Total assessed value</th><td>{_fmt_money(assessed)}</td></tr>
   {avm_block}
@@ -1156,15 +1263,18 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
 </table>
 {f'<p class="small">AVM method: {_esc(avm["method"])}</p>' if avm else ''}
 
-<h2>11 · Data provenance &amp; limitations</h2>
+<h2>15 · Data provenance &amp; limitations</h2>
 <ul class="small">
   <li>Parcel geometry &amp; overlays: OverlayResolver on Gold parquets (parcel, zoning-overlay, environmental-overlay, macris, local-historic, noncompliance).</li>
   <li>Assessor fields: property.parquet / MassGIS L3 CAMA join (tax-assessor source).</li>
   <li>Zoning rules: zoning.parquet from town zoning bylaw JSON.</li>
   <li>Permits: permits.parquet — matched by parcel_id and address (ISD / OpenGov feed).</li>
-  <li>Infrastructure: infra-projects.parquet — active CIP rows matched by street/corridor tokens in location_description.</li>
-  <li>Market trends: market-trends.parquet (MLS aggregates where licensed).</li>
-  <li>Not yet included: tax payment status, registry liens, ISD violation orders, parcel-level MLS comps.</li>
+  <li>Infrastructure: infra-projects.parquet — active CIP rows matched by street/corridor tokens.</li>
+  <li>Property tax: property-tax.parquet or lender_report.property_tax_records (Invoice Cloud).</li>
+  <li>Registry: registry-records.parquet or lender_report.registry_records (Middlesex South).</li>
+  <li>Violations: code-violation fixtures, 311.parquet, ISD portal records.</li>
+  <li>Comps: spatial join property + parcel CAMA last-sale fields — not MLS.</li>
+  <li>Market trends: market-trends.parquet (MLS zip aggregates where licensed).</li>
 </ul>
 
 <p class="disclaimer">
