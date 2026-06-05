@@ -19,14 +19,14 @@ export default function ReportViewer({ html, downloadUrl, onShare, shareNotice }
         {shareNotice && <span className="text-sm text-gold">{shareNotice}</span>}
       </div>
       <div
-        className="bg-white rounded-xl overflow-hidden shadow-xl text-navy report-frame"
+        className="bg-white rounded-xl overflow-hidden shadow-xl text-navy report-frame w-full"
         style={{ minHeight: 400 }}
       >
         <iframe
           title="Report preview"
           srcDoc={html}
-          className="w-full border-0"
-          style={{ minHeight: '70vh' }}
+          className="w-full border-0 block"
+          style={{ minHeight: '75vh', width: '100%' }}
           sandbox="allow-same-origin"
         />
       </div>

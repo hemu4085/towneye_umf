@@ -672,10 +672,15 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
         hist_links += f'<a href="{_esc(historic["ahc_url"])}">Town Historical Commission</a>'
 
     return f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lender Due Diligence Pack — {_esc(address)}</title>
 <style>
-  body{{font-family:'DM Sans',Arial,sans-serif;color:#0B1F3A;max-width:820px;margin:0 auto;padding:24px;font-size:14px;line-height:1.5}}
+  html,body{{box-sizing:border-box;margin:0;padding:0}}
+  *,*::before,*::after{{box-sizing:inherit}}
+  body{{font-family:'DM Sans',Arial,sans-serif;color:#0B1F3A;width:100%;max-width:none;
+        padding:28px 40px;font-size:14px;line-height:1.5}}
   h1{{font-family:Georgia,serif;color:#0B1F3A;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin:0 0 8px}}
   h2{{font-family:Georgia,serif;font-size:15px;letter-spacing:.5px;text-transform:uppercase;color:#0B1F3A;
       border-bottom:2px solid #C9A84C;padding-bottom:4px;margin:28px 0 12px}}
@@ -684,7 +689,7 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   .hero h1{{color:#C9A84C;border:none;margin:0 0 6px}}
   .hero .meta{{font-size:12px;opacity:.9}}
   .grade{{font-size:1.05rem;font-weight:600;color:#C9A84C;margin-top:8px}}
-  table{{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:13px}}
+  table{{width:100%;border-collapse:collapse;margin:8px 0 14px;font-size:13px;table-layout:auto}}
   th{{background:#0B1F3A;color:#F5F0E8;text-align:left;padding:8px;vertical-align:top}}
   td{{padding:8px;border-bottom:1px solid #e5e5e5;vertical-align:top}}
   tr:nth-child(even) td{{background:#faf9f6}}
