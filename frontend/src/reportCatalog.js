@@ -135,8 +135,8 @@ export const REPORTS = [
     icon: '🏦',
     name: 'Lender Due Diligence Pack',
     description:
-      'Risk & Constraints + Zoning Summary + Buildability verdict — loan file format',
-    time: '~20 seconds',
+      'Collateral memo: flood SFHA, historic COA flags, zoning conformity, envelope math & market context',
+    time: '~20–45 sec live',
     endpoint: 'lender',
   },
 ];
