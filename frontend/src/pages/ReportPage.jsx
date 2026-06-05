@@ -65,7 +65,7 @@ export default function ReportPage() {
   if (!report) return null;
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-8 max-w-7xl mx-auto w-full">
+    <div className="min-h-screen w-full px-4 sm:px-8 lg:px-12 xl:px-16 py-8">
       <FlowSteps current="report" />
 
       <Link

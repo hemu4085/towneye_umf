@@ -679,8 +679,8 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
 <style>
   html,body{{box-sizing:border-box;margin:0;padding:0}}
   *,*::before,*::after{{box-sizing:inherit}}
-  body{{font-family:'DM Sans',Arial,sans-serif;color:#0B1F3A;width:100%;max-width:none;
-        padding:28px 40px;font-size:14px;line-height:1.5}}
+  .te-report{{font-family:'DM Sans',Arial,sans-serif;color:#0B1F3A;width:100%;max-width:none;
+        padding:28px clamp(16px,3vw,48px);font-size:14px;line-height:1.5}}
   h1{{font-family:Georgia,serif;color:#0B1F3A;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin:0 0 8px}}
   h2{{font-family:Georgia,serif;font-size:15px;letter-spacing:.5px;text-transform:uppercase;color:#0B1F3A;
       border-bottom:2px solid #C9A84C;padding-bottom:4px;margin:28px 0 12px}}
@@ -694,7 +694,7 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   td{{padding:8px;border-bottom:1px solid #e5e5e5;vertical-align:top}}
   tr:nth-child(even) td{{background:#faf9f6}}
   .facts th{{width:38%}}
-  .summary-grid{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}}
+  .summary-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0}}
   .summary-card{{border:1px solid #ddd;border-radius:6px;padding:12px;background:#fff}}
   .summary-card h3{{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.4px}}
   .callout{{padding:10px 14px;border-radius:4px;margin:10px 0}}
@@ -706,6 +706,7 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   .disclaimer{{font-size:11px;color:#666;margin-top:36px;border-top:1px solid #ccc;padding-top:12px}}
   .verdict{{padding:10px 14px;border-radius:4px;background:#f4f6fb;border-left:4px solid #0B1F3A;margin:10px 0}}
 </style></head><body>
+<div class="te-report">
 
 <div class="hero">
   <h1>Lender Due Diligence Pack</h1>
@@ -806,4 +807,5 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   flood certification, appraisal, or legal opinion. Verify all flags with the municipality,
   FEMA, and title company before closing. © towneye.ai
 </p>
+</div>
 </body></html>"""
