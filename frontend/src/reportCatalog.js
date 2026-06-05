@@ -135,7 +135,7 @@ export const REPORTS = [
     icon: '🏦',
     name: 'Lender Due Diligence Pack',
     description:
-      'Collateral memo: flood SFHA, historic COA flags, zoning conformity, envelope math & market context',
+      'Collateral memo: flood, historic, zoning, permits, nearby DPW projects, envelope math & market',
     time: '~20–45 sec live',
     endpoint: 'lender',
   },

@@ -1418,6 +1418,22 @@ market_dynamics:
 #   Production full-crawl      : set to null (no limit; Arlington has ~1,567 pages).
 scraper_max_pages: 5
 
+# Lender Due Diligence Pack — report runtime knobs (backend/services/lender.py).
+lender_report:
+  permit_lookback_years: 10
+  # Street/corridor aliases for matching DPW CIP location_description to parcel addresses.
+  infra_street_aliases:
+    MASSACHUSETTS:
+      - "MASS"
+      - "MASS AVE"
+      - "MASSACHUSETTS AVENUE"
+      - "MASSACHUSETTS AVE"
+    BROADWAY:
+      - "BROADWAY"
+      - "ROUTE 3"
+    THORNDIKE:
+      - "THORNDIKE"
+
 # Town Pulse — per-source runtime parameters consumed by civic scrapers.
 # Keeps all endpoint-specific knobs out of scraper logic and in config.
 town_pulse:

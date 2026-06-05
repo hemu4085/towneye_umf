@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import html
+import json
 import re
+from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -14,6 +17,17 @@ from backend.services.zoning import generate_zoning_json
 from backend.utils.parcel_lookup import _load_town_config, _town_display_name
 from core.spatial import OverlayHit
 from reports.buildability_brief import BriefData, BuildableEnvelope
+
+_OPEN_PERMIT_STATUSES = frozenset({"SUBMITTED", "UNDER_REVIEW", "APPROVED", "INSPECTIONS"})
+_ACTIVE_INFRA_STATUSES = frozenset({"PLANNED", "DESIGN", "BID", "IN_PROGRESS"})
+_HIGH_SIGNAL_PERMIT_TYPES = frozenset({
+    "DEMOLITION", "RESIDENTIAL_NEW", "RESIDENTIAL_RENO",
+    "MECHANICAL", "SOLAR", "ELECTRICAL", "PLUMBING",
+})
+_ADDR_STOPWORDS = frozenset({
+    "ST", "STREET", "RD", "ROAD", "AVE", "AVENUE", "DR", "DRIVE",
+    "LN", "LANE", "CT", "COURT", "PL", "PLACE", "MA", "UNIT",
+})
 
 _STATUS_PILL = {
     "clear": ("#1a7a1a", "Clear"),
@@ -97,6 +111,269 @@ def _owner_entity_type(owner_name: str | None, keywords: list[str]) -> str:
         if re.search(rf"\b{re.escape(token)}\b", upper):
             return "Organization / Trust"
     return "Individual"
+
+
+def _gold_parquet(town_slug: str, domain: str) -> Path:
+    return get_settings().gold_data_path / town_slug / f"{domain}.parquet"
+
+
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _normalize_addr(value: str | None) -> str:
+    if not value:
+        return ""
+    return re.sub(r"\s+", " ", value.upper().strip())
+
+
+def _fmt_date(value: Any) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return "—"
+    try:
+        ts = pd.Timestamp(value)
+        if pd.isna(ts):
+            return "—"
+        return ts.strftime("%Y-%m-%d")
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _lender_cfg(town_cfg: dict[str, Any]) -> dict[str, Any]:
+    block = town_cfg.get("lender_report")
+    return block if isinstance(block, dict) else {}
+
+
+def _permit_lookback_years(town_cfg: dict[str, Any]) -> int:
+    raw = _lender_cfg(town_cfg).get("permit_lookback_years", 10)
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 10
+
+
+def _street_tokens(address: str | None, town_cfg: dict[str, Any]) -> set[str]:
+    if not address:
+        return set()
+    tokens = set()
+    for part in re.sub(r"[^\w\s]", " ", address.upper()).split():
+        if len(part) > 2 and part not in _ADDR_STOPWORDS:
+            tokens.add(part)
+    aliases = _lender_cfg(town_cfg).get("infra_street_aliases") or {}
+    if isinstance(aliases, dict):
+        for key, values in aliases.items():
+            key_up = str(key).upper()
+            if key_up in tokens or any(str(v).upper() in _normalize_addr(address) for v in values):
+                tokens.add(key_up)
+                tokens.update(str(v).upper() for v in values if v)
+    return tokens
+
+
+def _permit_matches_parcel(
+    meta: dict[str, Any],
+    parcel_id: str,
+    address: str | None,
+) -> bool:
+    if str(meta.get("parcel_id") or "") == parcel_id:
+        return True
+    permit_addr = _normalize_addr(str(meta.get("address") or ""))
+    target = _normalize_addr(address)
+    if permit_addr and target and permit_addr == target:
+        return True
+    if permit_addr and target:
+        permit_tokens = _street_tokens(permit_addr, {})
+        target_tokens = _street_tokens(target, {})
+        if permit_tokens & target_tokens:
+            num_match = re.search(r"^\d+", target)
+            if num_match and num_match.group(0) in permit_addr:
+                return True
+    return False
+
+
+def _analyze_permits(
+    data: BriefData,
+    town_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    path = _gold_parquet(data.inputs.town_slug, "permits")
+    lookback = _permit_lookback_years(town_cfg)
+    cutoff = pd.Timestamp.now(tz=UTC) - pd.DateOffset(years=lookback)
+    parcel_id = data.inputs.parcel_id
+    address = data.parcel.address
+
+    if not path.is_file():
+        return {
+            "status": "caution",
+            "note": "Building permit history is not loaded for this town.",
+            "rows": [],
+            "open_count": 0,
+            "total_value": None,
+            "signals": [],
+            "lookback_years": lookback,
+            "sources": _source_slugs(town_cfg, "permits") or ["permits"],
+        }
+
+    df = pd.read_parquet(path)
+    rows: list[dict[str, str]] = []
+    open_count = 0
+    total_value = 0.0
+    has_value = False
+    signals: list[str] = []
+
+    for _, row in df.iterrows():
+        meta = _ensure_dict(row.get("metadata"))
+        if not _permit_matches_parcel(meta, parcel_id, address):
+            continue
+        app_date = row.get("application_date")
+        if app_date is not None and pd.notna(app_date):
+            ts = pd.Timestamp(app_date)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize(UTC)
+            if ts < cutoff:
+                continue
+
+        status = str(row.get("status") or "")
+        permit_type = str(row.get("permit_type") or "")
+        est = row.get("estimated_value")
+        if est is not None and pd.notna(est):
+            total_value += float(est)
+            has_value = True
+        if status in _OPEN_PERMIT_STATUSES:
+            open_count += 1
+        if permit_type == "DEMOLITION" and status in _OPEN_PERMIT_STATUSES:
+            signals.append(f"Open demolition permit ({row.get('permit_number')})")
+        if permit_type == "MECHANICAL" and status == "CLOSED":
+            signals.append("Recent HVAC/mechanical work — verify remaining useful life")
+        if permit_type == "SOLAR" and status == "CLOSED":
+            signals.append("Rooftop solar installation on record")
+
+        rows.append({
+            "permit_number": str(row.get("permit_number") or "—"),
+            "permit_type": permit_type or "—",
+            "status": status or "—",
+            "application_date": _fmt_date(app_date),
+            "approval_date": _fmt_date(row.get("approval_date")),
+            "estimated_value": _fmt_money(est) if est is not None and pd.notna(est) else "—",
+            "description": str(meta.get("description") or "—")[:120],
+            "contractor": str(meta.get("contractor_license") or "—"),
+        })
+
+    rows.sort(key=lambda r: r["application_date"], reverse=True)
+
+    if not rows:
+        status = "clear"
+        note = (
+            f"No building permits in the last {lookback} years matched this parcel "
+            f"(parcel_id or address). Confirm with Inspectional Services / ISD."
+        )
+    elif open_count > 0:
+        status = "flagged" if any("demolition" in s.lower() for s in signals) else "caution"
+        note = (
+            f"{len(rows)} permit(s) on record; {open_count} still open or in inspections. "
+            "Open work may affect collateral condition and completion risk."
+        )
+    else:
+        status = "clear"
+        note = (
+            f"{len(rows)} closed permit(s) in the last {lookback} years — "
+            "improvement history supports collateral condition review."
+        )
+
+    return {
+        "status": status,
+        "note": note,
+        "rows": rows,
+        "open_count": open_count,
+        "total_value": total_value if has_value else None,
+        "signals": signals,
+        "lookback_years": lookback,
+        "sources": _source_slugs(town_cfg, "permits") or ["permits"],
+    }
+
+
+def _infra_location_match(location: str, tokens: set[str]) -> bool:
+    if not location or not tokens:
+        return False
+    loc = location.upper()
+    return any(token in loc for token in tokens)
+
+
+def _analyze_infra(
+    data: BriefData,
+    town_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    path = _gold_parquet(data.inputs.town_slug, "infra-projects")
+    tokens = _street_tokens(data.parcel.address, town_cfg)
+
+    if not path.is_file():
+        return {
+            "status": "caution",
+            "note": "DPW capital improvement plan data is not loaded for this town.",
+            "nearby_rows": [],
+            "town_active_count": 0,
+            "sources": _source_slugs(town_cfg, "infra_friction") or ["infra-projects"],
+        }
+
+    df = pd.read_parquet(path)
+    if df.empty:
+        return {
+            "status": "clear",
+            "note": "No infrastructure projects in Gold data.",
+            "nearby_rows": [],
+            "town_active_count": 0,
+            "sources": _source_slugs(town_cfg, "infra_friction") or ["infra-projects"],
+        }
+
+    active = df[df["status"].isin(_ACTIVE_INFRA_STATUSES)] if "status" in df.columns else df
+    nearby_rows: list[dict[str, str]] = []
+    disruption_types = frozenset({"ROAD_PAVING", "WATER_MAIN", "SEWER_MAIN", "STORMWATER"})
+
+    for _, row in active.iterrows():
+        loc = str(row.get("location_description") or "")
+        if not _infra_location_match(loc, tokens):
+            continue
+        project_type = str(row.get("project_type") or "")
+        nearby_rows.append({
+            "project_name": str(row.get("project_name") or "—"),
+            "project_type": project_type or "—",
+            "status": str(row.get("status") or "—"),
+            "location": loc,
+            "estimated_cost": _fmt_money(row.get("estimated_cost")),
+            "start_date": _fmt_date(row.get("start_date")),
+            "end_date": _fmt_date(row.get("end_date")),
+            "disruption": "Yes" if project_type in disruption_types else "Monitor",
+        })
+
+    town_active_count = len(active)
+    if nearby_rows:
+        high_impact = sum(1 for r in nearby_rows if r["disruption"] == "Yes")
+        status = "flagged" if high_impact else "caution"
+        note = (
+            f"{len(nearby_rows)} active capital project(s) mention streets near this address. "
+            "Road, water, or sewer work can affect access, noise, and basement/sewer risk during the loan term."
+        )
+    else:
+        status = "clear"
+        note = (
+            f"No active DPW capital projects matched street tokens for this address "
+            f"({town_active_count} town-wide active/upcoming projects in dataset)."
+        )
+
+    return {
+        "status": status,
+        "note": note,
+        "nearby_rows": nearby_rows,
+        "town_active_count": town_active_count,
+        "match_tokens": sorted(tokens),
+        "sources": _source_slugs(town_cfg, "infra_friction") or ["infra-projects"],
+    }
 
 
 def _cama_values(data: BriefData) -> dict[str, Any]:
@@ -430,8 +707,19 @@ def _estimate_market_value(assessed: float, town_slug: str, zipcode: str | None)
     }
 
 
-def _overall_grade(flood: dict, historic: dict, conformity: dict, risk: dict) -> tuple[str, str]:
+def _overall_grade(
+    flood: dict,
+    historic: dict,
+    conformity: dict,
+    risk: dict,
+    permits: dict | None = None,
+    infra: dict | None = None,
+) -> tuple[str, str]:
     statuses = [flood["status"], historic["status"], conformity["status"], risk["overall_status"]]
+    if permits:
+        statuses.append(permits["status"])
+    if infra:
+        statuses.append(infra["status"])
     if "flagged" in statuses:
         return "escalate", "One or more material collateral flags require senior review."
     if "caution" in statuses:
@@ -567,7 +855,9 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
     flood = _analyze_flood(data, town_cfg)
     historic = _analyze_historic(data, town_cfg)
     conformity = _analyze_conformity(data)
-    grade, grade_note = _overall_grade(flood, historic, conformity, risk)
+    permits = _analyze_permits(data, town_cfg)
+    infra = _analyze_infra(data, town_cfg)
+    grade, grade_note = _overall_grade(flood, historic, conformity, risk, permits, infra)
 
     address = data.parcel.address or data.inputs.parcel_id
     zipcode = _zip_from_address(address)
@@ -663,6 +953,45 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
         <tr><th>Months of supply</th><td>{market.get('months_supply') if market.get('months_supply') is not None else '—'}</td></tr>
         <tr><th>Median price / sqft (zip)</th><td>{_fmt_money(market.get('price_per_sqft'))}</td></tr>"""
 
+    permit_rows = "".join(
+        f"""<tr>
+          <td>{_esc(r['permit_number'])}</td>
+          <td>{_esc(r['permit_type'])}</td>
+          <td>{_esc(r['status'])}</td>
+          <td>{_esc(r['application_date'])}</td>
+          <td>{_esc(r['approval_date'])}</td>
+          <td>{r['estimated_value']}</td>
+          <td class="small">{_esc(r['description'])}</td>
+        </tr>"""
+        for r in permits["rows"]
+    )
+
+    permit_signals = ""
+    if permits["signals"]:
+        permit_signals = "<ul class=\"small\">" + "".join(
+            f"<li>{_esc(s)}</li>" for s in permits["signals"]
+        ) + "</ul>"
+
+    infra_rows = "".join(
+        f"""<tr>
+          <td>{_esc(r['project_name'])}</td>
+          <td>{_esc(r['project_type'])}</td>
+          <td>{_esc(r['status'])}</td>
+          <td class="small">{_esc(r['location'])}</td>
+          <td>{r['estimated_cost']}</td>
+          <td>{_esc(r['start_date'])} – {_esc(r['end_date'])}</td>
+          <td>{_esc(r['disruption'])}</td>
+        </tr>"""
+        for r in infra["nearby_rows"]
+    )
+
+    infra_tokens_note = ""
+    if infra.get("match_tokens"):
+        infra_tokens_note = (
+            f"<p class=\"small\">Street/corridor match tokens: "
+            f"{_esc(', '.join(infra['match_tokens']))}</p>"
+        )
+
     hist_links = ""
     if historic["macris_search_url"]:
         hist_links += f'<a href="{_esc(historic["macris_search_url"])}">MACRIS map</a>'
@@ -735,6 +1064,16 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
     <p>{_pill(conformity['status'])}</p>
     <p class="small">{_esc(conformity['assessor_use'] or 'See zoning section')}</p>
   </div>
+  <div class="summary-card">
+    <h3>Improvement history</h3>
+    <p>{_pill(permits['status'])} · {len(permits['rows'])} permit(s)</p>
+    <p class="small">{permits['open_count']} open · lookback {permits['lookback_years']} yr</p>
+  </div>
+  <div class="summary-card">
+    <h3>Nearby capital projects</h3>
+    <p>{_pill(infra['status'])} · {len(infra['nearby_rows'])} match(es)</p>
+    <p class="small">{infra['town_active_count']} active town-wide in CIP dataset</p>
+  </div>
 </div>
 <div class="verdict">{_esc(data.headline_verdict_text)}</div>
 
@@ -784,7 +1123,31 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   {risk_rows}
 </table>
 
-<h2 class="page-break">8 · Collateral value &amp; market context</h2>
+<h2>8 · Improvement &amp; permit history</h2>
+<div class="callout {'bad' if permits['status'] == 'flagged' else ('warn' if permits['status'] == 'caution' else 'ok')}">{_esc(permits['note'])}</div>
+<p class="small">
+  Matched permits: <strong>{len(permits['rows'])}</strong>
+  · Open / in progress: <strong>{permits['open_count']}</strong>
+  · Declared value total: <strong>{_fmt_money(permits['total_value'])}</strong>
+  · Lookback: <strong>{permits['lookback_years']} years</strong>
+</p>
+{permit_signals}
+{f'''<table>
+  <tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Approved</th><th>Est. value</th><th>Description</th></tr>
+  {permit_rows}
+</table>''' if permit_rows else '<p class="small">No parcel-matched permits in Gold data for this lookback window.</p>'}
+<p class="small">Sources: {', '.join(_esc(s) for s in permits['sources'])}</p>
+
+<h2>9 · Infrastructure &amp; capital projects near collateral</h2>
+<div class="callout {'bad' if infra['status'] == 'flagged' else ('warn' if infra['status'] == 'caution' else 'ok')}">{_esc(infra['note'])}</div>
+{infra_tokens_note}
+{f'''<table>
+  <tr><th>Project</th><th>Type</th><th>Status</th><th>Location</th><th>Est. cost</th><th>Schedule</th><th>Disruption</th></tr>
+  {infra_rows}
+</table>''' if infra_rows else '<p class="small">No active CIP projects matched streets near this address. See town-wide count in summary above.</p>'}
+<p class="small">Sources: {', '.join(_esc(s) for s in infra['sources'])}</p>
+
+<h2 class="page-break">10 · Collateral value &amp; market context</h2>
 <p class="small">Indicative only — not an appraisal. Grounded in assessor record and town market-trends Gold data.</p>
 <table class="facts">
   <tr><th>Total assessed value</th><td>{_fmt_money(assessed)}</td></tr>
@@ -793,13 +1156,15 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
 </table>
 {f'<p class="small">AVM method: {_esc(avm["method"])}</p>' if avm else ''}
 
-<h2>9 · Data provenance &amp; limitations</h2>
+<h2>11 · Data provenance &amp; limitations</h2>
 <ul class="small">
   <li>Parcel geometry &amp; overlays: OverlayResolver on Gold parquets (parcel, zoning-overlay, environmental-overlay, macris, local-historic, noncompliance).</li>
   <li>Assessor fields: property.parquet / MassGIS L3 CAMA join (tax-assessor source).</li>
   <li>Zoning rules: zoning.parquet from town zoning bylaw JSON.</li>
+  <li>Permits: permits.parquet — matched by parcel_id and address (ISD / OpenGov feed).</li>
+  <li>Infrastructure: infra-projects.parquet — active CIP rows matched by street/corridor tokens in location_description.</li>
   <li>Market trends: market-trends.parquet (MLS aggregates where licensed).</li>
-  <li>Not included in Phase 1: tax payment status, registry liens, ISD violation orders, parcel-level MLS comps.</li>
+  <li>Not yet included: tax payment status, registry liens, ISD violation orders, parcel-level MLS comps.</li>
 </ul>
 
 <p class="disclaimer">
