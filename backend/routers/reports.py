@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
+import time
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
@@ -76,14 +78,70 @@ async def report_availability(body: AvailabilityRequest):
     }
 
 
+def _elapsed_seconds(request: Request | None) -> float | None:
+    """True round-trip seconds since the API received the request.
+
+    Reads the timestamp stamped by the ``_stamp_request_received`` middleware
+    (set before any route logic runs), so the value spans parcel lookup, live
+    web scrapes (e.g. Invoice Cloud), and cached parquet reads through to the
+    moment the report content is assembled.
+    """
+    if request is None:
+        return None
+    start = getattr(request.state, "received_at", None)
+    if start is None:
+        return None
+    return max(0.0, time.perf_counter() - start)
+
+
+def _inject_timing_badge(html: str, seconds: float | None) -> str:
+    """Insert a 'Generated in N seconds' badge into the report HTML.
+
+    Uses fully inline styles so it renders identically in the inline preview,
+    the exported PDF, and any context where external <style> blocks are stripped.
+    """
+    if not html or seconds is None:
+        return html
+
+    label = f"Generated live in {seconds:.2f} seconds"
+    badge = (
+        '<div class="te-gen-badge" style="display:inline-flex;align-items:center;'
+        "gap:6px;margin:0 0 14px;padding:5px 12px;border-radius:999px;"
+        "background:#0B1F3A;color:#fff;font-size:12px;font-weight:600;"
+        'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
+        'letter-spacing:.2px;box-shadow:0 1px 3px rgba(11,31,58,.25)">'
+        f'<span aria-hidden="true">\u26a1</span>{label}</div>'
+    )
+
+    # Prefer placing the badge at the top of the report card.
+    m = re.search(r'<div[^>]*class="[^"]*te-report[^"]*"[^>]*>', html, re.I)
+    if m:
+        idx = m.end()
+        return html[:idx] + badge + html[idx:]
+
+    m = re.search(r"<body[^>]*>", html, re.I)
+    if m:
+        idx = m.end()
+        return html[:idx] + badge + html[idx:]
+
+    return badge + html
+
+
 def _report_response(
     report_type: str,
     html: str,
     payload: dict[str, Any] | None,
     req: ReportRequest,
+    request: Request | None = None,
     *,
     skip_pdf: bool = False,
 ) -> dict[str, Any]:
+    # Measure once the report content (live scrapes + parquet lookups + render)
+    # is fully assembled, then stamp the badge into the HTML so the PDF export
+    # below embeds the same number the inline preview shows.
+    elapsed = _elapsed_seconds(request)
+    html = _inject_timing_badge(html, elapsed)
+
     download_url = None
     pdf_path = None
     if not skip_pdf and not get_settings().portal_skip_pdf:
@@ -105,11 +163,12 @@ def _report_response(
         "data": payload,
         "pdf_path": str(pdf_path) if pdf_path else None,
         "download_url": download_url,
+        "generated_seconds": round(elapsed, 2) if elapsed is not None else None,
     }
 
 
 @router.post("/buildability")
-def report_buildability(req: ReportRequest):
+def report_buildability(req: ReportRequest, request: Request):
     try:
         html = get_demo_report_html(req.town_slug, req.parcel_id, "buildability")
         from_cache = html is not None
@@ -117,84 +176,84 @@ def report_buildability(req: ReportRequest):
             html = buildability.generate_buildability_html(
                 req.town_slug, req.parcel_id, req.prepared_for,
             )
-        return _report_response("buildability", html, None, req, skip_pdf=from_cache)
+        return _report_response("buildability", html, None, req, request, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/zoning")
-def report_zoning(req: ReportRequest):
+def report_zoning(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         payload = zoning.generate_zoning_json(data)
         html = zoning.render_zoning_html(data)
-        return _report_response("zoning", html, payload, req)
+        return _report_response("zoning", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/risk")
-def report_risk(req: ReportRequest):
+def report_risk(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         payload = risk.generate_risk_json(data)
         html = risk.render_risk_html(data)
-        return _report_response("risk", html, payload, req)
+        return _report_response("risk", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/market")
-def report_market(req: ReportRequest):
+def report_market(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         payload = market.generate_market_report(data)
         html = market.render_market_html(payload, req.address)
-        return _report_response("market", html, payload, req)
+        return _report_response("market", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/proforma")
-def report_proforma(req: ReportRequest):
+def report_proforma(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         payload = proforma.generate_proforma(data)
         html = proforma.render_proforma_html(payload, req.address)
-        return _report_response("proforma", html, payload, req)
+        return _report_response("proforma", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/neighborhood")
-def report_neighborhood(req: ReportRequest):
+def report_neighborhood(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         payload = neighborhood.generate_neighborhood(data)
         html = neighborhood.render_neighborhood_html(payload, req.address)
-        return _report_response("neighborhood", html, payload, req)
+        return _report_response("neighborhood", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/lender")
-def report_lender(req: ReportRequest):
+def report_lender(req: ReportRequest, request: Request):
     try:
         data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
         html = lender.generate_lender_html(data, req.prepared_for)
-        return _report_response("lender", html, None, req)
+        return _report_response("lender", html, None, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/homeowner-full")
-def report_homeowner_full(req: ReportRequest):
+def report_homeowner_full(req: ReportRequest, request: Request):
     try:
         html = get_demo_report_html(req.town_slug, req.parcel_id, "homeowner-full")
         if html is None:
             html = homeowner_full.generate_homeowner_full_html(
                 req.town_slug, req.parcel_id, req.prepared_for,
             )
-        return _report_response("homeowner-full", html, None, req, skip_pdf=True)
+        return _report_response("homeowner-full", html, None, req, request, skip_pdf=True)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

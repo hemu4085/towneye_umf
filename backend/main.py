@@ -11,13 +11,14 @@ Production demo (towneye.ai — single server):
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,19 @@ app = FastAPI(
     description="Massachusetts real estate intelligence reports",
     version="0.1.0",
 )
+
+
+@app.middleware("http")
+async def _stamp_request_received(request: Request, call_next):
+    """Record the earliest possible request-receipt time for true round-trip timing.
+
+    This runs before route handlers, so the stamp captures the moment the API
+    receives the request — before any parcel lookup, live web scrape, or cached
+    parquet read. Report endpoints read ``request.state.received_at`` to compute
+    the genuine end-to-end generation time shown in each report.
+    """
+    request.state.received_at = time.perf_counter()
+    return await call_next(request)
 
 _settings = get_settings()
 app.add_middleware(
