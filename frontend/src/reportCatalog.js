@@ -102,7 +102,7 @@ export const REPORTS = [
     id: 'risk',
     icon: '⚠️',
     name: 'Risk & Constraints Report',
-    description: 'Flood zone, wetlands, historic flags, violations & liens',
+    description: 'Open permits, flood/wetland detail, historic flags & code violations',
     time: '~20–60 sec live',
     endpoint: 'risk',
   },

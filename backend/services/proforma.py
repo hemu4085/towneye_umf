@@ -10,12 +10,11 @@ import pandas as pd
 from backend.config import get_settings
 from backend.services.buildability import collect_brief_data
 from backend.services.llm import generate_json_report
+from backend.services.town_proforma_config import (
+    compute_permit_fees,
+    get_developer_proforma_config,
+)
 from reports.buildability_brief import BriefData, BuildableEnvelope
-
-_HARD_COST_PSF = 475.0
-_SOFT_COST_PCT = 0.18
-_SALE_PSF = 875.0
-_AVG_UNIT_SF = 900
 
 _STATUS_LABEL = {"clear": "Clear", "caution": "Caution", "flagged": "Flagged"}
 
@@ -78,31 +77,57 @@ def _indicative_gfa(envelope: BuildableEnvelope, data: BriefData) -> float:
     return lot * 0.5
 
 
-def _units_from_gfa(gfa: float) -> int:
-    return max(1, int(round(gfa / _AVG_UNIT_SF)))
+def _pf_cfg(data: BriefData) -> dict[str, Any]:
+    return get_developer_proforma_config(data.inputs.town_slug)
 
 
-def _scenario_from_envelope(envelope: BuildableEnvelope, data: BriefData) -> dict[str, Any]:
+def _units_from_gfa(gfa: float, avg_unit_sf: float) -> int:
+    return max(1, int(round(gfa / avg_unit_sf)))
+
+
+def _carry_cost(subtotal: float, pf_cfg: dict[str, Any]) -> float:
+    fin = pf_cfg.get("financing") or {}
+    rate = float(fin.get("annual_carry_pct") or 0)
+    months = float(fin.get("construction_months") or 12)
+    return subtotal * rate * (months / 12.0)
+
+
+def _scenario_from_envelope(
+    envelope: BuildableEnvelope,
+    data: BriefData,
+    pf_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    hard_psf = float(pf_cfg["hard_cost_psf"])
+    soft_pct = float(pf_cfg["soft_cost_pct"])
+    sale_psf = float(pf_cfg["sale_psf"])
+    avg_unit_sf = float(pf_cfg["avg_unit_sf"])
+
     gfa = _indicative_gfa(envelope, data)
-    units = _units_from_gfa(gfa)
-    hard = gfa * _HARD_COST_PSF
-    soft = hard * _SOFT_COST_PCT
+    units = _units_from_gfa(gfa, avg_unit_sf)
+    hard = gfa * hard_psf
+    soft = hard * soft_pct
     land = _land_basis(data)
-    total_cost = hard + soft + land
-    sale = gfa * _SALE_PSF
+    permit_total, permit_lines = compute_permit_fees(gfa, pf_cfg.get("permit_fees") or [])
+    subtotal = hard + soft + land + permit_total
+    carry = _carry_cost(subtotal, pf_cfg)
+    total_cost = subtotal + carry
+    sale = gfa * sale_psf
     profit = sale - total_cost
     roi = ((sale - total_cost) / total_cost * 100.0) if total_cost > 0 else 0.0
-    avg_unit_sf = gfa / units if units else gfa
+    avg_unit_sf_val = gfa / units if units else gfa
     return {
         "name": envelope.label,
         "zone_code": envelope.zone_code,
         "is_overlay": envelope.is_overlay,
         "units": units,
         "total_gfa": int(round(gfa)),
-        "avg_unit_sf": int(round(avg_unit_sf)),
+        "avg_unit_sf": int(round(avg_unit_sf_val)),
         "hard_cost": int(round(hard)),
         "soft_cost": int(round(soft)),
         "land_basis": int(round(land)),
+        "permit_fees": permit_total,
+        "permit_fee_lines": permit_lines,
+        "carry_cost": int(round(carry)),
         "total_cost": int(round(total_cost)),
         "sale_price": int(round(sale)),
         "profit": int(round(profit)),
@@ -159,7 +184,7 @@ def _constraints_summary(data: BriefData) -> list[dict[str, str]]:
     return rows
 
 
-def _market_section(data: BriefData) -> dict[str, Any]:
+def _market_section(data: BriefData, pf_cfg: dict[str, Any]) -> dict[str, Any]:
     ctx = _town_market_context(data.inputs.town_slug)
     assessed = _assessed_value(data)
     return {
@@ -167,8 +192,8 @@ def _market_section(data: BriefData) -> dict[str, Any]:
         "median_dom": ctx.get("median_dom"),
         "months_of_inventory": ctx.get("months_of_inventory"),
         "assessed_value": assessed,
-        "indicative_sale_psf": _SALE_PSF,
-        "indicative_hard_cost_psf": _HARD_COST_PSF,
+        "indicative_sale_psf": float(pf_cfg["sale_psf"]),
+        "indicative_hard_cost_psf": float(pf_cfg["hard_cost_psf"]),
     }
 
 
@@ -186,38 +211,65 @@ def _envelope_rows(data: BriefData) -> list[dict[str, Any]]:
     return rows
 
 
-def _sensitivity_rows(scenario: dict[str, Any]) -> list[dict[str, Any]]:
-    """ROI sensitivity for the primary scenario under cost/sale swings."""
+def _land_mult_label(mult: float) -> str:
+    if mult < 0.995:
+        return "Land −10%"
+    if mult > 1.005:
+        return "Land +10%"
+    return "Land base"
+
+
+def _hard_mult_label(mult: float) -> str:
+    if mult < 0.995:
+        return "Hard −10%"
+    if mult > 1.005:
+        return "Hard +10%"
+    return "Hard base"
+
+
+def _irr_grid(scenario: dict[str, Any], pf_cfg: dict[str, Any]) -> dict[str, Any]:
+    """3 land × 2 hard ROI matrix for the primary scenario (PDF Report 03)."""
     gfa = float(scenario.get("total_gfa") or 0)
-    land = float(scenario.get("land_basis") or 0)
+    base_land = float(scenario.get("land_basis") or 0)
     if gfa <= 0:
+        return {"columns": [], "rows": []}
+
+    hard_psf = float(pf_cfg["hard_cost_psf"])
+    sale_psf = float(pf_cfg["sale_psf"])
+    soft_pct = float(pf_cfg["soft_cost_pct"])
+    grid = pf_cfg.get("irr_grid") or {}
+    land_mults = list(grid.get("land_price_multiples") or [0.90, 1.00, 1.10])
+    hard_mults = list(grid.get("hard_cost_multiples") or [0.90, 1.10])
+    permit_total, _ = compute_permit_fees(gfa, pf_cfg.get("permit_fees") or [])
+
+    columns = [_land_mult_label(m) for m in land_mults]
+    rows: list[dict[str, Any]] = []
+    for hm in hard_mults:
+        cells: list[float] = []
+        for lm in land_mults:
+            land = base_land * lm
+            hard = gfa * hard_psf * hm
+            soft = hard * soft_pct
+            subtotal = hard + soft + land + permit_total
+            carry = _carry_cost(subtotal, pf_cfg)
+            total = subtotal + carry
+            sale = gfa * sale_psf
+            roi = ((sale - total) / total * 100.0) if total > 0 else 0.0
+            cells.append(round(max(-99.0, min(99.0, roi)), 1))
+        rows.append({"label": _hard_mult_label(hm), "cells": cells})
+    return {"columns": columns, "rows": rows}
+
+
+def _sensitivity_rows(scenario: dict[str, Any], pf_cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flat sensitivity list derived from IRR grid corners."""
+    grid = _irr_grid(scenario, pf_cfg)
+    if not grid.get("rows"):
         return []
-
-    def _roi(hard_mult: float, sale_mult: float) -> float:
-        hard = gfa * _HARD_COST_PSF * hard_mult
-        soft = hard * _SOFT_COST_PCT
-        total = hard + soft + land
-        sale = gfa * _SALE_PSF * sale_mult
-        return ((sale - total) / total * 100.0) if total > 0 else 0.0
-
-    cases = [
-        ("Base case", 1.0, 1.0),
-        ("Hard cost +10%", 1.1, 1.0),
-        ("Hard cost −10%", 0.9, 1.0),
-        ("Sale price +10%", 1.0, 1.1),
-        ("Sale price −10%", 1.0, 0.9),
-        ("Combined stress (hard +10%, sale −10%)", 1.1, 0.9),
-        ("Combined upside (hard −10%, sale +10%)", 0.9, 1.1),
-    ]
-    return [
-        {
-            "case": label,
-            "hard_cost": _fmt_money(gfa * _HARD_COST_PSF * hm),
-            "sale": _fmt_money(gfa * _SALE_PSF * sm),
-            "roi_pct": round(_roi(hm, sm), 1),
-        }
-        for label, hm, sm in cases
-    ]
+    flat: list[dict[str, Any]] = []
+    for row in grid["rows"]:
+        for col, roi in zip(grid["columns"], row["cells"]):
+            flat.append({"case": f"{row['label']} · {col}", "roi_pct": roi})
+    return flat
 
 
 def _pick_primary_scenario(scenarios: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -228,7 +280,11 @@ def _pick_primary_scenario(scenarios: list[dict[str, Any]]) -> dict[str, Any] | 
     return max(pool, key=lambda s: float(s.get("roi_pct") or -999))
 
 
-def _executive_summary(data: BriefData, primary: dict[str, Any] | None) -> str:
+def _executive_summary(
+    data: BriefData,
+    primary: dict[str, Any] | None,
+    pf_cfg: dict[str, Any],
+) -> str:
     if primary is None:
         return "Indicative economics could not be anchored to a buildable envelope."
     units = primary.get("units", "—")
@@ -236,36 +292,46 @@ def _executive_summary(data: BriefData, primary: dict[str, Any] | None) -> str:
     roi = primary.get("roi_pct", "—")
     name = primary.get("name", "Primary scenario")
     profit = _fmt_money(primary.get("profit"))
+    hard_psf = float(pf_cfg["hard_cost_psf"])
+    sale_psf = float(pf_cfg["sale_psf"])
     return (
         f"Recommended path: {name}. Indicative yield ~{units} units / {gfa} sf GFA, "
-        f"{profit} profit at pilot assumptions (${_HARD_COST_PSF:,.0f}/sf hard, "
-        f"${_SALE_PSF:,.0f}/sf sale), ~{roi}% ROI. "
+        f"{profit} profit at pilot assumptions (${hard_psf:,.0f}/sf hard, "
+        f"${sale_psf:,.0f}/sf sale), ~{roi}% ROI. "
         f"Entitlement and envelope math are in the Buildability Brief."
     )
 
 
 def _enrich_payload(data: BriefData, payload: dict[str, Any]) -> dict[str, Any]:
+    pf_cfg = _pf_cfg(data)
     scenarios = payload.get("scenarios") or []
     primary = _pick_primary_scenario(scenarios)
     ctx = _town_market_context(data.inputs.town_slug)
     assessed = _assessed_value(data)
+    fin = pf_cfg.get("financing") or {}
+    permit_lines = primary.get("permit_fee_lines") if primary else []
     return {
         **payload,
         "prepared_on": (data.inputs.prepared_on or date.today()).isoformat(),
         "site_snapshot": _site_snapshot(data),
-        "market": _market_section(data),
+        "market": _market_section(data, pf_cfg),
         "constraints": _constraints_summary(data),
         "envelopes": _envelope_rows(data),
         "primary_scenario": primary.get("name") if primary else None,
-        "executive_summary": _executive_summary(data, primary),
-        "sensitivity_detail": _sensitivity_rows(primary) if primary else [],
+        "executive_summary": _executive_summary(data, primary, pf_cfg),
+        "irr_grid": _irr_grid(primary, pf_cfg) if primary else {"columns": [], "rows": []},
+        "sensitivity_detail": _sensitivity_rows(primary, pf_cfg) if primary else [],
         "assumptions": payload.get("assumptions") or [
-            f"Hard cost ${_HARD_COST_PSF:,.0f}/sf (RSMeans MA indicative, pilot)",
-            f"Soft costs {int(_SOFT_COST_PCT * 100)}% of hard construction",
+            f"Hard cost ${float(pf_cfg['hard_cost_psf']):,.0f}/sf (RSMeans MA indicative, from town config)",
+            f"Soft costs {int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard construction",
             f"Land basis {_fmt_money(assessed) if assessed else 'lot × $55/sf assessor proxy'}",
-            f"Indicative new-construction sale ${_SALE_PSF:,.0f}/sf GFA — not MLS-calibrated",
-            "Unit count derived from GFA ÷ 900 sf average unit size (pilot heuristic)",
-            f"Zoning envelopes sourced from same stack as Buildability Brief",
+            f"Indicative new-construction sale ${float(pf_cfg['sale_psf']):,.0f}/sf GFA — not MLS-calibrated",
+            f"Unit count derived from GFA ÷ {int(pf_cfg['avg_unit_sf'])} sf average unit size",
+            *([f"Permit fees (town schedule): {', '.join(l['label'] for l in permit_lines)}"]
+              if permit_lines else []),
+            f"Financing carry {float(fin.get('annual_carry_pct', 0)) * 100:.1f}% × "
+            f"{fin.get('construction_months', 14)} mo construction (indicative)",
+            "Zoning envelopes sourced from same stack as Buildability Brief",
             *(
                 [f"Town median sale (Gold): {_fmt_money(ctx.get('median_sale_price'))}"]
                 if ctx.get("median_sale_price")
@@ -276,40 +342,20 @@ def _enrich_payload(data: BriefData, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _proforma_fallback(data: BriefData) -> dict[str, Any]:
+    pf_cfg = _pf_cfg(data)
     envelopes = data.envelopes[:3] if data.envelopes else []
-    scenarios = [_scenario_from_envelope(e, data) for e in envelopes]
+    scenarios = [_scenario_from_envelope(e, data, pf_cfg) for e in envelopes]
     if not scenarios:
         lot = data.parcel.area_sqft or 0.0
         gfa = lot * 0.5
-        hard = gfa * _HARD_COST_PSF
-        soft = hard * _SOFT_COST_PCT
-        land = _land_basis(data)
-        total = hard + soft + land
-        sale = gfa * _SALE_PSF
-        units = _units_from_gfa(gfa)
-        scenarios.append({
-            "name": "Base (parcel area)",
-            "zone_code": data.primary_zone_code or "—",
-            "is_overlay": False,
-            "units": units,
-            "total_gfa": int(round(gfa)),
-            "avg_unit_sf": int(round(gfa / units)) if units else int(round(gfa)),
-            "hard_cost": int(round(hard)),
-            "soft_cost": int(round(soft)),
-            "land_basis": int(round(land)),
-            "total_cost": int(round(total)),
-            "sale_price": int(round(sale)),
-            "profit": int(round(sale - total)),
-            "margin_pct": round(((sale - total) / sale * 100) if sale else 0, 1),
-            "cost_per_sf": int(round(total / gfa)) if gfa else None,
-            "sale_per_sf": int(round(sale / gfa)) if gfa else None,
-            "sale_per_unit": int(round(sale / units)) if units else None,
-            "cost_per_unit": int(round(total / units)) if units else None,
-            "roi_pct": 12.0,
-            "qualifies": None,
-            "max_far": None,
-            "notes": "Derived from parcel area — refine with full envelope",
-        })
+        fake = BuildableEnvelope(
+            zone_code=data.primary_zone_code or "—",
+            is_overlay=False,
+            label="Base (parcel area)",
+            rationale="Derived from parcel area — refine with full envelope",
+            lot_sqft=lot,
+        )
+        scenarios.append(_scenario_from_envelope(fake, data, pf_cfg))
 
     primary = _pick_primary_scenario(scenarios)
     rois = [float(s["roi_pct"]) for s in scenarios]
@@ -376,6 +422,7 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[
         anchor = envelopes[i] if i < len(envelopes) else (envelopes[0] if envelopes else None)
         if anchor is not None:
             cap_gfa = _indicative_gfa(anchor, data)
+            pf_cfg = _pf_cfg(data)
             gfa = item.get("total_gfa")
             try:
                 gfa = float(gfa) if gfa is not None else cap_gfa
@@ -384,11 +431,13 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[
             gfa = min(gfa, cap_gfa * 1.15) if cap_gfa > 0 else gfa
             units = item.get("units")
             try:
-                units = int(units) if units is not None else _units_from_gfa(gfa)
+                units = int(units) if units is not None else _units_from_gfa(
+                    gfa, float(pf_cfg["avg_unit_sf"]),
+                )
             except (TypeError, ValueError):
-                units = _units_from_gfa(gfa)
-            units = min(units, max(1, _units_from_gfa(gfa) + 1))
-            rebuilt = _scenario_from_envelope(anchor, data)
+                units = _units_from_gfa(gfa, float(pf_cfg["avg_unit_sf"]))
+            units = min(units, max(1, _units_from_gfa(gfa, float(pf_cfg["avg_unit_sf"])) + 1))
+            rebuilt = _scenario_from_envelope(anchor, data, pf_cfg)
             item = {
                 **rebuilt,
                 **item,
@@ -396,16 +445,6 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[
                 "units": units,
                 "name": item.get("name") or rebuilt["name"],
             }
-            hard = float(item.get("hard_cost") or rebuilt["hard_cost"])
-            soft = float(item.get("soft_cost") or rebuilt["soft_cost"])
-            land = float(item.get("land_basis") or rebuilt["land_basis"])
-            sale = float(item.get("sale_price") or rebuilt["sale_price"])
-            total = hard + soft + land
-            item["total_cost"] = int(round(total))
-            item["profit"] = int(round(sale - total))
-            item["margin_pct"] = round(((sale - total) / sale * 100) if sale else 0, 1)
-            roi = ((sale - total) / total * 100) if total > 0 else 0
-            item["roi_pct"] = round(max(-15.0, min(35.0, roi)), 1)
         normalized.append(item)
     return normalized or _proforma_fallback(data)["scenarios"]
 
@@ -458,7 +497,6 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
     constraints = payload.get("constraints") or []
     envelopes = payload.get("envelopes") or []
     assumptions = payload.get("assumptions") or []
-    sens_detail = payload.get("sensitivity_detail") or []
     sources = payload.get("data_sources") or []
     primary_name = payload.get("primary_scenario")
     prepared = payload.get("prepared_on") or date.today().isoformat()
@@ -475,6 +513,8 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
           <td class="num">{_fmt_money(s.get('land_basis'))}</td>
           <td class="num">{_fmt_money(s.get('hard_cost'))}</td>
           <td class="num">{_fmt_money(s.get('soft_cost'))}</td>
+          <td class="num">{_fmt_money(s.get('permit_fees'))}</td>
+          <td class="num">{_fmt_money(s.get('carry_cost'))}</td>
           <td class="num">{_fmt_money(s.get('total_cost'))}</td>
           <td class="num">{_fmt_money(s.get('sale_price'))}</td>
           <td class="num">{_fmt_money(s.get('profit'))}</td>
@@ -482,7 +522,7 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
         </tr>"""
         note = s.get("notes")
         if note:
-            scenario_rows += f'<tr><td colspan="10" class="small">{note}</td></tr>'
+            scenario_rows += f'<tr><td colspan="12" class="small">{note}</td></tr>'
 
     unit_rows = ""
     for s in scenarios:
@@ -516,14 +556,12 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
           <td>{c.get('detail', '—')}</td>
         </tr>"""
 
-    sens_rows = ""
-    for row in sens_detail:
-        sens_rows += f"""<tr>
-          <td>{row.get('case', '—')}</td>
-          <td class="num">{row.get('hard_cost', '—')}</td>
-          <td class="num">{row.get('sale', '—')}</td>
-          <td class="num"><strong>{row.get('roi_pct', '—')}%</strong></td>
-        </tr>"""
+    irr = payload.get("irr_grid") or {}
+    irr_header = "".join(f"<th>{c}</th>" for c in irr.get("columns") or [])
+    irr_body = ""
+    for row in irr.get("rows") or []:
+        cells = "".join(f'<td class="num"><strong>{v}%</strong></td>' for v in row.get("cells") or [])
+        irr_body += f"<tr><td>{row.get('label', '—')}</td>{cells}</tr>"
 
     lot_line = _fmt_int(snap.get("lot_sqft_regulatory") or snap.get("lot_sqft_gis"))
     gis_line = (
@@ -615,8 +653,8 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 
 <h2>5 · Development Scenarios — Full Cost Stack</h2>
 <table>
-<tr><th>Scenario</th><th>Units</th><th>GFA (sf)</th><th>Land</th><th>Hard</th><th>Soft</th><th>Total cost</th><th>Sale</th><th>Profit</th><th>ROI</th></tr>
-{scenario_rows or "<tr><td colspan='10'>No scenarios computed</td></tr>"}
+<tr><th>Scenario</th><th>Units</th><th>GFA</th><th>Land</th><th>Hard</th><th>Soft</th><th>Permits</th><th>Carry</th><th>Total</th><th>Sale</th><th>Profit</th><th>ROI</th></tr>
+{scenario_rows or "<tr><td colspan='12'>No scenarios computed</td></tr>"}
 </table>
 
 <h2>6 · Unit Economics</h2>
@@ -631,10 +669,11 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 {constraint_rows}
 </table>
 
-<h2>8 · Sensitivity — Primary Scenario ({primary_name or '—'})</h2>
+<h2>8 · IRR Matrix — Primary Scenario ({primary_name or '—'})</h2>
+<p class="small">3 land-basis × 2 hard-cost scenarios (ROI %). Sale held at config sale $/sf.</p>
 <table>
-<tr><th>Case</th><th>Hard cost</th><th>Sale (indicative)</th><th>ROI</th></tr>
-{sens_rows or "<tr><td colspan='4'>Sensitivity not computed</td></tr>"}
+<tr><th>Hard cost →</th>{irr_header or '<th>—</th>'}</tr>
+{irr_body or "<tr><td colspan='4'>IRR matrix not computed</td></tr>"}
 </table>
 
 <h2>9 · Assumptions &amp; Sources</h2>

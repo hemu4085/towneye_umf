@@ -5,9 +5,8 @@
 set -euo pipefail
 
 # Large geometry layers excluded from Render demo image (512MB RAM).
-# Full layers remain in data/gold/ for local dev.
+# environmental-overlay included Phase A — required for flood/wetland risk flags.
 DEMO_EXCLUDE=(
-  "environmental-overlay.parquet"
 )
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

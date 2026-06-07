@@ -1602,3 +1602,24 @@ str_dynamics_mock_data:
     best returns are in East Arlington two-families targeting Boston-weekend
     visitors and remote-work travellers.
 
+# Developer Pro Forma — pilot assumptions (Report 03 / Phase A).
+# All economics constants for portal pro forma load from here (zero-hardcoding).
+developer_proforma:
+  hard_cost_psf: 475
+  sale_psf: 875
+  soft_cost_pct: 0.18
+  avg_unit_sf: 900
+  financing:
+    annual_carry_pct: 0.075
+    construction_months: 14
+  irr_grid:
+    land_price_multiples: [0.90, 1.00, 1.10]
+    hard_cost_multiples: [0.90, 1.10]
+  permit_fees:
+    - label: "Building permit — ISD base fee"
+      amount: 175
+    - label: "Building permit — per GFA sf"
+      per_gfa_sf: 0.15
+    - label: "Site plan / design review (overlay districts)"
+      amount: 750
+

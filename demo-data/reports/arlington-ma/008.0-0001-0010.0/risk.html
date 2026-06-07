@@ -1,36 +1,86 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
+<title>Risk &amp; Constraints — 5-7 BELKNAP ST</title>
 <style>
-  body{font-family:'DM Sans',Arial,sans-serif;color:#0B1F3A;max-width:780px;margin:24px auto;padding:0 20px}
-  h1{font-family:Georgia,serif;border-bottom:3px solid #C9A84C;padding-bottom:8px}
-  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
-  th{background:#0B1F3A;color:#F5F0E8;text-align:left;padding:8px}
-  td{padding:8px;border-bottom:1px solid #e5e5e5;vertical-align:top}
+  body{font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.55;color:#1a1a1a;max-width:780px;margin:36px auto;padding:0 28px;background:#fff}
+  h1{font-size:22px;margin:0 0 4px;color:#0b2545;letter-spacing:.5px}
+  h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#0b2545;border-bottom:2px solid #0b2545;padding:18px 0 4px;margin:18px 0 10px}
+  .hd{border-bottom:1px solid #ccc;padding-bottom:10px;margin-bottom:8px}
+  .meta{font-size:11px;color:#555;margin-top:6px}
+  table{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:12.5px}
+  th{background:#0b2545;color:#fff;text-align:left;padding:6px 9px;font-size:11.5px;letter-spacing:.5px}
+  td{padding:5px 9px;border-bottom:1px solid #e5e5e5;vertical-align:top}
+  tr:nth-child(even) td{background:#f7f9fc}
+  .ok{color:#1a7a1a;font-weight:bold}
+  .wn{color:#a06b00;font-weight:bold}
+  .fl{color:#a02020;font-weight:bold}
+  .small{font-size:11px;color:#555}
+  .verdict{padding:10px 14px;margin:10px 0 12px;border-radius:4px;font-weight:bold}
+  .v-green{background:#dff1d6;color:#1a5b22;border-left:6px solid #1a7a1a}
+  .v-yellow{background:#fff3cf;color:#7a5a00;border-left:6px solid #c89800}
+  .v-red{background:#fadcdc;color:#7a1a1a;border-left:6px solid #a02020}
+  ul{margin:6px 0;padding-left:20px}
+  .footnote{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}
 </style></head><body>
-<h1>Risk &amp; Constraints Report</h1>
-<p><strong>5-7 BELKNAP ST</strong> · Overall: <strong>CLEAR</strong></p>
+
+<div class="hd">
+  <h1>Risk &amp; Constraints Report</h1>
+  <div style="font-size:15px;color:#0b2545;font-weight:bold">5-7 BELKNAP ST</div>
+  <div class="meta">Parcel ID 008.0-0001-0010.0 · Overall: <span class="ok">CLEAR</span></div>
+</div>
+
+<h2>1 · Executive Summary</h2>
+<div class="verdict v-green">5-7 BELKNAP ST has a clean buildable profile: zoning permits redevelopment under NMF, R2 and there are no historic, environmental, flood, or non-compliance encumbrances.</div>
+<p>Open permits: <strong>0</strong> ·
+   Expired: <strong>0</strong> ·
+   Environmental hits: <strong>0</strong></p>
+
+<h2>2 · Constraint Layers</h2>
 <table>
-<tr><th>Constraint</th><th>Status</th><th>Detail</th><th>Source</th></tr>
+<tr><th>Layer</th><th>Status</th><th>Detail</th><th>Source</th></tr>
 <tr>
           <td>MACRIS — historic resource (state)</td>
-          <td><span style="color:#1a7a1a;font-weight:bold">Clear</span></td>
+          <td><span class="ok">Clear</span></td>
           <td>No overlap.</td>
-          <td style="font-size:11px;color:#666">MA Historical Commission MACRIS (statewide MAPC FeatureServer)</td>
+          <td class="small">MA Historical Commission MACRIS (statewide MAPC FeatureServer)</td>
         </tr><tr>
           <td>Local historic district / overlay / inventory</td>
-          <td><span style="color:#1a7a1a;font-weight:bold">Clear</span></td>
+          <td><span class="ok">Clear</span></td>
           <td>No overlap.</td>
-          <td style="font-size:11px;color:#666">Arlington GIS — Local_Historic_District, National_Historic_District, Historic_Overlay_Districts, Historic_Commission_Inventory_view</td>
+          <td class="small">Arlington GIS — Local_Historic_District, National_Historic_District, Historic_Overlay_Districts, Historic_Commission_Inventory_view</td>
         </tr><tr>
           <td>Wetlands & flood overlays</td>
-          <td><span style="color:#1a7a1a;font-weight:bold">Clear</span></td>
+          <td><span class="ok">Clear</span></td>
           <td>No overlap.</td>
-          <td style="font-size:11px;color:#666">Arlington GIS — ArlingtonMA_Wetlands, Arlington_Flood_Zones, Flood_Zones_Preliminary_Changes_2023</td>
+          <td class="small">Arlington GIS — ArlingtonMA_Wetlands, Arlington_Flood_Zones, Flood_Zones_Preliminary_Changes_2023</td>
         </tr><tr>
           <td>Open zoning / land-use non-compliance</td>
-          <td><span style="color:#1a7a1a;font-weight:bold">Clear</span></td>
+          <td><span class="ok">Clear</span></td>
           <td>No overlap.</td>
-          <td style="font-size:11px;color:#666">Arlington GIS — LandUse_NonCompliance</td>
+          <td class="small">Arlington GIS — LandUse_NonCompliance</td>
         </tr>
 </table>
+
+<h2>3 · Flood &amp; Wetlands Detail</h2>
+<table>
+<tr><th>Category</th><th>Status</th><th>Detail</th><th>Source</th></tr>
+<tr><td>Flood / wetland overlay</td>
+          <td><span class="ok">Clear</span></td>
+          <td>No FEMA or wetland polygon intersects parcel centroid.</td>
+          <td class="small">environmental-overlay.parquet</td></tr>
+</table>
+
+<h2>4 · Building Permits on Record</h2>
+<table>
+<tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Description</th></tr>
+<tr><td colspan="5">No permits on record for this parcel in TownEye Gold.</td></tr>
+</table>
+
+<h2>5 · Not Yet Connected (Pilot)</h2>
+<ul><li>Registry of Deeds restrictions and easements — not connected in pilot.</li><li>MassDEP BWSC / 21E contamination sites — not connected in pilot.</li></ul>
+
+<p class="footnote">
+  Screening report — not a substitute for title, environmental Phase I, or lender legal review.
+  Pair with the Buildability Brief for entitlement path and the Pro Forma for economics.
+</p>
 </body></html>
