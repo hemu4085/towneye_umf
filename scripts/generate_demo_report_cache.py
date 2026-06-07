@@ -17,16 +17,22 @@ if _demo_gold.is_dir() and any(_demo_gold.rglob("*.parquet")):
 else:
     os.environ.setdefault("GOLD_DATA_PATH", str(_full_gold))
 
-from backend.services.buildability import generate_buildability_html  # noqa: E402
+from backend.services.buildability import collect_brief_data, generate_buildability_html  # noqa: E402
 from backend.services.homeowner_full import generate_homeowner_full_html  # noqa: E402
+from backend.services.proforma import generate_proforma_html  # noqa: E402
+from backend.services.risk import render_risk_html  # noqa: E402
 
-DEMO_PARCEL = "128.0-0003-0012.0"
+DEMO_PARCEL = "008.0-0001-0010.0"
 DEMO_TOWN = "arlington-ma"
-DEMO_ADDRESS = "29 WALNUT ST, Arlington MA"
+DEMO_ADDRESS = "5-7 BELKNAP ST, Arlington MA"
 
 REPORT_WRITERS = {
     "buildability": generate_buildability_html,
     "homeowner-full": generate_homeowner_full_html,
+    "proforma": generate_proforma_html,
+    "risk": lambda town, parcel, pf: render_risk_html(
+        collect_brief_data(town, parcel, pf),
+    ),
 }
 
 
@@ -42,3 +48,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -130,7 +130,7 @@ export default function Home() {
       lng: DEMO_PROPERTY.lng,
     });
     setError('');
-    if (!userType) setUserType('agent');
+    if (!userType) setUserType('developer');
   }
 
   useEffect(() => {
@@ -261,12 +261,24 @@ export default function Home() {
             className="mt-3 text-sm text-gold border border-gold/40 rounded-full px-4 py-2
                        hover:bg-gold/10 transition-colors"
           >
-            Quick demo — 29 Walnut St
+            Quick demo — 5-7 Belknap St
           </button>
 
           <ApiStatusBar online={apiOnline} checking={apiChecking} onRetry={refreshApiHealth} />
 
           <UserTypeSelector value={userType} onChange={setUserType} />
+
+          {userType === 'developer' && (
+            <div className="w-full max-w-2xl mt-6 p-4 rounded-lg border border-gold/30 bg-gold/5 text-center">
+              <p className="text-cream text-sm leading-relaxed">
+                Instant buildability + pro forma for any {pilotTownShort} lot — zoning stack,
+                overlay analysis, and indicative development economics before you option or design.
+              </p>
+              <p className="text-xs text-gold/90 mt-2">
+                Start with <strong>Buildability Brief</strong>, then <strong>Development Pro Forma</strong>.
+              </p>
+            </div>
+          )}
 
           {userType && (
             <div className="w-full mt-2">

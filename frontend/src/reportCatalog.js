@@ -87,7 +87,7 @@ export const REPORTS = [
     name: 'Buildability Brief',
     description:
       'Full zoning stack, overlay analysis, development options & permitting timeline',
-    time: '~15–45 sec live',
+    time: '~instant on demo parcel',
     endpoint: 'buildability',
   },
   {
@@ -110,8 +110,8 @@ export const REPORTS = [
     id: 'proforma',
     icon: '💰',
     name: 'Development Pro Forma',
-    description: 'Unit yield, construction cost estimate & indicative ROI',
-    time: '~20–60 sec live',
+    description: 'Unit yield, construction cost estimate & indicative ROI tied to zoning envelopes',
+    time: '~instant on demo parcel · live LLM otherwise',
     endpoint: 'proforma',
   },
   {

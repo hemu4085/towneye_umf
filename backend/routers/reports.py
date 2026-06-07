@@ -95,22 +95,17 @@ def _elapsed_seconds(request: Request | None) -> float | None:
 
 
 def _inject_timing_badge(html: str, seconds: float | None) -> str:
-    """Insert a 'Generated in N seconds' badge into the report HTML.
-
-    Uses fully inline styles so it renders identically in the inline preview,
-    the exported PDF, and any context where external <style> blocks are stripped.
-    """
+    """Insert a plain executive-style generation time line into the report HTML."""
     if not html or seconds is None:
         return html
 
-    label = f"Generated live in {seconds:.2f} seconds"
+    label = f"Report generated in {seconds:.1f} seconds."
     badge = (
-        '<div class="te-gen-badge" style="display:inline-flex;align-items:center;'
-        "gap:6px;margin:0 0 14px;padding:5px 12px;border-radius:999px;"
-        "background:#0B1F3A;color:#fff;font-size:12px;font-weight:600;"
-        'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
-        'letter-spacing:.2px;box-shadow:0 1px 3px rgba(11,31,58,.25)">'
-        f'<span aria-hidden="true">\u26a1</span>{label}</div>'
+        '<p class="te-gen-badge" style="margin:0 0 16px;padding:0;'
+        "background:#fff;color:#000;font-size:11px;font-weight:400;"
+        "font-family:Georgia,'Times New Roman',serif;letter-spacing:.2px;"
+        'line-height:1.4">'
+        f"{label}</p>"
     )
 
     # Prefer placing the badge at the top of the report card.
@@ -195,10 +190,14 @@ def report_zoning(req: ReportRequest, request: Request):
 @router.post("/risk")
 def report_risk(req: ReportRequest, request: Request):
     try:
-        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
-        payload = risk.generate_risk_json(data)
-        html = risk.render_risk_html(data)
-        return _report_response("risk", html, payload, req, request)
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "risk")
+        from_cache = html is not None
+        payload = None
+        if html is None:
+            data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+            payload = risk.generate_risk_json(data)
+            html = risk.render_risk_html(data)
+        return _report_response("risk", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -217,10 +216,14 @@ def report_market(req: ReportRequest, request: Request):
 @router.post("/proforma")
 def report_proforma(req: ReportRequest, request: Request):
     try:
-        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
-        payload = proforma.generate_proforma(data)
-        html = proforma.render_proforma_html(payload, req.address)
-        return _report_response("proforma", html, payload, req, request)
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "proforma")
+        from_cache = html is not None
+        payload = None
+        if html is None:
+            data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+            payload = proforma.generate_proforma(data)
+            html = proforma.render_proforma_html(payload, req.address)
+        return _report_response("proforma", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

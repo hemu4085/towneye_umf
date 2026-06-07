@@ -1,0 +1,81 @@
+# configs/lead_generation.yaml
+# TownEye UMF — Lead Generation Agent configuration
+# All ICP segments, search templates, and product copy live here (zero-hardcoding in core/).
+
+version: "1.0.0"
+updated_by: "UMF_System"
+te_source: "towneye-lead-generation"
+
+product:
+  name: "TownEye"
+  tagline: "Massachusetts property intelligence — buildability, zoning, risk, and market in one report."
+  portal_url: "https://demo.towneye.ai"
+  demo_address: "5-7 Belknap St, Arlington MA"
+  reports:
+    - "Buildability Brief"
+    - "Zoning Summary"
+    - "Risk & Constraints"
+    - "Market Snapshot"
+    - "Pro Forma"
+    - "Homeowner Full Property Report"
+
+value_props:
+  - "Parcel-level buildability and by-right ADU analysis in minutes, not days."
+  - "Zoning overlays, flood, historic, and noncompliance layers on one map-backed brief."
+  - "RE agents close faster with lender-ready packs; developers de-risk entitlement early."
+  - "Homeowners get plain-language answers (ADU, flood, zoning) without reading bylaws."
+
+segments:
+  real_estate_agent:
+    label: "Real Estate Agent / Broker"
+    priority_weight: 1.0
+    search_query: "{town_name} {state} top real estate broker team luxury residential"
+    llm_hint: >
+      Identify 3–5 brokerage teams or individual agents who actively list residential
+      property in {town_name}, {state}. Prefer teams with a visible web presence.
+    outreach_angle: "faster listings, buyer confidence, buildability brief at listing"
+
+  developer:
+    label: "Residential Developer / Builder"
+    priority_weight: 0.9
+    search_query: "{town_name} {state} residential developer custom home builder ADU"
+    llm_hint: >
+      Identify 3–5 local developers or design-build firms doing infill or ADU work
+      in {town_name}, {state}.
+    outreach_angle: "entitlement risk, zoning overlays, pro forma on a specific parcel"
+
+  lender:
+    label: "Mortgage Lender / Private Lender"
+    priority_weight: 0.7
+    search_query: "{town_name} {state} mortgage lender credit union home loans"
+    llm_hint: >
+      Identify 2–4 lenders or credit unions serving homebuyers in {town_name}, {state}.
+    outreach_angle: "lender pack, flood/historic risk flags, collateral clarity"
+
+  homeowner_association:
+    label: "HOA / Civic Leader"
+    priority_weight: 0.5
+    search_query: "{town_name} {state} neighborhood association civic group"
+    llm_hint: >
+      Identify 2–3 neighborhood or civic groups that homeowners in {town_name} follow.
+    outreach_angle: "homeowner full report, property Q&A, transparency on town data"
+
+scoring:
+  min_score: 0.0
+  max_score: 100.0
+  weights:
+    segment_fit: 0.35
+    local_relevance: 0.30
+    reachability: 0.20
+    data_hook_strength: 0.15
+
+output:
+  leads_dir: "data/leads"
+  leads_file: "leads.jsonl"
+  campaigns_dir: "data/leads/campaigns"
+  default_prospects_per_segment: 5
+  max_outreach_chars: 1200
+
+registry:
+  path: "configs/expansion_registry.json"
+  onboarded_key: "onboarded"

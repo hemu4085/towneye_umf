@@ -73,7 +73,7 @@ def _warm_address_index() -> None:
         except OSError:
             pass
     try:
-        get_demo_report_html("arlington-ma", "128.0-0003-0012.0", "buildability")
+        get_demo_report_html("arlington-ma", "008.0-0001-0010.0", "buildability")
     except OSError:
         pass
 

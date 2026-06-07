@@ -91,8 +91,9 @@ export default function ReportPage() {
         <div className="mt-6 p-4 rounded-lg bg-red-950/40 border border-red-800/50">
           <p className="text-red-300">{error}</p>
           <p className="text-sm text-graytown mt-2">
-            Try <strong>Load demo property</strong> on the home page, then Buildability Brief again.
-            If the API was cold, wait 30 seconds and retry.
+            Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>Developer</strong>, then
+            retry Buildability or Pro Forma. Pro Forma uses live LLM when no demo cache is present —
+            if the API was cold or the LLM key is missing, wait 30 seconds and retry.
           </p>
         </div>
       )}
