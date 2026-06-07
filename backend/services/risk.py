@@ -166,6 +166,15 @@ def render_risk_html(data: BriefData) -> str:
         </tr>"""
 
     permit_block = payload["permits"]
+    permit_n = permit_block.get("total_count", 0) or 0
+    address = payload.get("address") or "this property"
+    if permit_n == 0:
+        permit_summary = f"No building permits found related to {address}."
+    elif permit_n == 1:
+        permit_summary = f"Found 1 building permit related to {address}."
+    else:
+        permit_summary = f"Found {permit_n} building permits related to {address}."
+
     permit_rows = ""
     for p in permit_block.get("permits") or []:
         status = p.get("status", "—")
@@ -181,7 +190,7 @@ def render_risk_html(data: BriefData) -> str:
           <td>{p.get('description') or '—'}</td>
         </tr>"""
     if not permit_rows:
-        permit_rows = """<tr><td colspan="6">No permits matched this parcel in the TownEye Gold ISD ledger.</td></tr>"""
+        permit_rows = f"""<tr><td colspan="6">No building permits found related to {address}.</td></tr>"""
 
     open_items = "".join(f"<li>{item}</li>" for item in payload.get("open_items") or [])
     env_note = (
@@ -250,9 +259,7 @@ def render_risk_html(data: BriefData) -> str:
 </table>
 
 <h2>4 · Building Permits (ISD Ledger)</h2>
-<p class="note">TownEye Gold ledger: <strong>{permit_block.get('ledger_total', 0)}</strong> permit records
-   ({permit_block.get('ledger_open', 0)} open town-wide) ·
-   <strong>{permit_block.get('total_count', 0)}</strong> matched this parcel.</p>
+<p class="note">{permit_summary}</p>
 <table>
 <tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Value</th><th>Description</th></tr>
 {permit_rows}
