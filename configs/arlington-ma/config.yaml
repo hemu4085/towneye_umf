@@ -1233,6 +1233,21 @@ permit_mock_data:
       contractor_license: "MH-445566"
       inspector: "R. Silva"
 
+  - permit_number: "B-24-1188"
+    permit_type: "RESIDENTIAL_NEW"
+    status: "CLOSED"
+    application_date: "2024-06-10"
+    approval_date: "2024-10-18"
+    estimated_value: 1450000
+    applicant_name: "5-7 BELKNAP STREET"
+    applicant_id: "APP-BEL-009"
+    metadata:
+      address: "5-7 Belknap St, Arlington MA 02474"
+      parcel_id: "008.0-0001-0010.0"
+      description: "New two-family garden-style building — Certificate of Occupancy issued 2024"
+      contractor_license: "CS-881122"
+      inspector: "J. Torres"
+
 # DPW Capital Improvement Plan — Domain 04 fixture.
 # Derived from Arlington MA FY2025–2030 Capital Improvement Plan (CIP).
 # Replace with a live PDF-extraction pipeline when pdfplumber is integrated.

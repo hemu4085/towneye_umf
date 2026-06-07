@@ -15,6 +15,8 @@
   .wn{color:#a06b00;font-weight:bold}
   .fl{color:#a02020;font-weight:bold}
   .small{font-size:11px;color:#555}
+  .note{font-size:12px;color:#444;margin:6px 0 10px}
+  .num{font-variant-numeric:tabular-nums}
   .verdict{padding:10px 14px;margin:10px 0 12px;border-radius:4px;font-weight:bold}
   .v-green{background:#dff1d6;color:#1a5b22;border-left:6px solid #1a7a1a}
   .v-yellow{background:#fff3cf;color:#7a5a00;border-left:6px solid #c89800}
@@ -31,9 +33,9 @@
 
 <h2>1 · Executive Summary</h2>
 <div class="verdict v-green">5-7 BELKNAP ST has a clean buildable profile: zoning permits redevelopment under NMF, R2 and there are no historic, environmental, flood, or non-compliance encumbrances.</div>
-<p>Open permits: <strong>0</strong> ·
-   Expired: <strong>0</strong> ·
-   Environmental hits: <strong>0</strong></p>
+<p>Open permits on parcel: <strong>0</strong> ·
+   Closed / CO: <strong>1</strong> ·
+   Environmental flags: <strong>0</strong></p>
 
 <h2>2 · Constraint Layers</h2>
 <table>
@@ -61,19 +63,42 @@
         </tr>
 </table>
 
-<h2>3 · Flood &amp; Wetlands Detail</h2>
+<h2>3 · Flood &amp; Wetlands Scan</h2>
+<p class="note">All three environmental layers are clear at the parcel centroid — supportive for collateral screening. Point-in-polygon test at assessor parcel centroid against 2,532 environmental polygons in Gold.</p>
 <table>
-<tr><th>Category</th><th>Status</th><th>Detail</th><th>Source</th></tr>
-<tr><td>Flood / wetland overlay</td>
+<tr><th>Layer checked</th><th>Status</th><th>Detail</th><th>Source</th></tr>
+<tr>
+          <td>FEMA NFHL flood zone (effective)</td>
           <td><span class="ok">Clear</span></td>
-          <td>No FEMA or wetland polygon intersects parcel centroid.</td>
-          <td class="small">environmental-overlay.parquet</td></tr>
+          <td>No polygon intersects parcel centroid (42.40857, -71.14706).</td>
+          <td class="small">environmental-overlay.parquet</td>
+        </tr><tr>
+          <td>FEMA flood zone (preliminary 2023)</td>
+          <td><span class="ok">Clear</span></td>
+          <td>No polygon intersects parcel centroid (42.40857, -71.14706).</td>
+          <td class="small">environmental-overlay.parquet</td>
+        </tr><tr>
+          <td>Town wetlands inventory</td>
+          <td><span class="ok">Clear</span></td>
+          <td>No polygon intersects parcel centroid (42.40857, -71.14706).</td>
+          <td class="small">environmental-overlay.parquet</td>
+        </tr>
 </table>
 
-<h2>4 · Building Permits on Record</h2>
+<h2>4 · Building Permits (ISD Ledger)</h2>
+<p class="note">TownEye Gold ledger: <strong>9</strong> permit records
+   (6 open town-wide) ·
+   <strong>1</strong> matched this parcel.</p>
 <table>
-<tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Description</th></tr>
-<tr><td colspan="5">No permits on record for this parcel in TownEye Gold.</td></tr>
+<tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Value</th><th>Description</th></tr>
+<tr>
+          <td>B-24-1188</td>
+          <td>RESIDENTIAL_NEW</td>
+          <td><span class="ok">Closed</span></td>
+          <td>2024-06-10</td>
+          <td class="num">$1,450,000</td>
+          <td>New two-family garden-style building — Certificate of Occupancy issued 2024</td>
+        </tr>
 </table>
 
 <h2>5 · Not Yet Connected (Pilot)</h2>

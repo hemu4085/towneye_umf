@@ -2,38 +2,80 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
+import pyarrow.parquet as pq
+
+from backend.config import get_settings
 from backend.services.parcel_permits import summarize_parcel_permits
 from reports.buildability_brief import BriefData
 
 _STATUS_LABEL = {"clear": "Clear", "caution": "Caution", "flagged": "Flagged"}
 _PILL = {"clear": "ok", "caution": "wn", "flagged": "fl"}
 
+_ENV_LAYER_CHECKS: tuple[tuple[str, str], ...] = (
+    ("flood-effective", "FEMA NFHL flood zone (effective)"),
+    ("flood-preliminary", "FEMA flood zone (preliminary 2023)"),
+    ("wetland", "Town wetlands inventory"),
+)
 
-def _environmental_detail(data: BriefData) -> list[dict[str, Any]]:
+
+@lru_cache(maxsize=8)
+def _env_polygon_count(town_slug: str) -> int:
+    path = get_settings().gold_data_path / town_slug / "environmental-overlay.parquet"
+    if not path.is_file():
+        return 0
+    try:
+        return pq.read_metadata(path).num_rows
+    except (OSError, ValueError):
+        return 0
+
+
+def _hit_matches_layer(hit, layer_key: str) -> bool:
+    layer = str(hit.layer or "").lower()
+    category = str((hit.attributes or {}).get("category") or "").lower()
+    return layer_key in layer or layer_key in category
+
+
+def _environmental_scan(data: BriefData) -> list[dict[str, Any]]:
+    hits = data.raw_stack.environmental_overlay
+    lat = data.raw_stack.point_lat
+    lon = data.raw_stack.point_lon
+    coord = f"({lat:.5f}, {lon:.5f})" if lat is not None and lon is not None else "(centroid)"
+
     rows: list[dict[str, Any]] = []
-    for hit in data.raw_stack.environmental_overlay:
-        attrs = hit.attributes or {}
-        category = str(attrs.get("category") or hit.layer or "environmental")
-        zone = hit.code or attrs.get("zone_code") or "—"
-        subtype = hit.label or attrs.get("zone_subtype") or "—"
-        bfe = attrs.get("static_bfe")
-        sfha = attrs.get("sfha_flag")
-        detail_parts = [f"Zone {zone}"]
-        if subtype and subtype != zone:
-            detail_parts.append(str(subtype))
-        if bfe is not None:
-            detail_parts.append(f"Base flood elevation {bfe} ft")
-        if sfha is not None:
-            detail_parts.append(f"SFHA={'yes' if sfha else 'no'}")
-        rows.append({
-            "category": category.replace("_", " ").title(),
-            "zone": zone,
-            "detail": "; ".join(detail_parts),
-            "source": hit.layer or "environmental-overlay",
-            "status": "flagged",
-        })
+    for layer_key, label in _ENV_LAYER_CHECKS:
+        matched = [h for h in hits if _hit_matches_layer(h, layer_key)]
+        if matched:
+            h = matched[0]
+            attrs = h.attributes or {}
+            zone = h.code or attrs.get("zone_code") or "—"
+            subtype = h.label or attrs.get("zone_subtype") or ""
+            bfe = attrs.get("static_bfe")
+            sfha = attrs.get("sfha_flag")
+            parts = [f"Zone {zone}"]
+            if subtype and subtype != zone:
+                parts.append(str(subtype))
+            if bfe is not None:
+                parts.append(f"BFE {bfe} ft")
+            if sfha is not None:
+                parts.append(f"SFHA={'yes' if sfha else 'no'}")
+            rows.append({
+                "label": label,
+                "status": "flagged",
+                "status_label": "Flagged",
+                "detail": "; ".join(parts),
+                "source": h.layer or "environmental-overlay",
+            })
+        else:
+            rows.append({
+                "label": label,
+                "status": "clear",
+                "status_label": "Clear",
+                "detail": f"No polygon intersects parcel centroid {coord}.",
+                "source": "environmental-overlay.parquet",
+            })
     return rows
 
 
@@ -49,15 +91,20 @@ def generate_risk_json(data: BriefData) -> dict[str, Any]:
             "hit_count": c.hit_count,
         })
 
-    permits = summarize_parcel_permits(data.inputs.town_slug, data.parcel.parcel_id)
-    environmental = _environmental_detail(data)
+    permits = summarize_parcel_permits(
+        data.inputs.town_slug,
+        data.parcel.parcel_id,
+        data.parcel.address or "",
+    )
+    environmental = _environmental_scan(data)
 
     flagged = sum(1 for i in constraints if i["status"] == "flagged")
     caution = sum(1 for i in constraints if i["status"] == "caution")
+    env_flagged = sum(1 for e in environmental if e["status"] == "flagged")
     if permits["has_open"] or permits["has_expired"]:
         flagged += 1
-    if environmental:
-        flagged = max(flagged, 1)
+    if env_flagged:
+        flagged += 1
 
     overall = "flagged" if flagged else ("caution" if caution else "clear")
 
@@ -73,9 +120,23 @@ def generate_risk_json(data: BriefData) -> dict[str, Any]:
         "headline": data.headline_verdict_text,
         "constraints": constraints,
         "environmental": environmental,
+        "environmental_flagged": env_flagged,
         "permits": permits,
         "open_items": open_items,
+        "centroid": {
+            "lat": data.raw_stack.point_lat,
+            "lon": data.raw_stack.point_lon,
+        },
     }
+
+
+def _fmt_money(value: float | int | None) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"${float(value):,.0f}"
+    except (TypeError, ValueError):
+        return "—"
 
 
 def render_risk_html(data: BriefData) -> str:
@@ -96,17 +157,13 @@ def render_risk_html(data: BriefData) -> str:
 
     env_rows = ""
     for e in payload["environmental"]:
+        pill = _PILL.get(e["status"], "")
         env_rows += f"""<tr>
-          <td>{e['category']}</td>
-          <td><span class="fl">Flagged</span></td>
+          <td>{e['label']}</td>
+          <td><span class="{pill}">{e['status_label']}</span></td>
           <td>{e['detail']}</td>
           <td class="small">{e['source']}</td>
         </tr>"""
-    if not env_rows:
-        env_rows = """<tr><td>Flood / wetland overlay</td>
-          <td><span class="ok">Clear</span></td>
-          <td>No FEMA or wetland polygon intersects parcel centroid.</td>
-          <td class="small">environmental-overlay.parquet</td></tr>"""
 
     permit_block = payload["permits"]
     permit_rows = ""
@@ -114,17 +171,31 @@ def render_risk_html(data: BriefData) -> str:
         status = p.get("status", "—")
         pill = "wn" if p.get("is_open") else ("fl" if status == "EXPIRED" else "ok")
         label = "Open" if p.get("is_open") else ("Expired" if status == "EXPIRED" else status.title())
+        est = _fmt_money(p.get("estimated_value"))
         permit_rows += f"""<tr>
           <td>{p.get('permit_number', '—')}</td>
           <td>{p.get('permit_type', '—')}</td>
           <td><span class="{pill}">{label}</span></td>
           <td>{p.get('application_date', '—')}</td>
+          <td class="num">{est}</td>
           <td>{p.get('description') or '—'}</td>
         </tr>"""
     if not permit_rows:
-        permit_rows = """<tr><td colspan="5">No permits on record for this parcel in TownEye Gold.</td></tr>"""
+        permit_rows = """<tr><td colspan="6">No permits matched this parcel in the TownEye Gold ISD ledger.</td></tr>"""
 
     open_items = "".join(f"<li>{item}</li>" for item in payload.get("open_items") or [])
+    env_note = (
+        "All three environmental layers are clear at the parcel centroid — supportive for collateral screening."
+        if payload.get("environmental_flagged", 0) == 0
+        else f"{payload['environmental_flagged']} environmental layer(s) require review."
+    )
+    env_polygons = _env_polygon_count(data.inputs.town_slug)
+    env_scan_note = (
+        f"Point-in-polygon test at assessor parcel centroid against "
+        f"{env_polygons:,} environmental polygons in Gold."
+        if env_polygons
+        else "Point-in-polygon test at assessor parcel centroid (environmental overlay not loaded)."
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -143,6 +214,8 @@ def render_risk_html(data: BriefData) -> str:
   .wn{{color:#a06b00;font-weight:bold}}
   .fl{{color:#a02020;font-weight:bold}}
   .small{{font-size:11px;color:#555}}
+  .note{{font-size:12px;color:#444;margin:6px 0 10px}}
+  .num{{font-variant-numeric:tabular-nums}}
   .verdict{{padding:10px 14px;margin:10px 0 12px;border-radius:4px;font-weight:bold}}
   .v-green{{background:#dff1d6;color:#1a5b22;border-left:6px solid #1a7a1a}}
   .v-yellow{{background:#fff3cf;color:#7a5a00;border-left:6px solid #c89800}}
@@ -159,9 +232,9 @@ def render_risk_html(data: BriefData) -> str:
 
 <h2>1 · Executive Summary</h2>
 <div class="verdict {verdict_cls}">{payload.get('headline', '')}</div>
-<p>Open permits: <strong>{permit_block.get('open_count', 0)}</strong> ·
-   Expired: <strong>{permit_block.get('expired_count', 0)}</strong> ·
-   Environmental hits: <strong>{len(payload.get('environmental') or [])}</strong></p>
+<p>Open permits on parcel: <strong>{permit_block.get('open_count', 0)}</strong> ·
+   Closed / CO: <strong>{permit_block.get('total_count', 0) - permit_block.get('open_count', 0)}</strong> ·
+   Environmental flags: <strong>{payload.get('environmental_flagged', 0)}</strong></p>
 
 <h2>2 · Constraint Layers</h2>
 <table>
@@ -169,15 +242,19 @@ def render_risk_html(data: BriefData) -> str:
 {constraint_rows}
 </table>
 
-<h2>3 · Flood &amp; Wetlands Detail</h2>
+<h2>3 · Flood &amp; Wetlands Scan</h2>
+<p class="note">{env_note} {env_scan_note}</p>
 <table>
-<tr><th>Category</th><th>Status</th><th>Detail</th><th>Source</th></tr>
+<tr><th>Layer checked</th><th>Status</th><th>Detail</th><th>Source</th></tr>
 {env_rows}
 </table>
 
-<h2>4 · Building Permits on Record</h2>
+<h2>4 · Building Permits (ISD Ledger)</h2>
+<p class="note">TownEye Gold ledger: <strong>{permit_block.get('ledger_total', 0)}</strong> permit records
+   ({permit_block.get('ledger_open', 0)} open town-wide) ·
+   <strong>{permit_block.get('total_count', 0)}</strong> matched this parcel.</p>
 <table>
-<tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Description</th></tr>
+<tr><th>Permit #</th><th>Type</th><th>Status</th><th>Applied</th><th>Value</th><th>Description</th></tr>
 {permit_rows}
 </table>
 

@@ -33,7 +33,30 @@ def _permits_frame(town_slug: str) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
-def get_parcel_permits(town_slug: str, parcel_id: str) -> list[dict[str, Any]]:
+def town_permit_ledger_stats(town_slug: str) -> dict[str, Any]:
+    df = _permits_frame(town_slug)
+    if df.empty:
+        return {"total": 0, "open": 0, "closed": 0}
+    statuses = df["status"].astype(str).str.upper()
+    open_n = int(statuses.isin(_OPEN_STATUSES).sum())
+    return {
+        "total": len(df),
+        "open": open_n,
+        "closed": int(len(df) - open_n),
+    }
+
+
+def _row_matches_parcel(md: dict[str, Any], parcel_id: str, address: str) -> bool:
+    if str(md.get("parcel_id") or "") == str(parcel_id):
+        return True
+    addr = str(md.get("address") or "").upper()
+    street = str(address or "").split(",")[0].upper().strip()
+    if street and street in addr:
+        return True
+    return False
+
+
+def get_parcel_permits(town_slug: str, parcel_id: str, address: str = "") -> list[dict[str, Any]]:
     df = _permits_frame(town_slug)
     if df.empty:
         return []
@@ -41,7 +64,7 @@ def get_parcel_permits(town_slug: str, parcel_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for _, row in df.iterrows():
         md = _parse_metadata(row.get("metadata"))
-        if str(md.get("parcel_id") or "") != str(parcel_id):
+        if not _row_matches_parcel(md, parcel_id, address):
             continue
         status = str(row.get("status") or "").upper()
         rows.append({
@@ -60,8 +83,13 @@ def get_parcel_permits(town_slug: str, parcel_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-def summarize_parcel_permits(town_slug: str, parcel_id: str) -> dict[str, Any]:
-    permits = get_parcel_permits(town_slug, parcel_id)
+def summarize_parcel_permits(
+    town_slug: str,
+    parcel_id: str,
+    address: str = "",
+) -> dict[str, Any]:
+    ledger = town_permit_ledger_stats(town_slug)
+    permits = get_parcel_permits(town_slug, parcel_id, address)
     open_permits = [p for p in permits if p.get("is_open")]
     expired = [p for p in permits if p.get("status") == "EXPIRED"]
     return {
@@ -71,4 +99,6 @@ def summarize_parcel_permits(town_slug: str, parcel_id: str) -> dict[str, Any]:
         "total_count": len(permits),
         "has_open": bool(open_permits),
         "has_expired": bool(expired),
+        "ledger_total": ledger["total"],
+        "ledger_open": ledger["open"],
     }
