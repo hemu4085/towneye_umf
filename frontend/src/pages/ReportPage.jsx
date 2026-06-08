@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import DealRadarCriteriaPanel from '../components/DealRadarCriteriaPanel';
+import ClosingRiskCriteriaPanel from '../components/ClosingRiskCriteriaPanel';
 import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
@@ -27,6 +28,7 @@ export default function ReportPage() {
   const reportCacheKey = state?.reportCacheKey;
   const townScoped = report && !reportRequiresParcel(report.id);
   const isDealRadar = report?.id === 'deal-radar';
+  const isClosingRiskRadar = report?.id === 'closing-risk-radar';
 
   useEffect(() => {
     if (state?.parcel?.parcel_id) {
@@ -196,6 +198,16 @@ export default function ReportPage() {
         />
       )}
 
+      {isClosingRiskRadar && townSlug && (
+        <ClosingRiskCriteriaPanel
+          townSlug={townSlug}
+          appliedCriteria={appliedCriteria}
+          loading={loading}
+          onApply={handleApplyCriteria}
+          onReset={handleResetCriteria}
+        />
+      )}
+
       {loading && <LoadingState reportName={report.name} />}
 
       {error && (
@@ -204,8 +216,17 @@ export default function ReportPage() {
           <p className="text-sm text-graytown mt-2">
             {townScoped ? (
               <>
-                Deal Radar scans the pilot town from Gold data — wait 30 seconds on a cold API and
-                retry.
+                {isClosingRiskRadar ? (
+                  <>
+                    Closing Risk Radar scans permits and overlay flags town-wide — wait up to 45
+                    seconds on a cold API and retry.
+                  </>
+                ) : (
+                  <>
+                    Deal Radar scans the pilot town from Gold data — wait 30 seconds on a cold API
+                    and retry.
+                  </>
+                )}
               </>
             ) : (
               <>

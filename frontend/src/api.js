@@ -222,6 +222,21 @@ export async function fetchDealRadarConfig(townSlug) {
   }
 }
 
+export async function fetchClosingRiskRadarConfig(townSlug) {
+  const params = new URLSearchParams({ town_slug: townSlug });
+  const { signal, cancel } = fetchSignal(25000);
+  try {
+    const res = await apiFetch(`/reports/closing-risk-radar/config?${params}`, { signal });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not load Closing Risk Radar config');
+    return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Closing Risk Radar config');
+  } finally {
+    cancel();
+  }
+}
+
 export async function generateReport(reportType, payload) {
   const { signal, cancel } = fetchSignal(180000);
   try {

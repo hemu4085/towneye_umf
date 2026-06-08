@@ -177,7 +177,7 @@ export default function Home() {
 
   async function generateTownReport(report) {
     if (!userType) {
-      setError('Select your role (Developer) to run Deal Radar.');
+      setError('Select your role to run a town-wide scan.');
       return;
     }
     setError('');
@@ -285,6 +285,7 @@ export default function Home() {
 
   const parcelReady = Boolean(parcel?.parcel_id);
   const showDeveloperDealRadarHint = userType === 'developer';
+  const showAttorneyClosingRiskHint = userType === 'attorney';
 
   return (
     <>
@@ -317,7 +318,7 @@ export default function Home() {
             {indexReady ? (
               <>
                 Suggestions appear <strong className="text-cream">as you type</strong> — pick one for
-                parcel reports, or skip for <strong className="text-cream">Deal Radar</strong>.
+                parcel reports, or skip for <strong className="text-cream">town-wide scans</strong>.
               </>
             ) : (
               <>Loading {pilotTownShort} address list…</>
@@ -352,6 +353,18 @@ export default function Home() {
             </div>
           )}
 
+          {showAttorneyClosingRiskHint && (
+            <div className="w-full max-w-2xl mt-6 p-4 rounded-lg border border-gold/30 bg-gold/5 text-center">
+              <p className="text-cream text-sm leading-relaxed">
+                <strong>Closing Risk Radar</strong> scans all of {pilotTownShort} for open/expired
+                permits, flood SFHA, wetlands, and historic flags — no address required.
+              </p>
+              <p className="text-xs text-gold/90 mt-2">
+                Pick an address to highlight a parcel, or run Buildability / Risk on a specific property.
+              </p>
+            </div>
+          )}
+
           {userType && (
             <div className="w-full mt-2">
               <h2 className="font-display text-lg text-cream text-center mt-6">
@@ -363,7 +376,7 @@ export default function Home() {
                 </p>
               ) : (
                 <p className="text-center text-xs text-amber-300/90 mt-2">
-                  Deal Radar is ready for {pilotTownShort}. Select an address for parcel-level reports.
+                  Town-wide scans are ready for {pilotTownShort}. Select an address for parcel-level reports.
                 </p>
               )}
               <ReportGrid

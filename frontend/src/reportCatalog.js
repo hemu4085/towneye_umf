@@ -34,6 +34,7 @@ export const REPORT_ACCESS = {
     lender: null,
   },
   attorney: {
+    'closing-risk-radar': 'must',
     buildability: 'must',
     market: null,
     risk: 'must',
@@ -81,6 +82,15 @@ export const REPORTS = [
       'Town-wide ranked list — no address needed. Long tenure, underbuilt lots, no active permit; CSV export',
     time: '~instant on demo parcel · ~10–30 sec live scan',
     endpoint: 'deal-radar',
+  },
+  {
+    id: 'closing-risk-radar',
+    icon: '⚖️',
+    name: 'Closing Risk Radar',
+    description:
+      'Town-wide due-diligence scan — open/expired permits, flood SFHA, wetlands, historic flags; CSV export',
+    time: '~instant on demo · ~15–45 sec live scan',
+    endpoint: 'closing-risk-radar',
   },
   {
     id: 'homeowner-full',
@@ -161,7 +171,7 @@ export function reportTier(userType, reportId) {
 }
 
 /** Town-wide reports — no parcel resolve required before generate. */
-export const TOWN_SCOPED_REPORTS = new Set(['deal-radar']);
+export const TOWN_SCOPED_REPORTS = new Set(['deal-radar', 'closing-risk-radar']);
 
 export function reportRequiresParcel(reportId) {
   return !TOWN_SCOPED_REPORTS.has(reportId);

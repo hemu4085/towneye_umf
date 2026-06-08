@@ -18,6 +18,7 @@ else:
     os.environ.setdefault("GOLD_DATA_PATH", str(_full_gold))
 
 from backend.services.buildability import collect_brief_data, generate_buildability_html  # noqa: E402
+from backend.services.closing_risk_radar import generate_closing_risk_radar_html
 from backend.services.deal_radar import generate_deal_radar_html  # noqa: E402
 from backend.services.homeowner_full import generate_homeowner_full_html  # noqa: E402
 from backend.services.proforma import generate_proforma_html  # noqa: E402
@@ -53,6 +54,11 @@ def main() -> None:
     town_dest = town_dir / "deal-radar.html"
     town_dest.write_text(town_html, encoding="utf-8")
     print(f"OK: {town_dest} ({len(town_html)} bytes) — {DEMO_TOWN} town-wide")
+
+    closing_html = generate_closing_risk_radar_html(DEMO_TOWN, None)
+    closing_dest = town_dir / "closing-risk-radar.html"
+    closing_dest.write_text(closing_html, encoding="utf-8")
+    print(f"OK: {closing_dest} ({len(closing_html)} bytes) — {DEMO_TOWN} closing risk")
 
 
 if __name__ == "__main__":
