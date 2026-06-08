@@ -1638,3 +1638,27 @@ developer_proforma:
     - label: "Site plan / design review (overlay districts)"
       amount: 750
 
+# Deal Radar — developer opportunity scan (Report 01 / Phase B v0).
+# Town-wide ranking rules; no town names in backend logic.
+deal_radar:
+  min_owner_tenure_years: 15
+  underbuilt_ratio_max: 0.60
+  min_expansion_room_sqft: 800
+  default_indicative_far: 0.50
+  overlay_indicative_far:
+    NMF: 2.0
+    MBMF: 2.0
+  exclude_zone_codes: []
+  exclude_luc_prefixes: []
+  scoring:
+    tenure_weight: 0.35
+    underbuilt_weight: 0.45
+    lot_weight: 0.20
+  output:
+    top_n: 50
+    max_scan: 20000
+  pilot_gaps:
+    - "Probate / registry distress signals — not connected in pilot."
+    - "Absentee owner (mailing vs site address) — not connected in pilot."
+    - "MLS price-reduction history — not connected in pilot."
+

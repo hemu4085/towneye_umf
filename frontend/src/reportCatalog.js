@@ -24,6 +24,7 @@ export const REPORT_ACCESS = {
     lender: null,
   },
   developer: {
+    'deal-radar': 'must',
     buildability: 'must',
     market: null,
     risk: 'must',
@@ -72,6 +73,15 @@ export const REPORT_ACCESS = {
 };
 
 export const REPORTS = [
+  {
+    id: 'deal-radar',
+    icon: '📡',
+    name: 'Deal Radar',
+    description:
+      'Town-wide ranked list: long tenure, underbuilt vs zoning, no active permit — CSV export',
+    time: '~instant on demo parcel · ~10–30 sec live scan',
+    endpoint: 'deal-radar',
+  },
   {
     id: 'homeowner-full',
     icon: '🏠',
@@ -151,6 +161,10 @@ export function reportTier(userType, reportId) {
 }
 
 export const LOADING_MESSAGES = [
+  'Scanning assessor records…',
+  'Filtering tenure & underbuilt lots…',
+  'Checking open permits…',
+  'Ranking opportunities…',
   'Pulling zoning data…',
   'Computing buildable envelope…',
   'Checking historic overlays…',

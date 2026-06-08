@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
+from backend.services import buildability, deal_radar, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
 from backend.services.demo_reports import get_demo_report_html
 from backend.services.report_availability import get_report_availability
@@ -32,6 +32,7 @@ ReportType = Literal[
     "neighborhood",
     "lender",
     "homeowner-full",
+    "deal-radar",
 ]
 
 
@@ -258,5 +259,22 @@ def report_homeowner_full(req: ReportRequest, request: Request):
                 req.town_slug, req.parcel_id, req.prepared_for,
             )
         return _report_response("homeowner-full", html, None, req, request, skip_pdf=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/deal-radar")
+def report_deal_radar(req: ReportRequest, request: Request):
+    try:
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "deal-radar")
+        from_cache = html is not None
+        payload = None
+        if html is None:
+            payload = deal_radar.generate_deal_radar(
+                req.town_slug,
+                highlight_parcel_id=req.parcel_id,
+            )
+            html = deal_radar.render_deal_radar_html(payload)
+        return _report_response("deal-radar", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

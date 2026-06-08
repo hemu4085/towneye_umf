@@ -18,6 +18,7 @@ else:
     os.environ.setdefault("GOLD_DATA_PATH", str(_full_gold))
 
 from backend.services.buildability import collect_brief_data, generate_buildability_html  # noqa: E402
+from backend.services.deal_radar import generate_deal_radar_html  # noqa: E402
 from backend.services.homeowner_full import generate_homeowner_full_html  # noqa: E402
 from backend.services.proforma import generate_proforma_html  # noqa: E402
 from backend.services.risk import render_risk_html  # noqa: E402
@@ -28,6 +29,7 @@ DEMO_ADDRESS = "5-7 BELKNAP ST, Arlington MA"
 
 REPORT_WRITERS = {
     "buildability": generate_buildability_html,
+    "deal-radar": generate_deal_radar_html,
     "homeowner-full": generate_homeowner_full_html,
     "proforma": generate_proforma_html,
     "risk": lambda town, parcel, pf: render_risk_html(
