@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import DealRadarCriteriaPanel from '../components/DealRadarCriteriaPanel';
 import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
@@ -16,6 +17,7 @@ export default function ReportPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [shareNotice, setShareNotice] = useState('');
+  const [appliedCriteria, setAppliedCriteria] = useState(null);
 
   const { parcel: storedParcel, setParcel } = useParcel();
   const report = state?.report;
@@ -24,12 +26,80 @@ export default function ReportPage() {
   const preparedFor = state?.preparedFor;
   const reportCacheKey = state?.reportCacheKey;
   const townScoped = report && !reportRequiresParcel(report.id);
+  const isDealRadar = report?.id === 'deal-radar';
 
   useEffect(() => {
     if (state?.parcel?.parcel_id) {
       setParcel(state.parcel);
     }
   }, [state?.parcel, setParcel]);
+
+  const buildPayload = useCallback(
+    (criteria) => {
+      const ctx = townScoped
+        ? (townContext || {
+            town_slug: parcel?.town_slug,
+            town_name: parcel?.town_name,
+            address: parcel?.address,
+            parcel_id: parcel?.parcel_id,
+            lat: parcel?.lat,
+            lng: parcel?.lng,
+          })
+        : parcel;
+
+      const payload = {
+        town_slug: ctx?.town_slug || parcel?.town_slug,
+        prepared_for: preparedFor || undefined,
+        address: ctx?.address || parcel?.address,
+        lat: ctx?.lat ?? parcel?.lat,
+        lng: ctx?.lng ?? parcel?.lng,
+      };
+      const highlightId = ctx?.parcel_id || parcel?.parcel_id;
+      if (highlightId) payload.parcel_id = highlightId;
+      if (criteria && Object.keys(criteria).length > 0) {
+        payload.criteria = criteria;
+      }
+      return payload;
+    },
+    [townScoped, townContext, parcel, preparedFor],
+  );
+
+  const loadReport = useCallback(
+    (criteria, usePrefetch = false) => {
+      if (!report) {
+        navigate('/');
+        return undefined;
+      }
+      if (!townScoped && !parcel) {
+        navigate('/');
+        return undefined;
+      }
+
+      const payload = buildPayload(criteria);
+      if (!payload.town_slug) {
+        navigate('/');
+        return undefined;
+      }
+
+      setLoading(true);
+      setError('');
+
+      const prefetched =
+        usePrefetch && reportCacheKey ? consumeReportPrefetch(reportCacheKey) : null;
+      const load = prefetched ?? generateReport(report.endpoint, payload);
+
+      return load
+        .then((data) => {
+          setResult(data);
+          if (data?.data?.criteria) {
+            setAppliedCriteria(data.data.criteria);
+          }
+        })
+        .catch((err) => setError(err.message))
+        .finally(() => setLoading(false));
+    },
+    [report, parcel, townScoped, buildPayload, reportCacheKey, navigate],
+  );
 
   useEffect(() => {
     if (!report) {
@@ -41,40 +111,30 @@ export default function ReportPage() {
       return;
     }
 
-    const ctx = townScoped
-      ? (townContext || {
-          town_slug: parcel?.town_slug,
-          town_name: parcel?.town_name,
-          address: parcel?.address,
-          parcel_id: parcel?.parcel_id,
-          lat: parcel?.lat,
-          lng: parcel?.lng,
-        })
-      : parcel;
-
-    const payload = {
-      town_slug: ctx?.town_slug || parcel?.town_slug,
-      prepared_for: preparedFor || undefined,
-      address: ctx?.address || parcel?.address,
-      lat: ctx?.lat ?? parcel?.lat,
-      lng: ctx?.lng ?? parcel?.lng,
-    };
-    const highlightId = ctx?.parcel_id || parcel?.parcel_id;
-    if (highlightId) payload.parcel_id = highlightId;
-
+    const payload = buildPayload(null);
     if (!payload.town_slug) {
       navigate('/');
       return;
     }
 
+    setLoading(true);
+    setError('');
+
     const prefetched = reportCacheKey ? consumeReportPrefetch(reportCacheKey) : null;
     const load = prefetched ?? generateReport(report.endpoint, payload);
 
     load
-      .then((data) => setResult(data))
+      .then((data) => {
+        setResult(data);
+        if (data?.data?.criteria) {
+          setAppliedCriteria(data.data.criteria);
+        }
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [report, parcel, townContext, townScoped, preparedFor, reportCacheKey, navigate]);
+    // Initial load only — regenerations go through handleApplyCriteria.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report?.id, reportCacheKey]);
 
   async function handleShare() {
     if (!result?.download_url) {
@@ -86,6 +146,15 @@ export default function ReportPage() {
     setShareNotice(ok ? 'PDF link copied to clipboard.' : 'Could not copy link. Try Download PDF.');
   }
 
+  function handleApplyCriteria(criteria) {
+    loadReport(criteria, false);
+  }
+
+  function handleResetCriteria() {
+    setAppliedCriteria(null);
+    loadReport(null, false);
+  }
+
   if (!report) return null;
 
   const subtitle = townScoped
@@ -93,6 +162,8 @@ export default function ReportPage() {
         townContext?.parcel_id ? ' (parcel highlighted)' : ''
       }`
     : parcel?.address;
+
+  const townSlug = townContext?.town_slug || parcel?.town_slug;
 
   return (
     <div className="min-h-screen w-full px-4 sm:px-8 lg:px-12 xl:px-16 py-8">
@@ -114,6 +185,16 @@ export default function ReportPage() {
         {report.icon} {report.name}
       </h1>
       <p className="text-graytown">{subtitle}</p>
+
+      {isDealRadar && townSlug && (
+        <DealRadarCriteriaPanel
+          townSlug={townSlug}
+          appliedCriteria={appliedCriteria}
+          loading={loading}
+          onApply={handleApplyCriteria}
+          onReset={handleResetCriteria}
+        />
+      )}
 
       {loading && <LoadingState reportName={report.name} />}
 

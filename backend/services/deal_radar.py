@@ -15,8 +15,10 @@ import pandas as pd
 from backend.config import get_settings
 from backend.services.deal_radar_config import (
     base_zone_far_map,
+    criteria_snapshot,
     get_deal_radar_config,
     get_town_display_name,
+    merge_criteria_overrides,
 )
 from backend.services.parcel_permits import _OPEN_STATUSES, _parse_metadata
 
@@ -151,6 +153,9 @@ def _open_permit_parcel_ids(town_slug: str) -> frozenset[str]:
 def _is_excluded(row: pd.Series, cfg: dict[str, Any]) -> bool:
     zone = str(row.get("zone_code") or "").strip().upper()
     exclude_zones = {str(z).upper() for z in (cfg.get("exclude_zone_codes") or [])}
+    include_zones = {str(z).upper() for z in (cfg.get("include_zone_codes") or [])}
+    if include_zones and zone not in include_zones:
+        return True
     if zone and zone in exclude_zones:
         return True
     luc = str(row.get("luc") or "").strip()
@@ -158,6 +163,28 @@ def _is_excluded(row: pd.Series, cfg: dict[str, Any]) -> bool:
         if luc.startswith(str(prefix)):
             return True
     return False
+
+
+def _in_range(
+    value: float | None,
+    minimum: Any,
+    maximum: Any,
+) -> bool:
+    if value is None:
+        return minimum is None and maximum is None
+    if minimum is not None:
+        try:
+            if value < float(minimum):
+                return False
+        except (TypeError, ValueError):
+            pass
+    if maximum is not None:
+        try:
+            if value > float(maximum):
+                return False
+        except (TypeError, ValueError):
+            pass
+    return True
 
 
 def _score_candidate(
@@ -192,26 +219,62 @@ def _passes_filters(
     tenure: float | None,
     utilization: float | None,
     expansion_room: float | None,
+    existing: float | None,
+    max_gfa: float | None,
+    lot_sqft: float | None,
+    assessed: float | None,
     has_open_permit: bool,
     cfg: dict[str, Any],
 ) -> bool:
     min_tenure = float(cfg.get("min_owner_tenure_years") or 15)
     if tenure is None or tenure < min_tenure:
         return False
-    if has_open_permit:
+
+    require_no_permit = cfg.get("require_no_open_permit", True)
+    if require_no_permit and has_open_permit:
         return False
+
     ratio_max = float(cfg.get("underbuilt_ratio_max") or 0.60)
     min_room = float(cfg.get("min_expansion_room_sqft") or 800)
+    underbuilt_ok = False
     if utilization is not None and utilization <= ratio_max:
-        return True
+        underbuilt_ok = True
     if expansion_room is not None and expansion_room >= min_room:
-        return True
-    return False
+        underbuilt_ok = True
+    if not underbuilt_ok:
+        return False
+
+    util_pct = utilization * 100.0 if utilization is not None else None
+    max_util = cfg.get("max_utilization_pct")
+    if max_util is not None and util_pct is not None and util_pct > float(max_util):
+        return False
+    min_util = cfg.get("min_utilization_pct")
+    if min_util is not None and util_pct is not None and util_pct < float(min_util):
+        return False
+
+    if not _in_range(existing, cfg.get("min_existing_gfa_sqft"), cfg.get("max_existing_gfa_sqft")):
+        return False
+    if not _in_range(max_gfa, cfg.get("min_max_gfa_sqft"), cfg.get("max_max_gfa_sqft")):
+        return False
+    if not _in_range(assessed, cfg.get("min_assessed_value"), cfg.get("max_assessed_value")):
+        return False
+    if not _in_range(lot_sqft, cfg.get("min_lot_sqft"), cfg.get("max_lot_sqft")):
+        return False
+    return True
 
 
-@lru_cache(maxsize=4)
-def scan_town_deals(town_slug: str) -> tuple[dict[str, Any], ...]:
-    cfg = get_deal_radar_config(town_slug)
+def _sort_candidates(candidates: list[dict[str, Any]], sort_by: str) -> None:
+    key_map = {
+        "score": lambda c: (-float(c.get("score") or 0), -float(c.get("expansion_room_sqft") or 0)),
+        "expansion": lambda c: (-float(c.get("expansion_room_sqft") or 0), -float(c.get("score") or 0)),
+        "assessed_value": lambda c: (-float(c.get("assessed_value") or 0), -float(c.get("score") or 0)),
+        "tenure": lambda c: (-float(c.get("tenure_years") or 0), -float(c.get("score") or 0)),
+    }
+    candidates.sort(key=key_map.get(sort_by, key_map["score"]))
+
+
+def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None) -> tuple[dict[str, Any], ...]:
+    cfg = effective_cfg or merge_criteria_overrides(town_slug, {})
     far_map = base_zone_far_map(town_slug)
     lot_map = _parcel_lot_map(town_slug)
     open_permits = _open_permit_parcel_ids(town_slug)
@@ -252,11 +315,20 @@ def scan_town_deals(town_slug: str) -> tuple[dict[str, Any], ...]:
         utilization = (existing / max_gfa) if (existing is not None and max_gfa > 0) else None
         expansion_room = (max_gfa - existing) if (existing is not None and max_gfa > 0) else None
 
+        assessed = (
+            float(row.get("assessed_value"))
+            if row.get("assessed_value") is not None and not pd.isna(row.get("assessed_value"))
+            else None
+        )
         has_open = parcel_id in open_permits
         if not _passes_filters(
             tenure=tenure,
             utilization=utilization,
             expansion_room=expansion_room,
+            existing=existing,
+            max_gfa=max_gfa,
+            lot_sqft=lot_sqft,
+            assessed=assessed,
             has_open_permit=has_open,
             cfg=cfg,
         ):
@@ -282,28 +354,52 @@ def scan_town_deals(town_slug: str) -> tuple[dict[str, Any], ...]:
             "utilization_pct": round(utilization * 100.0, 1) if utilization is not None else None,
             "expansion_room_sqft": int(round(expansion_room)) if expansion_room is not None else None,
             "lot_sqft": int(round(lot_sqft)),
-            "assessed_value": (
-                float(row.get("assessed_value"))
-                if row.get("assessed_value") is not None and not pd.isna(row.get("assessed_value"))
-                else None
-            ),
+            "assessed_value": assessed,
             "open_permit_count": 1 if has_open else 0,
             "score": score,
             "signals": ["long_tenure", "underbuilt", "no_active_permit"],
         })
 
-    candidates.sort(key=lambda c: (-float(c["score"]), -float(c.get("expansion_room_sqft") or 0)))
+    _sort_candidates(candidates, str(cfg.get("sort_by") or "score"))
     return tuple(candidates)
+
+
+def _criteria_summary_text(criteria: dict[str, Any], total: int, scanned: int) -> str:
+    parts = [f"{total:,} parcels match your filters (scanned {scanned:,} assessor records)."]
+    tenure = criteria.get("min_owner_tenure_years")
+    if tenure is not None:
+        parts.append(f"Tenure ≥ {tenure} yr.")
+    util = criteria.get("max_utilization_pct")
+    if util is not None:
+        parts.append(f"Utilization ≤ {util}%.")
+    room = criteria.get("min_expansion_room_sqft")
+    if room is not None:
+        parts.append(f"Expansion ≥ {_fmt_int(room)} sf.")
+    zones = criteria.get("include_zone_codes") or []
+    if zones:
+        parts.append(f"Zones: {', '.join(zones)}.")
+    assessed_min = criteria.get("min_assessed_value")
+    assessed_max = criteria.get("max_assessed_value")
+    if assessed_min is not None or assessed_max is not None:
+        parts.append(
+            f"Assessed {_fmt_money(assessed_min) if assessed_min else '—'}"
+            f" – {_fmt_money(assessed_max) if assessed_max else '—'}."
+        )
+    if criteria.get("preset"):
+        parts.append(f"Preset: {criteria['preset']}.")
+    return " ".join(parts)
 
 
 def generate_deal_radar(
     town_slug: str,
     *,
     highlight_parcel_id: str | None = None,
+    criteria_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    cfg = get_deal_radar_config(town_slug)
-    top_n = int((cfg.get("output") or {}).get("top_n") or 50)
-    all_candidates = list(scan_town_deals(town_slug))
+    cfg = merge_criteria_overrides(town_slug, criteria_overrides)
+    criteria = cfg.get("applied_criteria") or criteria_snapshot(cfg)
+    top_n = int(cfg.get("top_n") or 50)
+    all_candidates = list(scan_town_deals(town_slug, cfg))
     ranked = all_candidates[:top_n]
 
     for i, row in enumerate(ranked, start=1):
@@ -322,11 +418,7 @@ def generate_deal_radar(
     state = str((_raw_town_state(town_slug)) or "MA")
     scanned = len(_property_frame(town_slug))
 
-    summary_bits = [
-        f"{len(all_candidates):,} parcels pass tenure ≥ {int(cfg.get('min_owner_tenure_years') or 15)} yr,",
-        f"underbuilt vs indicative FAR, and no active permit",
-        f"(scanned {scanned:,} assessor records).",
-    ]
+    summary_bits = [_criteria_summary_text(criteria, len(all_candidates), scanned)]
     if highlight_row:
         summary_bits.append(
             f"Your parcel ranks #{highlight_rank:,} town-wide (score {highlight_row['score']}).",
@@ -340,11 +432,8 @@ def generate_deal_radar(
         "town_name": town_name,
         "state": state,
         "prepared_on": date.today().isoformat(),
-        "criteria": {
-            "min_owner_tenure_years": cfg.get("min_owner_tenure_years"),
-            "underbuilt_ratio_max": cfg.get("underbuilt_ratio_max"),
-            "min_expansion_room_sqft": cfg.get("min_expansion_room_sqft"),
-        },
+        "criteria": criteria,
+        "criteria_defaults": criteria_snapshot(merge_criteria_overrides(town_slug, {})),
         "executive_summary": " ".join(summary_bits),
         "total_matches": len(all_candidates),
         "parcels_scanned": scanned,
@@ -372,6 +461,9 @@ def _raw_town_state(town_slug: str) -> str | None:
 
 def deal_radar_to_csv(payload: dict[str, Any]) -> str:
     buf = io.StringIO()
+    criteria = payload.get("criteria") or {}
+    if criteria:
+        buf.write(f"# criteria={json.dumps(criteria, sort_keys=True)}\n")
     fields = [
         "rank",
         "parcel_id",
@@ -393,6 +485,62 @@ def deal_radar_to_csv(payload: dict[str, Any]) -> str:
     for row in payload.get("deals") or []:
         writer.writerow(row)
     return buf.getvalue()
+
+
+def _criteria_html_lines(criteria: dict[str, Any]) -> str:
+    lines: list[str] = []
+    preset = criteria.get("preset")
+    if preset:
+        lines.append(f"<li>Preset: <strong>{preset}</strong></li>")
+    lines.append(
+        f"<li>Owner tenure ≥ <strong>{criteria.get('min_owner_tenure_years', 15)}</strong> years</li>"
+    )
+    util = criteria.get("max_utilization_pct")
+    if util is not None:
+        lines.append(f"<li>Max utilization ≤ <strong>{util}%</strong> of indicative max GFA</li>")
+    room = criteria.get("min_expansion_room_sqft")
+    if room is not None:
+        lines.append(f"<li>Min expansion room ≥ <strong>{_fmt_int(room)}</strong> sf</li>")
+    gfa_min = criteria.get("min_existing_gfa_sqft")
+    gfa_max = criteria.get("max_existing_gfa_sqft")
+    if gfa_min is not None or gfa_max is not None:
+        lines.append(
+            f"<li>Existing GFA: <strong>{_fmt_int(gfa_min) if gfa_min else '—'}"
+            f" – {_fmt_int(gfa_max) if gfa_max else '—'}</strong> sf</li>"
+        )
+    max_gfa_min = criteria.get("min_max_gfa_sqft")
+    max_gfa_max = criteria.get("max_max_gfa_sqft")
+    if max_gfa_min is not None or max_gfa_max is not None:
+        lines.append(
+            f"<li>Max buildable GFA: <strong>{_fmt_int(max_gfa_min) if max_gfa_min else '—'}"
+            f" – {_fmt_int(max_gfa_max) if max_gfa_max else '—'}</strong> sf</li>"
+        )
+    assessed_min = criteria.get("min_assessed_value")
+    assessed_max = criteria.get("max_assessed_value")
+    if assessed_min is not None or assessed_max is not None:
+        lines.append(
+            f"<li>Assessed value: <strong>{_fmt_money(assessed_min)} – {_fmt_money(assessed_max)}</strong></li>"
+        )
+    lot_min = criteria.get("min_lot_sqft")
+    lot_max = criteria.get("max_lot_sqft")
+    if lot_min is not None or lot_max is not None:
+        lines.append(
+            f"<li>Lot size: <strong>{_fmt_int(lot_min) if lot_min else '—'}"
+            f" – {_fmt_int(lot_max) if lot_max else '—'}</strong> sf</li>"
+        )
+    zones = criteria.get("include_zone_codes") or []
+    if zones:
+        lines.append(f"<li>Zones included: <strong>{', '.join(zones)}</strong></li>")
+    ex_zones = criteria.get("exclude_zone_codes") or []
+    if ex_zones:
+        lines.append(f"<li>Zones excluded: <strong>{', '.join(ex_zones)}</strong></li>")
+    permit = criteria.get("require_no_open_permit", True)
+    lines.append(
+        f"<li>Open permits: <strong>{'Excluded' if permit else 'Allowed'}</strong></li>"
+    )
+    lines.append(f"<li>Sort by: <strong>{criteria.get('sort_by', 'score')}</strong></li>")
+    lines.append(f"<li>Top N: <strong>{criteria.get('top_n', 50)}</strong></li>")
+    return "".join(lines)
 
 
 def render_deal_radar_html(payload: dict[str, Any]) -> str:
@@ -447,6 +595,7 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
         )
 
     gap_items = "".join(f"<li>{g}</li>" for g in gaps)
+    criteria_html = _criteria_html_lines(criteria)
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -484,13 +633,11 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
 {highlight_block}
 <a class="btn" href="{csv_href}" download="deal-radar-{payload.get('town_slug', 'town')}.csv">Download CSV (top {payload.get('top_n', 50)})</a>
 
-<h2>2 · Screening Criteria (v0 — Gold only)</h2>
+<h2>2 · Screening Criteria</h2>
 <ul>
-  <li>Owner tenure ≥ <strong>{criteria.get('min_owner_tenure_years', 15)}</strong> years (last sale date proxy)</li>
-  <li>Underbuilt: existing GFA ≤ <strong>{int(float(criteria.get('underbuilt_ratio_max', 0.6)) * 100)}%</strong> of indicative max GFA, or expansion room ≥ <strong>{_fmt_int(criteria.get('min_expansion_room_sqft'))}</strong> sf</li>
-  <li>No active building permit on record in TownEye Gold</li>
+{criteria_html}
 </ul>
-<p class="small">Signals scored: {', '.join(_SIGNAL_LABELS.values())}.</p>
+<p class="small">Signals scored: {', '.join(_SIGNAL_LABELS.values())}. Indicative FAR from town config — confirm overlays on target parcels.</p>
 
 <h2>3 · Ranked Opportunities</h2>
 <table>
@@ -514,7 +661,12 @@ def generate_deal_radar_html(
     town_slug: str,
     parcel_id: str | None = None,
     prepared_for: str | None = None,
+    criteria_overrides: dict[str, Any] | None = None,
 ) -> str:
-    del prepared_for  # town-scoped report; reserved for future personalization
-    payload = generate_deal_radar(town_slug, highlight_parcel_id=parcel_id)
+    del prepared_for
+    payload = generate_deal_radar(
+        town_slug,
+        highlight_parcel_id=parcel_id,
+        criteria_overrides=criteria_overrides,
+    )
     return render_deal_radar_html(payload)

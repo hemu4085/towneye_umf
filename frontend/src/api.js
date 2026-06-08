@@ -188,7 +188,6 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
   }
 }
 
-/** Town-scoped reports (e.g. Deal Radar) — no address required. */
 export async function fetchTownReportAvailability(townSlug) {
   const { signal, cancel } = fetchSignal(25000);
   try {
@@ -203,6 +202,21 @@ export async function fetchTownReportAvailability(townSlug) {
     return data;
   } catch (err) {
     throw friendlyFetchError(err, 'Report availability check');
+  } finally {
+    cancel();
+  }
+}
+
+export async function fetchDealRadarConfig(townSlug) {
+  const params = new URLSearchParams({ town_slug: townSlug });
+  const { signal, cancel } = fetchSignal(25000);
+  try {
+    const res = await apiFetch(`/reports/deal-radar/config?${params}`, { signal });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not load Deal Radar config');
+    return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Deal Radar config');
   } finally {
     cancel();
   }

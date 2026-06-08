@@ -1657,6 +1657,25 @@ deal_radar:
   output:
     top_n: 50
     max_scan: 20000
+  limits:
+    min_owner_tenure_years: [5, 40]
+    underbuilt_ratio_max: [0.30, 0.95]
+    min_expansion_room_sqft: [0, 25000]
+    top_n: [10, 200]
+    min_assessed_value: [0, 25000000]
+    max_assessed_value: [0, 25000000]
+  presets:
+    conservative:
+      min_owner_tenure_years: 20
+      underbuilt_ratio_max: 0.50
+      min_expansion_room_sqft: 1200
+      top_n: 25
+    balanced: {}
+    aggressive:
+      min_owner_tenure_years: 10
+      underbuilt_ratio_max: 0.75
+      min_expansion_room_sqft: 500
+      top_n: 100
   pilot_gaps:
     - "Probate / registry distress signals — not connected in pilot."
     - "Absentee owner (mailing vs site address) — not connected in pilot."

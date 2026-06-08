@@ -13,7 +13,7 @@ from backend.config import get_settings
 from backend.services import buildability, deal_radar, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
 from backend.services.demo_reports import get_deal_radar_demo_html, get_demo_report_html
-from backend.services.deal_radar_config import get_town_display_name
+from backend.services.deal_radar_config import get_portal_deal_radar_config, get_town_display_name
 from backend.services.report_availability import get_report_availability
 from backend.utils.parcel_lookup import (
     ParcelNotFoundError,
@@ -46,11 +46,34 @@ class ReportRequest(BaseModel):
     lng: Optional[float] = None
 
 
+class DealRadarCriteria(BaseModel):
+    preset: Optional[str] = None
+    min_owner_tenure_years: Optional[float] = None
+    underbuilt_ratio_max: Optional[float] = None
+    max_utilization_pct: Optional[float] = None
+    min_expansion_room_sqft: Optional[int] = None
+    min_existing_gfa_sqft: Optional[int] = None
+    max_existing_gfa_sqft: Optional[int] = None
+    min_max_gfa_sqft: Optional[int] = None
+    max_max_gfa_sqft: Optional[int] = None
+    min_utilization_pct: Optional[float] = None
+    min_assessed_value: Optional[float] = None
+    max_assessed_value: Optional[float] = None
+    min_lot_sqft: Optional[int] = None
+    max_lot_sqft: Optional[int] = None
+    include_zone_codes: Optional[list[str]] = None
+    exclude_zone_codes: Optional[list[str]] = None
+    require_no_open_permit: Optional[bool] = None
+    top_n: Optional[int] = None
+    sort_by: Optional[str] = None
+
+
 class DealRadarRequest(BaseModel):
     town_slug: str
     parcel_id: Optional[str] = None
     address: Optional[str] = None
     prepared_for: Optional[str] = None
+    criteria: Optional[DealRadarCriteria] = None
 
 
 class AvailabilityRequest(BaseModel):
@@ -295,17 +318,32 @@ def report_homeowner_full(req: ReportRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.get("/deal-radar/config")
+def deal_radar_portal_config(town_slug: str):
+    settings = get_settings()
+    if town_slug not in settings.town_slugs:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Town '{town_slug}' is not supported.",
+        )
+    return get_portal_deal_radar_config(town_slug)
+
+
 @router.post("/deal-radar")
 def report_deal_radar(req: DealRadarRequest, request: Request):
     try:
         highlight = (req.parcel_id or "").strip() or None
-        html = get_deal_radar_demo_html(req.town_slug, highlight)
+        criteria_dict = req.criteria.model_dump(exclude_none=True) if req.criteria else {}
+        use_custom_criteria = bool(criteria_dict)
+
+        html = None if use_custom_criteria else get_deal_radar_demo_html(req.town_slug, highlight)
         from_cache = html is not None
         payload = None
         if html is None:
             payload = deal_radar.generate_deal_radar(
                 req.town_slug,
                 highlight_parcel_id=highlight,
+                criteria_overrides=criteria_dict or None,
             )
             html = deal_radar.render_deal_radar_html(payload)
         town_name = get_town_display_name(req.town_slug)
