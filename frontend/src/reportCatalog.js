@@ -25,7 +25,7 @@ export const REPORT_ACCESS = {
   },
   developer: {
     buildability: 'must',
-    market: 'useful',
+    market: null,
     risk: 'must',
     proforma: 'must',
     zoning: null,
