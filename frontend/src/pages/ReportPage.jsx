@@ -6,6 +6,7 @@ import ReportViewer from '../components/ReportViewer';
 import { useParcel } from '../context/ParcelContext';
 import { generateReport } from '../api';
 import { consumeReportPrefetch } from '../reportPrefetch';
+import { reportRequiresParcel } from '../reportCatalog';
 import { absoluteUrl, copyToClipboard } from '../utils/share';
 
 export default function ReportPage() {
@@ -18,9 +19,11 @@ export default function ReportPage() {
 
   const { parcel: storedParcel, setParcel } = useParcel();
   const report = state?.report;
+  const townContext = state?.townContext;
   const parcel = state?.parcel || storedParcel;
   const preparedFor = state?.preparedFor;
   const reportCacheKey = state?.reportCacheKey;
+  const townScoped = report && !reportRequiresParcel(report.id);
 
   useEffect(() => {
     if (state?.parcel?.parcel_id) {
@@ -29,19 +32,40 @@ export default function ReportPage() {
   }, [state?.parcel, setParcel]);
 
   useEffect(() => {
-    if (!report || !parcel) {
+    if (!report) {
+      navigate('/');
+      return;
+    }
+    if (!townScoped && !parcel) {
       navigate('/');
       return;
     }
 
+    const ctx = townScoped
+      ? (townContext || {
+          town_slug: parcel?.town_slug,
+          town_name: parcel?.town_name,
+          address: parcel?.address,
+          parcel_id: parcel?.parcel_id,
+          lat: parcel?.lat,
+          lng: parcel?.lng,
+        })
+      : parcel;
+
     const payload = {
-      address: parcel.address,
-      parcel_id: parcel.parcel_id,
-      town_slug: parcel.town_slug,
+      town_slug: ctx?.town_slug || parcel?.town_slug,
       prepared_for: preparedFor || undefined,
-      lat: parcel.lat,
-      lng: parcel.lng,
+      address: ctx?.address || parcel?.address,
+      lat: ctx?.lat ?? parcel?.lat,
+      lng: ctx?.lng ?? parcel?.lng,
     };
+    const highlightId = ctx?.parcel_id || parcel?.parcel_id;
+    if (highlightId) payload.parcel_id = highlightId;
+
+    if (!payload.town_slug) {
+      navigate('/');
+      return;
+    }
 
     const prefetched = reportCacheKey ? consumeReportPrefetch(reportCacheKey) : null;
     const load = prefetched ?? generateReport(report.endpoint, payload);
@@ -50,7 +74,7 @@ export default function ReportPage() {
       .then((data) => setResult(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [report, parcel, preparedFor, reportCacheKey, navigate]);
+  }, [report, parcel, townContext, townScoped, preparedFor, reportCacheKey, navigate]);
 
   async function handleShare() {
     if (!result?.download_url) {
@@ -63,6 +87,12 @@ export default function ReportPage() {
   }
 
   if (!report) return null;
+
+  const subtitle = townScoped
+    ? `${townContext?.town_name || 'Town'}, MA — town-wide scan${
+        townContext?.parcel_id ? ' (parcel highlighted)' : ''
+      }`
+    : parcel?.address;
 
   return (
     <div className="min-h-screen w-full px-4 sm:px-8 lg:px-12 xl:px-16 py-8">
@@ -83,7 +113,7 @@ export default function ReportPage() {
       <h1 className="font-display text-2xl text-gold mt-4">
         {report.icon} {report.name}
       </h1>
-      <p className="text-graytown">{parcel?.address}</p>
+      <p className="text-graytown">{subtitle}</p>
 
       {loading && <LoadingState reportName={report.name} />}
 
@@ -91,9 +121,17 @@ export default function ReportPage() {
         <div className="mt-6 p-4 rounded-lg bg-red-950/40 border border-red-800/50">
           <p className="text-red-300">{error}</p>
           <p className="text-sm text-graytown mt-2">
-            Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>Developer</strong>, then
-            retry Buildability or Pro Forma. Pro Forma uses live LLM when no demo cache is present —
-            if the API was cold or the LLM key is missing, wait 30 seconds and retry.
+            {townScoped ? (
+              <>
+                Deal Radar scans the pilot town from Gold data — wait 30 seconds on a cold API and
+                retry.
+              </>
+            ) : (
+              <>
+                Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>Developer</strong>,
+                then retry Buildability or Pro Forma.
+              </>
+            )}
           </p>
         </div>
       )}

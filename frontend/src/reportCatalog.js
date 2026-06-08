@@ -78,7 +78,7 @@ export const REPORTS = [
     icon: '📡',
     name: 'Deal Radar',
     description:
-      'Town-wide ranked list: long tenure, underbuilt vs zoning, no active permit — CSV export',
+      'Town-wide ranked list — no address needed. Long tenure, underbuilt lots, no active permit; CSV export',
     time: '~instant on demo parcel · ~10–30 sec live scan',
     endpoint: 'deal-radar',
   },
@@ -158,6 +158,13 @@ export function reportsForUserType(userType) {
 
 export function reportTier(userType, reportId) {
   return REPORT_ACCESS[userType]?.[reportId] ?? null;
+}
+
+/** Town-wide reports — no parcel resolve required before generate. */
+export const TOWN_SCOPED_REPORTS = new Set(['deal-radar']);
+
+export function reportRequiresParcel(reportId) {
+  return !TOWN_SCOPED_REPORTS.has(reportId);
 }
 
 export const LOADING_MESSAGES = [

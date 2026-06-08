@@ -15,6 +15,11 @@ export function consumeReportPrefetch(cacheKey) {
   return promise;
 }
 
-export function reportCacheKey(reportId, parcelId) {
+import { TOWN_SCOPED_REPORTS } from './reportCatalog';
+
+export function reportCacheKey(reportId, parcelId, townSlug) {
+  if (TOWN_SCOPED_REPORTS.has(reportId)) {
+    return `${reportId}:${townSlug || 'town'}:${parcelId || 'all'}`;
+  }
   return `${reportId}:${parcelId}`;
 }

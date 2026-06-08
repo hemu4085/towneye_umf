@@ -188,6 +188,26 @@ export async function fetchReportAvailability({ address, parcel_id, town_slug })
   }
 }
 
+/** Town-scoped reports (e.g. Deal Radar) — no address required. */
+export async function fetchTownReportAvailability(townSlug) {
+  const { signal, cancel } = fetchSignal(25000);
+  try {
+    const res = await apiFetch('/reports/availability', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ town_slug: townSlug, address: '' }),
+      signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not check report availability');
+    return data;
+  } catch (err) {
+    throw friendlyFetchError(err, 'Report availability check');
+  } finally {
+    cancel();
+  }
+}
+
 export async function generateReport(reportType, payload) {
   const { signal, cancel } = fetchSignal(180000);
   try {

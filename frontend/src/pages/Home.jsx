@@ -8,6 +8,7 @@ import UserTypeSelector from '../components/UserTypeSelector';
 import { useParcel } from '../context/ParcelContext';
 import {
   fetchReportAvailability,
+  fetchTownReportAvailability,
   generateReport,
   getApiHealth,
   resolveParcel,
@@ -15,6 +16,7 @@ import {
 import { useAddressIndex } from '../hooks/useAddressIndex';
 import { DEMO_PROPERTY } from '../demoProperty';
 import { reportCacheKey, startReportPrefetch } from '../reportPrefetch';
+import { reportRequiresParcel } from '../reportCatalog';
 import { addressesMatch } from '../utils/address';
 
 const DEFAULT_REQUEST_EMAIL = 'hemuit4085@gmail.com';
@@ -39,6 +41,12 @@ function resolvePayload(address, parcel) {
   };
 }
 
+function townLabel(slug, fallbackName) {
+  if (fallbackName) return fallbackName;
+  const prefix = (slug || '').split('-')[0] || 'town';
+  return `${prefix.charAt(0).toUpperCase()}${prefix.slice(1)}`;
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -53,6 +61,8 @@ export default function Home() {
   const [apiOnline, setApiOnline] = useState(false);
   const [apiChecking, setApiChecking] = useState(true);
   const [pilotTown, setPilotTown] = useState('Arlington MA');
+  const [pilotTownSlug, setPilotTownSlug] = useState(DEMO_PROPERTY.town_slug);
+  const [pilotTownName, setPilotTownName] = useState(DEMO_PROPERTY.town_name);
   const {
     entries: addressEntries,
     townName,
@@ -60,7 +70,7 @@ export default function Home() {
     loading: indexLoading,
     error: indexError,
   } = useAddressIndex();
-  const pilotTownShort = townName || pilotTown.split(',')[0]?.trim() || 'town';
+  const pilotTownShort = townName || pilotTownName || pilotTown.split(',')[0]?.trim() || 'town';
 
   const refreshApiHealth = useCallback(async () => {
     setApiChecking(true);
@@ -70,8 +80,11 @@ export default function Home() {
       setApiOnline(ok);
       if (data?.towns?.[0]) {
         const slug = data.towns[0];
+        setPilotTownSlug(slug);
         const name = slug.split('-')[0];
-        setPilotTown(`${name.charAt(0).toUpperCase()}${name.slice(1)} MA`);
+        const label = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+        setPilotTownName(label);
+        setPilotTown(`${label} MA`);
       }
       return ok;
     } catch {
@@ -96,6 +109,35 @@ export default function Home() {
   useEffect(() => {
     refreshApiHealth();
   }, [refreshApiHealth]);
+
+  useEffect(() => {
+    if (!userType || !pilotTownSlug) return undefined;
+
+    const timer = setTimeout(async () => {
+      setAvailabilityLoading(true);
+      try {
+        const townData = await fetchTownReportAvailability(pilotTownSlug);
+        let merged = { ...(townData.reports || {}) };
+        if (townData.report_request_email) setRequestEmail(townData.report_request_email);
+        setApiOnline(true);
+
+        const trimmed = address.trim();
+        if (trimmed.length >= 3 && parcel?.parcel_id) {
+          const parcelData = await fetchReportAvailability(resolvePayload(trimmed, parcel));
+          merged = { ...merged, ...(parcelData.reports || {}) };
+          if (parcelData.parcel) setParcel(parcelData.parcel);
+          if (parcelData.report_request_email) setRequestEmail(parcelData.report_request_email);
+        }
+        setAvailability(merged);
+      } catch {
+        /* parcel reports still resolve on click */
+      } finally {
+        setAvailabilityLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [address, userType, parcel?.parcel_id, parcel?.town_slug, pilotTownSlug, setParcel]);
 
   function handleAddressChange(value) {
     setAddress(value);
@@ -133,33 +175,62 @@ export default function Home() {
     if (!userType) setUserType('developer');
   }
 
-  useEffect(() => {
-    const trimmed = address.trim();
-    if (!userType || trimmed.length < 3 || !parcel?.parcel_id) {
-      return undefined;
+  async function generateTownReport(report) {
+    if (!userType) {
+      setError('Select your role (Developer) to run Deal Radar.');
+      return;
     }
+    setError('');
+    setLoadingReportId(report.id);
+    try {
+      if (!apiOnline) await refreshApiHealth();
 
-    const timer = setTimeout(async () => {
-      setAvailabilityLoading(true);
-      try {
-        const data = await fetchReportAvailability(resolvePayload(trimmed, parcel));
-        setAvailability(data.reports);
-        if (data.parcel) setParcel(data.parcel);
-        if (data.report_request_email) setRequestEmail(data.report_request_email);
-        setApiOnline(true);
-      } catch {
-        /* clicks still work — resolve happens on report generation */
-      } finally {
-        setAvailabilityLoading(false);
-      }
-    }, 300);
+      const townSlug = pilotTownSlug || DEMO_PROPERTY.town_slug;
+      const townNameLabel = pilotTownName || townLabel(townSlug);
+      const highlightParcelId = parcel?.parcel_id || undefined;
+      const townContext = {
+        town_slug: townSlug,
+        town_name: townNameLabel,
+        parcel_id: highlightParcelId,
+        address: highlightParcelId ? parcel.address : `${townNameLabel}, MA`,
+        lat: parcel?.lat,
+        lng: parcel?.lng,
+      };
 
-    return () => clearTimeout(timer);
-  }, [address, userType, parcel?.parcel_id, parcel?.town_slug]);
+      const payload = {
+        town_slug: townSlug,
+        parcel_id: highlightParcelId,
+        address: townContext.address,
+        lat: townContext.lat,
+        lng: townContext.lng,
+      };
+      const cacheKey = reportCacheKey(report.id, highlightParcelId, townSlug);
+      startReportPrefetch(cacheKey, generateReport(report.endpoint, payload));
+      navigate(`/report/${report.id}`, {
+        state: {
+          report,
+          townContext,
+          parcel: highlightParcelId ? parcel : null,
+          userType,
+          address: address.trim(),
+          reportCacheKey: cacheKey,
+        },
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingReportId(null);
+    }
+  }
 
   async function handleReportClick(report) {
     const status = availability?.[report.id];
     if (status && status.available === false) return;
+
+    if (!reportRequiresParcel(report.id)) {
+      await generateTownReport(report);
+      return;
+    }
 
     if (!address.trim()) {
       setError(`Enter a property address in ${pilotTownShort}, or use the demo button.`);
@@ -194,7 +265,7 @@ export default function Home() {
         lat: resolved.lat,
         lng: resolved.lng,
       };
-      const cacheKey = reportCacheKey(report.id, resolved.parcel_id);
+      const cacheKey = reportCacheKey(report.id, resolved.parcel_id, resolved.town_slug);
       startReportPrefetch(cacheKey, generateReport(report.endpoint, payload));
       navigate(`/report/${report.id}`, {
         state: {
@@ -213,6 +284,7 @@ export default function Home() {
   }
 
   const parcelReady = Boolean(parcel?.parcel_id);
+  const showDeveloperDealRadarHint = userType === 'developer';
 
   return (
     <>
@@ -244,8 +316,8 @@ export default function Home() {
           <p className="text-center text-xs text-graytown mt-2 max-w-lg">
             {indexReady ? (
               <>
-                Suggestions appear <strong className="text-cream">as you type</strong> — pick one, then
-                choose your role and report.
+                Suggestions appear <strong className="text-cream">as you type</strong> — pick one for
+                parcel reports, or skip for <strong className="text-cream">Deal Radar</strong>.
               </>
             ) : (
               <>Loading {pilotTownShort} address list…</>
@@ -268,14 +340,14 @@ export default function Home() {
 
           <UserTypeSelector value={userType} onChange={setUserType} />
 
-          {userType === 'developer' && (
+          {showDeveloperDealRadarHint && (
             <div className="w-full max-w-2xl mt-6 p-4 rounded-lg border border-gold/30 bg-gold/5 text-center">
               <p className="text-cream text-sm leading-relaxed">
-                Instant buildability + pro forma for any {pilotTownShort} lot — zoning stack,
-                overlay analysis, and indicative development economics before you option or design.
+                <strong>Deal Radar</strong> scans all of {pilotTownShort} — no address required.
+                Pick an address only if you want that parcel highlighted in the ranked list.
               </p>
               <p className="text-xs text-gold/90 mt-2">
-                Start with <strong>Buildability Brief</strong>, then <strong>Development Pro Forma</strong>.
+                Parcel reports (Buildability, Pro Forma, Risk) still need an address from the dropdown.
               </p>
             </div>
           )}
@@ -291,7 +363,7 @@ export default function Home() {
                 </p>
               ) : (
                 <p className="text-center text-xs text-amber-300/90 mt-2">
-                  Select an address from the dropdown to lock the parcel
+                  Deal Radar is ready for {pilotTownShort}. Select an address for parcel-level reports.
                 </p>
               )}
               <ReportGrid

@@ -8,6 +8,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# Demo cache for town-scoped reports (no parcel highlight).
+TOWN_WIDE_DEMO_KEY = "_town"
+
 
 def _demo_reports_root() -> Path:
     custom = os.getenv("DEMO_REPORTS_PATH", "").strip()
@@ -22,3 +25,12 @@ def get_demo_report_html(town_slug: str, parcel_id: str, report_type: str) -> st
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def get_deal_radar_demo_html(town_slug: str, parcel_id: str | None = None) -> str | None:
+    """Prefer parcel-highlight cache when present; fall back to town-wide demo."""
+    if parcel_id:
+        html = get_demo_report_html(town_slug, parcel_id, "deal-radar")
+        if html:
+            return html
+    return get_demo_report_html(town_slug, TOWN_WIDE_DEMO_KEY, "deal-radar")

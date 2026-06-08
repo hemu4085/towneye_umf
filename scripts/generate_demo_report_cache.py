@@ -47,6 +47,13 @@ def main() -> None:
         dest.write_text(html, encoding="utf-8")
         print(f"OK: {dest} ({len(html)} bytes) — {DEMO_ADDRESS}")
 
+    town_dir = ROOT / "demo-data" / "reports" / DEMO_TOWN / "_town"
+    town_dir.mkdir(parents=True, exist_ok=True)
+    town_html = generate_deal_radar_html(DEMO_TOWN, None)
+    town_dest = town_dir / "deal-radar.html"
+    town_dest.write_text(town_html, encoding="utf-8")
+    print(f"OK: {town_dest} ({len(town_html)} bytes) — {DEMO_TOWN} town-wide")
+
 
 if __name__ == "__main__":
     main()

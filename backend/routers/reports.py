@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 from backend.config import get_settings
 from backend.services import buildability, deal_radar, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
-from backend.services.demo_reports import get_demo_report_html
+from backend.services.demo_reports import get_deal_radar_demo_html, get_demo_report_html
+from backend.services.deal_radar_config import get_town_display_name
 from backend.services.report_availability import get_report_availability
 from backend.utils.parcel_lookup import (
     ParcelNotFoundError,
@@ -45,17 +46,48 @@ class ReportRequest(BaseModel):
     lng: Optional[float] = None
 
 
+class DealRadarRequest(BaseModel):
+    town_slug: str
+    parcel_id: Optional[str] = None
+    address: Optional[str] = None
+    prepared_for: Optional[str] = None
+
+
 class AvailabilityRequest(BaseModel):
-    address: str = Field(..., min_length=3)
+    address: str = Field(default="", min_length=0)
     parcel_id: Optional[str] = None
     town_slug: Optional[str] = None
 
 
 @router.post("/availability")
 async def report_availability(body: AvailabilityRequest):
+    settings = get_settings()
+    address = (body.address or "").strip()
+
+    if body.town_slug and len(address) < 3:
+        if body.town_slug not in settings.town_slugs:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Town '{body.town_slug}' is not supported.",
+            )
+        reports = get_report_availability(
+            body.town_slug,
+            body.parcel_id or "_town",
+        )
+        return {
+            "reports": reports,
+            "parcel": None,
+            "town_slug": body.town_slug,
+            "town_name": get_town_display_name(body.town_slug),
+            "report_request_email": settings.report_request_email,
+        }
+
+    if len(address) < 3:
+        raise HTTPException(status_code=422, detail="Address is required.")
+
     try:
         parcel = await resolve_address(
-            body.address,
+            address,
             parcel_id=body.parcel_id,
             town_slug=body.town_slug,
         )
@@ -75,7 +107,7 @@ async def report_availability(body: AvailabilityRequest):
             "lat": parcel.get("lat"),
             "lng": parcel.get("lng"),
         },
-        "report_request_email": get_settings().report_request_email,
+        "report_request_email": settings.report_request_email,
     }
 
 
@@ -264,17 +296,32 @@ def report_homeowner_full(req: ReportRequest, request: Request):
 
 
 @router.post("/deal-radar")
-def report_deal_radar(req: ReportRequest, request: Request):
+def report_deal_radar(req: DealRadarRequest, request: Request):
     try:
-        html = get_demo_report_html(req.town_slug, req.parcel_id, "deal-radar")
+        highlight = (req.parcel_id or "").strip() or None
+        html = get_deal_radar_demo_html(req.town_slug, highlight)
         from_cache = html is not None
         payload = None
         if html is None:
             payload = deal_radar.generate_deal_radar(
                 req.town_slug,
-                highlight_parcel_id=req.parcel_id,
+                highlight_parcel_id=highlight,
             )
             html = deal_radar.render_deal_radar_html(payload)
-        return _report_response("deal-radar", html, payload, req, request, skip_pdf=from_cache)
+        town_name = get_town_display_name(req.town_slug)
+        report_req = ReportRequest(
+            address=req.address or f"{town_name}, MA",
+            parcel_id=highlight or "_town",
+            town_slug=req.town_slug,
+            prepared_for=req.prepared_for,
+        )
+        return _report_response(
+            "deal-radar",
+            html,
+            payload,
+            report_req,
+            request,
+            skip_pdf=from_cache,
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
