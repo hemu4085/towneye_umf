@@ -43,3 +43,12 @@ def get_closing_risk_radar_demo_html(town_slug: str, parcel_id: str | None = Non
         if html:
             return html
     return get_demo_report_html(town_slug, TOWN_WIDE_DEMO_KEY, "closing-risk-radar")
+
+
+def get_listing_radar_demo_html(town_slug: str, parcel_id: str | None = None) -> str | None:
+    """Prefer parcel-highlight cache when present; fall back to town-wide demo."""
+    if parcel_id:
+        html = get_demo_report_html(town_slug, parcel_id, "listing-radar")
+        if html:
+            return html
+    return get_demo_report_html(town_slug, TOWN_WIDE_DEMO_KEY, "listing-radar")

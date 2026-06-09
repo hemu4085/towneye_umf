@@ -1726,3 +1726,53 @@ closing_risk_radar:
     - "MassDEP BWSC / 21E contamination sites — not connected in pilot."
     - "Probate court filings and estate proceedings — not connected in pilot."
 
+# Listing Radar — RE agent listing-opportunity scan (town-wide v0).
+listing_radar:
+  min_owner_tenure_years: 7
+  max_owner_tenure_years: 35
+  min_utilization_pct: 25
+  max_utilization_pct: 75
+  min_existing_gfa_sqft: 800
+  default_indicative_far: 0.50
+  overlay_indicative_far:
+    NMF: 2.0
+    MBMF: 2.0
+  exclude_zone_codes: []
+  exclude_luc_prefixes: []
+  scoring:
+    tenure_sweet_spot_weight: 0.30
+    utilization_story_weight: 0.30
+    no_permit_weight: 0.20
+    lot_weight: 0.10
+    value_weight: 0.10
+  output:
+    top_n: 50
+    max_scan: 20000
+  limits:
+    min_owner_tenure_years: [1, 50]
+    max_owner_tenure_years: [5, 60]
+    min_utilization_pct: [0, 100]
+    max_utilization_pct: [0, 100]
+    min_existing_gfa_sqft: [0, 50000]
+    min_assessed_value: [0, 25000000]
+    max_assessed_value: [0, 25000000]
+    top_n: [10, 200]
+  presets:
+    empty_nester:
+      min_owner_tenure_years: 20
+      max_owner_tenure_years: 50
+      min_utilization_pct: 30
+      max_utilization_pct: 70
+      top_n: 40
+    balanced: {}
+    investor_flip:
+      min_owner_tenure_years: 1
+      max_owner_tenure_years: 8
+      min_utilization_pct: 20
+      max_utilization_pct: 85
+      top_n: 75
+  pilot_gaps:
+    - "MLS listing history, DOM, and price reductions — not connected in pilot."
+    - "Absentee owner (mailing vs site address) — not connected in pilot."
+    - "Probate / estate filings — not connected in pilot."
+

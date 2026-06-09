@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import DealRadarCriteriaPanel from '../components/DealRadarCriteriaPanel';
 import ClosingRiskCriteriaPanel from '../components/ClosingRiskCriteriaPanel';
+import ListingRadarCriteriaPanel from '../components/ListingRadarCriteriaPanel';
 import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
@@ -29,6 +30,7 @@ export default function ReportPage() {
   const townScoped = report && !reportRequiresParcel(report.id);
   const isDealRadar = report?.id === 'deal-radar';
   const isClosingRiskRadar = report?.id === 'closing-risk-radar';
+  const isListingRadar = report?.id === 'listing-radar';
 
   useEffect(() => {
     if (state?.parcel?.parcel_id) {
@@ -208,6 +210,16 @@ export default function ReportPage() {
         />
       )}
 
+      {isListingRadar && townSlug && (
+        <ListingRadarCriteriaPanel
+          townSlug={townSlug}
+          appliedCriteria={appliedCriteria}
+          loading={loading}
+          onApply={handleApplyCriteria}
+          onReset={handleResetCriteria}
+        />
+      )}
+
       {loading && <LoadingState reportName={report.name} />}
 
       {error && (
@@ -221,6 +233,11 @@ export default function ReportPage() {
                     Closing Risk Radar scans permits and overlay flags town-wide — wait up to 45
                     seconds on a cold API and retry.
                   </>
+                ) : isListingRadar ? (
+                  <>
+                    Listing Radar scans assessor tenure and buildability signals town-wide — wait
+                    30 seconds on a cold API and retry.
+                  </>
                 ) : (
                   <>
                     Deal Radar scans the pilot town from Gold data — wait 30 seconds on a cold API
@@ -230,8 +247,8 @@ export default function ReportPage() {
               </>
             ) : (
               <>
-                Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>Developer</strong>,
-                then retry Buildability or Pro Forma.
+                Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>RE Agent</strong>,
+                then retry Buyer Briefing or Buildability.
               </>
             )}
           </p>

@@ -18,9 +18,11 @@ else:
     os.environ.setdefault("GOLD_DATA_PATH", str(_full_gold))
 
 from backend.services.buildability import collect_brief_data, generate_buildability_html  # noqa: E402
+from backend.services.buyer_briefing import render_buyer_briefing_html  # noqa: E402
 from backend.services.closing_risk_radar import generate_closing_risk_radar_html
 from backend.services.deal_radar import generate_deal_radar_html  # noqa: E402
 from backend.services.homeowner_full import generate_homeowner_full_html  # noqa: E402
+from backend.services.listing_radar import generate_listing_radar_html  # noqa: E402
 from backend.services.proforma import generate_proforma_html  # noqa: E402
 from backend.services.risk import render_risk_html  # noqa: E402
 
@@ -30,6 +32,9 @@ DEMO_ADDRESS = "5-7 BELKNAP ST, Arlington MA"
 
 REPORT_WRITERS = {
     "buildability": generate_buildability_html,
+    "buyer-briefing": lambda town, parcel, pf: render_buyer_briefing_html(
+        collect_brief_data(town, parcel, pf),
+    ),
     "deal-radar": generate_deal_radar_html,
     "homeowner-full": generate_homeowner_full_html,
     "proforma": generate_proforma_html,
@@ -59,6 +64,16 @@ def main() -> None:
     closing_dest = town_dir / "closing-risk-radar.html"
     closing_dest.write_text(closing_html, encoding="utf-8")
     print(f"OK: {closing_dest} ({len(closing_html)} bytes) — {DEMO_TOWN} closing risk")
+
+    listing_html = generate_listing_radar_html(DEMO_TOWN, None)
+    listing_dest = town_dir / "listing-radar.html"
+    listing_dest.write_text(listing_html, encoding="utf-8")
+    print(f"OK: {listing_dest} ({len(listing_html)} bytes) — {DEMO_TOWN} listing radar")
+
+    highlight_listing = generate_listing_radar_html(DEMO_TOWN, DEMO_PARCEL)
+    highlight_dest = out_dir / "listing-radar.html"
+    highlight_dest.write_text(highlight_listing, encoding="utf-8")
+    print(f"OK: {highlight_dest} ({len(highlight_listing)} bytes) — {DEMO_ADDRESS} listing highlight")
 
 
 if __name__ == "__main__":
