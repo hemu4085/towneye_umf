@@ -10,17 +10,15 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, buyer_briefing, closing_risk_radar, deal_radar, homeowner_full, lender, listing_radar, market, neighborhood, proforma, risk, zoning
+from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
 from backend.services.closing_risk_radar_config import get_portal_closing_risk_radar_config
 from backend.services.demo_reports import (
     get_closing_risk_radar_demo_html,
     get_deal_radar_demo_html,
     get_demo_report_html,
-    get_listing_radar_demo_html,
 )
 from backend.services.deal_radar_config import get_portal_deal_radar_config, get_town_display_name
-from backend.services.listing_radar_config import get_portal_listing_radar_config
 from backend.services.report_availability import get_report_availability
 from backend.utils.parcel_lookup import (
     ParcelNotFoundError,
@@ -42,8 +40,6 @@ ReportType = Literal[
     "homeowner-full",
     "deal-radar",
     "closing-risk-radar",
-    "listing-radar",
-    "buyer-briefing",
 ]
 
 
@@ -113,33 +109,6 @@ class ClosingRiskRadarRequest(BaseModel):
     address: Optional[str] = None
     prepared_for: Optional[str] = None
     criteria: Optional[ClosingRiskRadarCriteria] = None
-
-
-class ListingRadarCriteria(BaseModel):
-    preset: Optional[str] = None
-    min_owner_tenure_years: Optional[float] = None
-    max_owner_tenure_years: Optional[float] = None
-    min_utilization_pct: Optional[float] = None
-    max_utilization_pct: Optional[float] = None
-    min_existing_gfa_sqft: Optional[int] = None
-    max_existing_gfa_sqft: Optional[int] = None
-    min_assessed_value: Optional[float] = None
-    max_assessed_value: Optional[float] = None
-    min_lot_sqft: Optional[int] = None
-    max_lot_sqft: Optional[int] = None
-    include_zone_codes: Optional[list[str]] = None
-    exclude_zone_codes: Optional[list[str]] = None
-    require_no_open_permit: Optional[bool] = None
-    top_n: Optional[int] = None
-    sort_by: Optional[str] = None
-
-
-class ListingRadarRequest(BaseModel):
-    town_slug: str
-    parcel_id: Optional[str] = None
-    address: Optional[str] = None
-    prepared_for: Optional[str] = None
-    criteria: Optional[ListingRadarCriteria] = None
 
 
 class AvailabilityRequest(BaseModel):
@@ -468,68 +437,6 @@ def report_closing_risk_radar(req: ClosingRiskRadarRequest, request: Request):
         )
         return _report_response(
             "closing-risk-radar",
-            html,
-            payload,
-            report_req,
-            request,
-            skip_pdf=from_cache,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@router.post("/buyer-briefing")
-def report_buyer_briefing(req: ReportRequest, request: Request):
-    try:
-        html = get_demo_report_html(req.town_slug, req.parcel_id, "buyer-briefing")
-        from_cache = html is not None
-        payload = None
-        if html is None:
-            data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
-            payload = buyer_briefing.generate_buyer_briefing(data)
-            html = buyer_briefing.render_buyer_briefing_html(data)
-        return _report_response("buyer-briefing", html, payload, req, request, skip_pdf=from_cache)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@router.get("/listing-radar/config")
-def listing_radar_portal_config(town_slug: str):
-    settings = get_settings()
-    if town_slug not in settings.town_slugs:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Town '{town_slug}' is not supported.",
-        )
-    return get_portal_listing_radar_config(town_slug)
-
-
-@router.post("/listing-radar")
-def report_listing_radar(req: ListingRadarRequest, request: Request):
-    try:
-        highlight = (req.parcel_id or "").strip() or None
-        criteria_dict = req.criteria.model_dump(exclude_none=True) if req.criteria else {}
-        use_custom_criteria = bool(criteria_dict)
-
-        html = None if use_custom_criteria else get_listing_radar_demo_html(req.town_slug, highlight)
-        from_cache = html is not None
-        payload = None
-        if html is None:
-            payload = listing_radar.generate_listing_radar(
-                req.town_slug,
-                highlight_parcel_id=highlight,
-                criteria_overrides=criteria_dict or None,
-            )
-            html = listing_radar.render_listing_radar_html(payload)
-        town_name = get_town_display_name(req.town_slug)
-        report_req = ReportRequest(
-            address=req.address or f"{town_name}, MA",
-            parcel_id=highlight or "_town",
-            town_slug=req.town_slug,
-            prepared_for=req.prepared_for,
-        )
-        return _report_response(
-            "listing-radar",
             html,
             payload,
             report_req,

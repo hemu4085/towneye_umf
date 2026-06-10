@@ -172,7 +172,7 @@ export default function Home() {
       lng: DEMO_PROPERTY.lng,
     });
     setError('');
-    if (!userType) setUserType('agent');
+    if (!userType) setUserType('developer');
   }
 
   async function generateTownReport(report) {
@@ -237,7 +237,7 @@ export default function Home() {
       return;
     }
     if (!userType) {
-      setError('Select your role (RE Agent or Developer) to choose a report.');
+      setError('Select your role (Developer, Attorney, etc.) to choose a report.');
       return;
     }
 
@@ -286,7 +286,6 @@ export default function Home() {
   const parcelReady = Boolean(parcel?.parcel_id);
   const showDeveloperDealRadarHint = userType === 'developer';
   const showAttorneyClosingRiskHint = userType === 'attorney';
-  const showAgentListingRadarHint = userType === 'agent';
 
   return (
     <>
@@ -341,19 +340,6 @@ export default function Home() {
           <ApiStatusBar online={apiOnline} checking={apiChecking} onRetry={refreshApiHealth} />
 
           <UserTypeSelector value={userType} onChange={setUserType} />
-
-          {showAgentListingRadarHint && (
-            <div className="w-full max-w-2xl mt-6 p-4 rounded-lg border border-gold/30 bg-gold/5 text-center">
-              <p className="text-cream text-sm leading-relaxed">
-                <strong>Listing Radar</strong> scans all of {pilotTownShort} for listing prospects —
-                tenure window, utilization story, no open permit — no address required.
-              </p>
-              <p className="text-xs text-gold/90 mt-2">
-                Pick an address to highlight a parcel, or run <strong>Buyer Briefing</strong> /
-                Buildability on a specific property.
-              </p>
-            </div>
-          )}
 
           {showDeveloperDealRadarHint && (
             <div className="w-full max-w-2xl mt-6 p-4 rounded-lg border border-gold/30 bg-gold/5 text-center">

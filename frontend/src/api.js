@@ -237,21 +237,6 @@ export async function fetchClosingRiskRadarConfig(townSlug) {
   }
 }
 
-export async function fetchListingRadarConfig(townSlug) {
-  const params = new URLSearchParams({ town_slug: townSlug });
-  const { signal, cancel } = fetchSignal(25000);
-  try {
-    const res = await apiFetch(`/reports/listing-radar/config?${params}`, { signal });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Could not load Listing Radar config');
-    return data;
-  } catch (err) {
-    throw friendlyFetchError(err, 'Listing Radar config');
-  } finally {
-    cancel();
-  }
-}
-
 export async function generateReport(reportType, payload) {
   const { signal, cancel } = fetchSignal(180000);
   try {

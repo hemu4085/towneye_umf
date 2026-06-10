@@ -1,5 +1,4 @@
 export const USER_TYPES = [
-  { id: 'agent', label: 'RE Agent' },
   { id: 'developer', label: 'Developer' },
   { id: 'attorney', label: 'Attorney' },
   { id: 'architect', label: 'Architect' },
@@ -14,21 +13,9 @@ export const USER_TYPES = [
  * null   = not relevant (hidden)
  */
 export const REPORT_ACCESS = {
-  agent: {
-    'listing-radar': 'must',
-    'buyer-briefing': 'must',
-    buildability: 'useful',
-    market: 'useful',
-    risk: null,
-    proforma: null,
-    zoning: null,
-    neighborhood: null,
-    lender: null,
-  },
   developer: {
     'deal-radar': 'must',
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -38,7 +25,6 @@ export const REPORT_ACCESS = {
   attorney: {
     'closing-risk-radar': 'must',
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -47,7 +33,6 @@ export const REPORT_ACCESS = {
   },
   architect: {
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -56,7 +41,6 @@ export const REPORT_ACCESS = {
   },
   lender: {
     buildability: 'useful',
-    market: 'useful',
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -66,7 +50,6 @@ export const REPORT_ACCESS = {
   homeowner: {
     'homeowner-full': 'must',
     buildability: 'useful',
-    market: 'useful',
     risk: 'useful',
     proforma: null,
     zoning: null,
@@ -79,11 +62,8 @@ export const REPORT_ACCESS = {
 export const REPORT_ENGINE = {
   'deal-radar': 'deterministic',
   'closing-risk-radar': 'deterministic',
-  'listing-radar': 'deterministic',
-  'buyer-briefing': 'hybrid',
   'homeowner-full': 'hybrid',
   buildability: 'deterministic',
-  market: 'hybrid',
   risk: 'deterministic',
   proforma: 'hybrid',
   zoning: 'deterministic',
@@ -92,26 +72,6 @@ export const REPORT_ENGINE = {
 };
 
 export const REPORTS = [
-  {
-    id: 'listing-radar',
-    icon: '📋',
-    name: 'Listing Radar',
-    description:
-      'Town-wide ranked prospects — tenure window, listing story utilization, no open permit; CSV export',
-    time: '~instant on demo · ~10–30 sec live scan',
-    endpoint: 'listing-radar',
-    report_engine: 'deterministic',
-  },
-  {
-    id: 'buyer-briefing',
-    icon: '🗂️',
-    name: 'Buyer Briefing Card',
-    description:
-      'Pre-showing one-pager — flood/historic/permit flags, zoning headline, agent talking points',
-    time: '~instant on demo parcel · ~20–60 sec live',
-    endpoint: 'buyer-briefing',
-    report_engine: 'hybrid',
-  },
   {
     id: 'deal-radar',
     icon: '📡',
@@ -137,7 +97,7 @@ export const REPORTS = [
     icon: '🏠',
     name: 'Full Property Report',
     description:
-      'Complete home intelligence: facts, zoning, buildability, risks & market — like a professional house report',
+      'Complete home intelligence: facts, zoning, buildability, risks & constraints — like a professional house report',
     time: '~1–2 min live',
     endpoint: 'homeowner-full',
     report_engine: 'hybrid',
@@ -151,15 +111,6 @@ export const REPORTS = [
     time: '~instant on demo parcel',
     endpoint: 'buildability',
     report_engine: 'deterministic',
-  },
-  {
-    id: 'market',
-    icon: '📊',
-    name: 'Market Snapshot',
-    description: 'Median price, DOM, inventory & comps within 0.25mi',
-    time: '~20–60 sec live',
-    endpoint: 'market',
-    report_engine: 'hybrid',
   },
   {
     id: 'risk',
@@ -202,7 +153,7 @@ export const REPORTS = [
     icon: '🏦',
     name: 'Lender Due Diligence Pack',
     description:
-      'Full collateral memo: tax, liens, violations, assessor comps, zoning, permits & market',
+      'Full collateral memo: tax, liens, violations, assessor facts, zoning, permits & constraints',
     time: '~20–45 sec live',
     endpoint: 'lender',
     report_engine: 'deterministic',
@@ -226,7 +177,6 @@ export function reportEngine(reportId) {
 export const TOWN_SCOPED_REPORTS = new Set([
   'deal-radar',
   'closing-risk-radar',
-  'listing-radar',
 ]);
 
 export function reportRequiresParcel(reportId) {
@@ -235,7 +185,6 @@ export function reportRequiresParcel(reportId) {
 
 export const LOADING_MESSAGES = [
   'Scanning assessor records…',
-  'Filtering tenure & listing story lots…',
   'Checking open permits…',
   'Ranking opportunities…',
   'Pulling zoning data…',
