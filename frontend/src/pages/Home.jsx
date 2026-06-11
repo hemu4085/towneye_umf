@@ -292,7 +292,7 @@ export default function Home() {
       <header className="px-6 py-8 text-center border-b border-gold/20">
         <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
         <p className="text-graytown mt-2 text-lg">
-          AI-Powered Real Estate Intelligence for Massachusetts
+          The new AI Powered Real Estate Platform - Find it, Know it, Build It
         </p>
         <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
       </header>
