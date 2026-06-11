@@ -77,8 +77,20 @@ def _indicative_gfa(envelope: BuildableEnvelope, data: BriefData) -> float:
     return lot * 0.5
 
 
-def _pf_cfg(data: BriefData) -> dict[str, Any]:
-    return get_developer_proforma_config(data.inputs.town_slug)
+def _pf_cfg(data: BriefData, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    base = get_developer_proforma_config(data.inputs.town_slug)
+    if not overrides:
+        return base
+    
+    merged = dict(base)
+    for k in ["hard_cost_psf", "soft_cost_pct", "sale_psf", "avg_unit_sf"]:
+        if k in overrides and overrides[k] is not None:
+            merged[k] = overrides[k]
+            
+    if "financing" in overrides and isinstance(overrides["financing"], dict):
+        merged["financing"] = {**(merged.get("financing") or {}), **overrides["financing"]}
+        
+    return merged
 
 
 def _units_from_gfa(gfa: float, avg_unit_sf: float) -> int:
@@ -302,8 +314,9 @@ def _executive_summary(
     )
 
 
-def _enrich_payload(data: BriefData, payload: dict[str, Any]) -> dict[str, Any]:
-    pf_cfg = _pf_cfg(data)
+def _enrich_payload(data: BriefData, payload: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    pf_cfg = _pf_cfg(data, overrides)
+    o = overrides or {}
     scenarios = payload.get("scenarios") or []
     primary = _pick_primary_scenario(scenarios)
     ctx = _town_market_context(data.inputs.town_slug)
@@ -322,15 +335,15 @@ def _enrich_payload(data: BriefData, payload: dict[str, Any]) -> dict[str, Any]:
         "irr_grid": _irr_grid(primary, pf_cfg) if primary else {"columns": [], "rows": []},
         "sensitivity_detail": _sensitivity_rows(primary, pf_cfg) if primary else [],
         "assumptions": payload.get("assumptions") or [
-            f"Hard cost ${float(pf_cfg['hard_cost_psf']):,.0f}/sf (RSMeans MA indicative, from town config)",
-            f"Soft costs {int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard construction",
+            f"Hard cost ${float(pf_cfg['hard_cost_psf']):,.0f}/sf" + (' <strong style="color:#0b2545">(User override)</strong>' if "hard_cost_psf" in o else " (RSMeans MA indicative, from town config)"),
+            f"Soft costs {int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard construction" + (' <strong style="color:#0b2545">(User override)</strong>' if "soft_cost_pct" in o else ""),
             f"Land basis {_fmt_money(assessed) if assessed else 'lot × $55/sf assessor proxy'}",
-            f"Indicative new-construction sale ${float(pf_cfg['sale_psf']):,.0f}/sf GFA — not MLS-calibrated",
-            f"Unit count derived from GFA ÷ {int(pf_cfg['avg_unit_sf'])} sf average unit size",
+            f"Indicative new-construction sale ${float(pf_cfg['sale_psf']):,.0f}/sf GFA" + (' <strong style="color:#0b2545">(User override)</strong>' if "sale_psf" in o else " — not MLS-calibrated"),
+            f"Unit count derived from GFA ÷ {int(pf_cfg['avg_unit_sf'])} sf average unit size" + (' <strong style="color:#0b2545">(User override)</strong>' if "avg_unit_sf" in o else ""),
             *([f"Permit fees (town schedule): {', '.join(l['label'] for l in permit_lines)}"]
               if permit_lines else []),
             f"Financing carry {float(fin.get('annual_carry_pct', 0)) * 100:.1f}% × "
-            f"{fin.get('construction_months', 14)} mo construction (indicative)",
+            f"{fin.get('construction_months', 14)} mo construction" + (' <strong style="color:#0b2545">(User override)</strong>' if "financing" in o else " (indicative)"),
             "Zoning envelopes sourced from same stack as Buildability Brief",
             *(
                 [f"Town median sale (Gold): {_fmt_money(ctx.get('median_sale_price'))}"]
@@ -341,8 +354,8 @@ def _enrich_payload(data: BriefData, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _proforma_fallback(data: BriefData) -> dict[str, Any]:
-    pf_cfg = _pf_cfg(data)
+def _proforma_fallback(data: BriefData, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    pf_cfg = _pf_cfg(data, overrides)
     envelopes = data.envelopes[:3] if data.envelopes else []
     scenarios = [_scenario_from_envelope(e, data, pf_cfg) for e in envelopes]
     if not scenarios:
@@ -380,7 +393,7 @@ def _proforma_fallback(data: BriefData) -> dict[str, Any]:
         ],
         "fallback": True,
     }
-    return _enrich_payload(data, payload)
+    return _enrich_payload(data, payload, overrides)
 
 
 def _brief_context(data: BriefData) -> str:
@@ -409,10 +422,10 @@ Buildable envelopes (anchor scenario GFA/units to these — do not exceed max GF
 """
 
 
-def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[str, Any]]:
+def _normalize_scenarios(payload: dict[str, Any], data: BriefData, overrides: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     raw = payload.get("scenarios") or []
     if not isinstance(raw, list) or not raw:
-        return _proforma_fallback(data)["scenarios"]
+        return _proforma_fallback(data, overrides)["scenarios"]
 
     envelopes = data.envelopes or []
     normalized: list[dict[str, Any]] = []
@@ -422,7 +435,7 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[
         anchor = envelopes[i] if i < len(envelopes) else (envelopes[0] if envelopes else None)
         if anchor is not None:
             cap_gfa = _indicative_gfa(anchor, data)
-            pf_cfg = _pf_cfg(data)
+            pf_cfg = _pf_cfg(data, overrides)
             gfa = item.get("total_gfa")
             try:
                 gfa = float(gfa) if gfa is not None else cap_gfa
@@ -446,23 +459,26 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData) -> list[dict[
                 "name": item.get("name") or rebuilt["name"],
             }
         normalized.append(item)
-    return normalized or _proforma_fallback(data)["scenarios"]
+    return normalized or _proforma_fallback(data, overrides)["scenarios"]
 
 
-def generate_proforma(data: BriefData) -> dict[str, Any]:
-    fallback = _proforma_fallback(data)
+def generate_proforma(data: BriefData, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    fallback = _proforma_fallback(data, overrides)
     if not get_settings().anthropic_api_key.strip():
         return fallback
+
+    pf_cfg = _pf_cfg(data, overrides)
+    o = overrides or {}
 
     prompt = f"""Build a development pro forma JSON for a Massachusetts infill developer.
 Use ONLY the parcel/zoning facts below — scenarios must match envelope math (do not exceed max GFA).
 
 {_brief_context(data)}
 
-Cost/sale assumptions (pilot):
-- Hard cost $425–$525/sf (use ~475)
-- Soft costs ~18% of hard; land basis from assessed value shown above
-- Indicative new-construction sale ~$800–$950/sf GFA for this submarket
+Cost/sale assumptions ({'user overrides applied' if o else 'pilot'}):
+- Hard cost ~${float(pf_cfg['hard_cost_psf']):,.0f}/sf
+- Soft costs ~{int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard; land basis from assessed value shown above
+- Indicative new-construction sale ~${float(pf_cfg['sale_psf']):,.0f}/sf GFA for this submarket
 
 Return JSON with keys:
 headline (string, one line),
@@ -478,10 +494,10 @@ data_sources (array of strings).
     merged = {
         **fallback,
         **{k: v for k, v in raw.items() if k not in ("scenarios", "fallback", "site_snapshot")},
-        "scenarios": _normalize_scenarios(raw, data),
+        "scenarios": _normalize_scenarios(raw, data, overrides),
         "fallback": False,
     }
-    return _enrich_payload(data, merged)
+    return _enrich_payload(data, merged, overrides)
 
 
 def _verdict_block(snapshot: dict[str, Any]) -> str:
@@ -694,7 +710,8 @@ def generate_proforma_html(
     town_slug: str,
     parcel_id: str,
     prepared_for: str | None = None,
+    overrides: dict[str, Any] | None = None,
 ) -> str:
     data = collect_brief_data(town_slug, parcel_id, prepared_for)
-    payload = generate_proforma(data)
+    payload = generate_proforma(data, overrides)
     return render_proforma_html(payload, data.parcel.address)
