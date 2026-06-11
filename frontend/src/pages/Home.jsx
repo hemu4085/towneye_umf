@@ -289,7 +289,10 @@ export default function Home() {
 
   return (
     <>
-      <header className="px-6 py-8 text-center border-b border-gold/20">
+      <header className="px-6 py-8 text-center border-b border-gold/20 relative">
+        <a href="/" className="absolute top-6 left-6 sm:top-8 sm:left-8 inline-block">
+          <img src="/logo.png" alt="TownEye Logo" className="h-10 sm:h-12 w-auto" />
+        </a>
         <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
         <p className="text-graytown mt-2 text-lg">
           The AI Powered Real Estate Platform - Find it, Know it, Build It
