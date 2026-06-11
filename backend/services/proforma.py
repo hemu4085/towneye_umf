@@ -500,11 +500,64 @@ data_sources (array of strings).
     return _enrich_payload(data, merged, overrides)
 
 
+import io
+import csv
+
+def proforma_to_csv(payload: dict[str, Any]) -> str:
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    
+    # 1. Site Info
+    snap = payload.get("site_snapshot") or {}
+    writer.writerow(["--- SITE SNAPSHOT ---"])
+    writer.writerow(["Address", snap.get("address", "")])
+    writer.writerow(["Parcel ID", snap.get("parcel_id", "")])
+    writer.writerow(["Lot SqFt (GIS)", snap.get("lot_sqft_gis", "")])
+    writer.writerow(["Primary Zone", snap.get("primary_zone", "")])
+    writer.writerow([])
+    
+    # 2. Scenarios
+    writer.writerow(["--- DEVELOPMENT SCENARIOS ---"])
+    scenarios = payload.get("scenarios") or []
+    if scenarios:
+        headers = ["Scenario", "Units", "Total GFA", "Avg Unit SF", "Land Basis", "Hard Cost", "Soft Cost", "Permit Fees", "Carry Cost", "Total Cost", "Sale Price", "Profit", "Margin %", "ROI %", "Notes"]
+        writer.writerow(headers)
+        for s in scenarios:
+            writer.writerow([
+                s.get("name", ""),
+                s.get("units", ""),
+                s.get("total_gfa", ""),
+                s.get("avg_unit_sf", ""),
+                s.get("land_basis", ""),
+                s.get("hard_cost", ""),
+                s.get("soft_cost", ""),
+                s.get("permit_fees", ""),
+                s.get("carry_cost", ""),
+                s.get("total_cost", ""),
+                s.get("sale_price", ""),
+                s.get("profit", ""),
+                s.get("margin_pct", ""),
+                s.get("roi_pct", ""),
+                s.get("notes", "")
+            ])
+    writer.writerow([])
+    
+    # 3. Assumptions
+    writer.writerow(["--- ASSUMPTIONS ---"])
+    for a in (payload.get("assumptions") or []):
+        import re
+        clean_a = re.sub(r'<[^>]+>', '', a)
+        writer.writerow([clean_a])
+        
+    return buf.getvalue()
+
 def _verdict_block(snapshot: dict[str, Any]) -> str:
     vc = snapshot.get("verdict_class") or "yellow"
     css = {"green": "v-green", "yellow": "v-yellow", "red": "v-red"}.get(vc, "v-yellow")
     return f'<div class="verdict {css}">{snapshot.get("verdict_text", "")}</div>'
 
+
+import base64
 
 def render_proforma_html(payload: dict[str, Any], address: str) -> str:
     snap = payload.get("site_snapshot") or {}
@@ -517,6 +570,10 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
     primary_name = payload.get("primary_scenario")
     prepared = payload.get("prepared_on") or date.today().isoformat()
 
+    csv_text = proforma_to_csv(payload)
+    csv_b64 = base64.b64encode(csv_text.encode("utf-8")).decode("ascii")
+    csv_href = f"data:text/csv;base64,{csv_b64}"
+    
     # --- scenario tables ---
     scenario_rows = ""
     for s in scenarios:
@@ -619,6 +676,7 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
   .num{{font-variant-numeric:tabular-nums}}
   .small{{font-size:11px;color:#555}}
   .note{{font-size:12px;color:#555;font-style:italic;margin:8px 0}}
+  .btn{{display:inline-block;margin:8px 0 12px;padding:8px 14px;background:#0b2545;color:#fff;text-decoration:none;border-radius:4px;font-size:12px}}
   .ok{{color:#1a7a1a;font-weight:bold}}
   .wn{{color:#a06b00;font-weight:bold}}
   .fl{{color:#a02020;font-weight:bold}}
@@ -640,6 +698,7 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 <h2>1 · Executive Summary</h2>
 {_verdict_block(snap) if snap.get('verdict_text') else ''}
 <p class="exec">{payload.get('executive_summary', payload.get('headline', ''))}</p>
+<a class="btn" href="{csv_href}" download="proforma-{snap.get('parcel_id', 'parcel')}.csv">Download Scenario Math (CSV)</a>
 {fallback_note}
 
 <h2>2 · Site Snapshot</h2>
