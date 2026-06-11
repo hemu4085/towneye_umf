@@ -32,6 +32,8 @@ _DEFAULTS: dict[str, Any] = {
         "max_scan": 20000,
     },
     "require_by_right_multifamily": False,
+    "require_absentee_owner": False,
+    "require_entity_owner": False,
     "multifamily_zone_codes": ["MBMF", "NMF"],
     "limits": {
         "min_owner_tenure_years": [5, 40],
@@ -175,6 +177,12 @@ def merge_criteria_overrides(
     if "require_by_right_multifamily" in raw and raw["require_by_right_multifamily"] is not None:
         merged["require_by_right_multifamily"] = bool(raw["require_by_right_multifamily"])
 
+    if "require_absentee_owner" in raw and raw["require_absentee_owner"] is not None:
+        merged["require_absentee_owner"] = bool(raw["require_absentee_owner"])
+
+    if "require_entity_owner" in raw and raw["require_entity_owner"] is not None:
+        merged["require_entity_owner"] = bool(raw["require_entity_owner"])
+
     if "sort_by" in raw and raw["sort_by"]:
         sort_by = str(raw["sort_by"])
         if sort_by in (cfg.get("sort_options") or _DEFAULTS["sort_options"]):
@@ -218,6 +226,8 @@ def criteria_snapshot(cfg: dict[str, Any]) -> dict[str, Any]:
         "exclude_zone_codes": list(cfg.get("exclude_zone_codes") or []),
         "require_no_open_permit": cfg.get("require_no_open_permit", True),
         "require_by_right_multifamily": cfg.get("require_by_right_multifamily", False),
+        "require_absentee_owner": cfg.get("require_absentee_owner", False),
+        "require_entity_owner": cfg.get("require_entity_owner", False),
         "top_n": cfg.get("top_n"),
         "sort_by": cfg.get("sort_by", "score"),
     }

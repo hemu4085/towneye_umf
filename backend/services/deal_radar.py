@@ -27,6 +27,8 @@ _SIGNAL_LABELS = {
     "underbuilt": "Underbuilt vs zoning envelope",
     "no_active_permit": "No active building permit",
     "by_right_multifamily": "By-right multi-family zoning",
+    "absentee_owner": "Absentee owner",
+    "entity_owner": "LLC / Corporate owner",
 }
 
 
@@ -227,6 +229,7 @@ def _passes_filters(
     has_open_permit: bool,
     zone_code: str | None,
     cfg: dict[str, Any],
+    **kwargs: Any,
 ) -> bool:
     min_tenure = float(cfg.get("min_owner_tenure_years") or 15)
     if tenure is None or tenure < min_tenure:
@@ -268,6 +271,12 @@ def _passes_filters(
         multifamily_zones = {str(z).upper() for z in (cfg.get("multifamily_zone_codes") or [])}
         if not zone_code or zone_code.upper() not in multifamily_zones:
             return False
+
+    if cfg.get("require_absentee_owner") and not kwargs.get("is_absentee"):
+        return False
+        
+    if cfg.get("require_entity_owner") and not kwargs.get("is_entity"):
+        return False
 
     return True
 
@@ -330,6 +339,25 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             else None
         )
         has_open = parcel_id in open_permits
+        
+        owner_name = str(row.get("owner_name") or "").strip()
+        is_entity = False
+        if owner_name:
+            upper_name = owner_name.upper()
+            is_entity = any(kw in upper_name for kw in ["LLC", "INC", "CORP", "TRUST", "TR ", "TRS ", "REALTY", "ASSOCIATES", "L.L.C."])
+            
+        owner_addr = str(metadata.get("owner_address") or metadata.get("mailing_address") or "").strip().lower()
+        site_addr = str(row.get("address") or "").strip().lower()
+        
+        # Absentee if owner_address exists and isn't a substring of site address (and vice versa)
+        # We enforce len > 5 to avoid empty or trivial string matches
+        is_absentee = False
+        if len(owner_addr) > 5 and len(site_addr) > 5:
+            # simple normalized compare: strip spaces and compare first 10 chars
+            o_clean = owner_addr.replace(" ", "").replace(",", "")
+            s_clean = site_addr.replace(" ", "").replace(",", "")
+            is_absentee = o_clean[:10] != s_clean[:10]
+
         if not _passes_filters(
             tenure=tenure,
             utilization=utilization,
@@ -341,6 +369,8 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             has_open_permit=has_open,
             zone_code=zone_code,
             cfg=cfg,
+            is_absentee=is_absentee,
+            is_entity=is_entity,
         ):
             continue
 
@@ -356,6 +386,10 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
         multifamily_zones = {str(z).upper() for z in (cfg.get("multifamily_zone_codes") or [])}
         if zone_code and zone_code.upper() in multifamily_zones:
             signals.append("by_right_multifamily")
+        if is_absentee:
+            signals.append("absentee_owner")
+        if is_entity:
+            signals.append("entity_owner")
             
         candidates.append({
             "parcel_id": parcel_id,
@@ -375,6 +409,8 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             "score": score,
             "signals": signals,
             "by_right_multifamily": "by_right_multifamily" in signals,
+            "is_absentee": is_absentee,
+            "is_entity": is_entity,
         })
 
     _sort_candidates(candidates, str(cfg.get("sort_by") or "score"))
@@ -559,6 +595,13 @@ def _criteria_html_lines(criteria: dict[str, Any]) -> str:
     lines.append(
         f"<li>By-right multi-family: <strong>{'Required' if multifamily else 'Any'}</strong></li>"
     )
+    absentee = criteria.get("require_absentee_owner", False)
+    if absentee:
+        lines.append(f"<li>Owner occupancy: <strong>Absentee only</strong></li>")
+    entity = criteria.get("require_entity_owner", False)
+    if entity:
+        lines.append(f"<li>Owner entity: <strong>LLC/Corporate only</strong></li>")
+        
     lines.append(f"<li>Sort by: <strong>{criteria.get('sort_by', 'score')}</strong></li>")
     lines.append(f"<li>Top N: <strong>{criteria.get('top_n', 50)}</strong></li>")
     return "".join(lines)
@@ -582,11 +625,13 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
         row_cls = ' class="highlight"' if is_hi else ""
         hi_tag = ' <span class="tag">Your parcel</span>' if is_hi else ""
         mf_tag = ' <span class="tag mf">By-Right MF</span>' if d.get('by_right_multifamily') else ""
+        absentee_tag = ' <span class="tag absentee">Absentee</span>' if d.get('is_absentee') else ""
+        entity_tag = ' <span class="tag entity">LLC/Corp</span>' if d.get('is_entity') else ""
         deal_rows += f"""<tr{row_cls}>
           <td class="num">{d.get('rank', '—')}</td>
-          <td>{d.get('address', '—')}{hi_tag}{mf_tag}</td>
+          <td>{d.get('address', '—')}{hi_tag}{mf_tag}{absentee_tag}</td>
           <td class="small">{d.get('parcel_id', '—')}</td>
-          <td>{d.get('owner_name') or '—'}</td>
+          <td>{d.get('owner_name') or '—'}{entity_tag}</td>
           <td>{d.get('zone_code') or '—'}</td>
           <td class="num">{d.get('tenure_years', '—')}</td>
           <td class="num">{_fmt_int(d.get('existing_gfa_sqft'))}</td>
@@ -639,6 +684,8 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
   .note{{font-size:12px;color:#555;font-style:italic;margin:8px 0}}
   .tag{{display:inline-block;background:#0b2545;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;margin-left:4px}}
   .tag.mf{{background:#1a7a1a}}
+  .tag.absentee{{background:#a06b00}}
+  .tag.entity{{background:#555}}
   .btn{{display:inline-block;margin:8px 0 12px;padding:8px 14px;background:#0b2545;color:#fff;text-decoration:none;border-radius:4px;font-size:12px}}
   ul{{margin:6px 0;padding-left:20px}}
   .footnote{{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}}
