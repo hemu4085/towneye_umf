@@ -50,6 +50,7 @@ class ReportRequest(BaseModel):
     prepared_for: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    overrides: Optional[dict[str, Any]] = None
 
 
 class DealRadarCriteria(BaseModel):
@@ -307,12 +308,12 @@ def report_market(req: ReportRequest, request: Request):
 @router.post("/proforma")
 def report_proforma(req: ReportRequest, request: Request):
     try:
-        html = get_demo_report_html(req.town_slug, req.parcel_id, "proforma")
+        html = None if req.overrides else get_demo_report_html(req.town_slug, req.parcel_id, "proforma")
         from_cache = html is not None
         payload = None
         if html is None:
             data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
-            payload = proforma.generate_proforma(data)
+            payload = proforma.generate_proforma(data, req.overrides)
             html = proforma.render_proforma_html(payload, req.address)
         return _report_response("proforma", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
