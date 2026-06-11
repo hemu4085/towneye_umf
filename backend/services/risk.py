@@ -231,9 +231,11 @@ def render_risk_html(data: BriefData) -> str:
   .v-red{{background:#fadcdc;color:#7a1a1a;border-left:6px solid #a02020}}
   ul{{margin:6px 0;padding-left:20px}}
   .footnote{{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}}
+  .logo-header {{ position: absolute; top: 20px; right: 28px; height: 32px; opacity: 0.8; }}
 </style></head><body>
 
-<div class="hd">
+<div class="hd" style="position: relative;">
+  <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
   <h1>Risk &amp; Constraints Report</h1>
   <div style="font-size:15px;color:#0b2545;font-weight:bold">{payload['address']}</div>
   <div class="meta">Parcel ID {payload['parcel_id']} · Overall: <span class="{overall_pill}">{overall.upper()}</span></div>

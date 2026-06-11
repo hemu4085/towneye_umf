@@ -70,7 +70,10 @@ export default function Dashboard() {
   const snap = parcel?.assessor_snapshot || {};
 
   return (
-    <div className="min-h-screen px-4 py-8 max-w-6xl mx-auto">
+    <div className="min-h-screen px-4 py-8 max-w-6xl mx-auto relative">
+      <a href="/" className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-block">
+        <img src="/logo.png" alt="TownEye Logo" className="h-8 sm:h-10 w-auto opacity-80 hover:opacity-100 transition-opacity" />
+      </a>
       <FlowSteps current="pick" />
 
       <Link to="/" className="text-gold text-sm hover:underline">

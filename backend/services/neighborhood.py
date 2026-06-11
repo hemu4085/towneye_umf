@@ -21,7 +21,13 @@ Note data limitations clearly in data_sources array."""
 def render_neighborhood_html(payload: dict, address: str) -> str:
     bullets = "".join(f"<li>{h}</li>" for h in (payload.get("highlights") or []))
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>body{{font-family:'DM Sans',sans-serif;max-width:780px;margin:24px auto}}</style></head><body>
-<h1>Neighborhood Intel</h1><p><strong>{address}</strong></p>
+<style>
+  body{{font-family:'DM Sans',sans-serif;max-width:780px;margin:24px auto}}
+  .logo-header {{ position: absolute; top: 24px; right: 20px; height: 32px; opacity: 0.8; }}
+</style></head><body>
+<div style="position: relative;">
+  <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
+  <h1>Neighborhood Intel</h1><p><strong>{address}</strong></p>
+</div>
 <p>Walk score: {payload.get('walk_score','N/A')} · {payload.get('transit_summary','')}</p>
 <ul>{bullets}</ul></body></html>"""

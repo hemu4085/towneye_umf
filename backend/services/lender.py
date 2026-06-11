@@ -1094,9 +1094,11 @@ def generate_lender_html(data: BriefData, prepared_for: str | None) -> str:
   .page-break{{page-break-before:always}}
   .disclaimer{{font-size:11px;color:#666;margin-top:36px;border-top:1px solid #ccc;padding-top:12px}}
   .verdict{{padding:10px 14px;border-radius:4px;background:#f4f6fb;border-left:4px solid #0B1F3A;margin:10px 0}}
+  .logo-header {{ position: absolute; top: 20px; right: 28px; height: 32px; opacity: 0.8; }}
 </style></head><body>
-<div class="te-report">
+<div class="te-report" style="position: relative;">
 
+<img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
 <div class="hero">
   <h1>Lender Due Diligence Pack</h1>
   <p><strong>{_esc(address)}</strong></p>

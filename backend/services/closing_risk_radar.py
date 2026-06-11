@@ -732,10 +732,12 @@ def render_closing_risk_radar_html(payload: dict[str, Any]) -> str:
   .btn{{display:inline-block;margin:8px 0 12px;padding:8px 14px;background:#0b2545;color:#fff;text-decoration:none;border-radius:4px;font-size:12px}}
   ul{{margin:6px 0;padding-left:20px}}
   .footnote{{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}}
+  .logo-header {{ position: absolute; top: 20px; right: 28px; height: 32px; opacity: 0.8; }}
 </style></head><body>
 <div class="te-report">
 
-<div class="hd">
+<div class="hd" style="position: relative;">
+  <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
   <h1>Closing Risk Radar</h1>
   <div style="font-size:15px;color:#0b2545;font-weight:bold">{town}, {state}</div>
   <div class="meta">Prepared on {prepared} · Top {payload.get('top_n', 50)} of {payload.get('total_matches', 0):,} matches · {payload.get('parcels_scanned', 0):,} parcels scanned</div>
