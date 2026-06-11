@@ -1,5 +1,4 @@
 export const USER_TYPES = [
-  { id: 'agent', label: 'RE Agent' },
   { id: 'developer', label: 'Developer' },
   { id: 'attorney', label: 'Attorney' },
   { id: 'architect', label: 'Architect' },
@@ -14,19 +13,9 @@ export const USER_TYPES = [
  * null   = not relevant (hidden)
  */
 export const REPORT_ACCESS = {
-  agent: {
-    buildability: 'must',
-    market: 'must',
-    risk: null,
-    proforma: null,
-    zoning: null,
-    neighborhood: null,
-    lender: null,
-  },
   developer: {
     'deal-radar': 'must',
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -36,7 +25,6 @@ export const REPORT_ACCESS = {
   attorney: {
     'closing-risk-radar': 'must',
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -45,7 +33,6 @@ export const REPORT_ACCESS = {
   },
   architect: {
     buildability: 'must',
-    market: null,
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -54,7 +41,6 @@ export const REPORT_ACCESS = {
   },
   lender: {
     buildability: 'useful',
-    market: 'useful',
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -64,13 +50,25 @@ export const REPORT_ACCESS = {
   homeowner: {
     'homeowner-full': 'must',
     buildability: 'useful',
-    market: 'useful',
     risk: 'useful',
     proforma: null,
     zoning: null,
     neighborhood: null,
     lender: null,
   },
+};
+
+/** deterministic | hybrid | llm — shown as Data-backed / Data+AI / AI-synthesized badges */
+export const REPORT_ENGINE = {
+  'deal-radar': 'deterministic',
+  'closing-risk-radar': 'deterministic',
+  'homeowner-full': 'hybrid',
+  buildability: 'deterministic',
+  risk: 'deterministic',
+  proforma: 'hybrid',
+  zoning: 'deterministic',
+  neighborhood: 'llm',
+  lender: 'deterministic',
 };
 
 export const REPORTS = [
@@ -82,6 +80,7 @@ export const REPORTS = [
       'Town-wide ranked list — no address needed. Long tenure, underbuilt lots, no active permit; CSV export',
     time: '~instant on demo parcel · ~10–30 sec live scan',
     endpoint: 'deal-radar',
+    report_engine: 'deterministic',
   },
   {
     id: 'closing-risk-radar',
@@ -91,15 +90,17 @@ export const REPORTS = [
       'Town-wide due-diligence scan — open/expired permits, flood SFHA, wetlands, historic flags; CSV export',
     time: '~instant on demo · ~15–45 sec live scan',
     endpoint: 'closing-risk-radar',
+    report_engine: 'deterministic',
   },
   {
     id: 'homeowner-full',
     icon: '🏠',
     name: 'Full Property Report',
     description:
-      'Complete home intelligence: facts, zoning, buildability, risks & market — like a professional house report',
+      'Complete home intelligence: facts, zoning, buildability, risks & constraints — like a professional house report',
     time: '~1–2 min live',
     endpoint: 'homeowner-full',
+    report_engine: 'hybrid',
   },
   {
     id: 'buildability',
@@ -109,14 +110,7 @@ export const REPORTS = [
       'Full zoning stack, overlay analysis, development options & permitting timeline',
     time: '~instant on demo parcel',
     endpoint: 'buildability',
-  },
-  {
-    id: 'market',
-    icon: '📊',
-    name: 'Market Snapshot',
-    description: 'Median price, DOM, inventory & comps within 0.25mi',
-    time: '~20–60 sec live',
-    endpoint: 'market',
+    report_engine: 'deterministic',
   },
   {
     id: 'risk',
@@ -125,6 +119,7 @@ export const REPORTS = [
     description: 'Open permits, flood/wetland detail, historic flags & code violations',
     time: '~20–60 sec live',
     endpoint: 'risk',
+    report_engine: 'deterministic',
   },
   {
     id: 'proforma',
@@ -133,6 +128,7 @@ export const REPORTS = [
     description: 'Unit yield, construction cost estimate & indicative ROI tied to zoning envelopes',
     time: '~instant on demo parcel · live LLM otherwise',
     endpoint: 'proforma',
+    report_engine: 'hybrid',
   },
   {
     id: 'zoning',
@@ -141,6 +137,7 @@ export const REPORTS = [
     description: 'Base zone, overlays, permitted uses, setbacks & FAR — one page',
     time: '~5 seconds',
     endpoint: 'zoning',
+    report_engine: 'deterministic',
   },
   {
     id: 'neighborhood',
@@ -149,15 +146,17 @@ export const REPORTS = [
     description: 'Schools, walkability, transit, commute times & recent permits',
     time: '~10 seconds',
     endpoint: 'neighborhood',
+    report_engine: 'llm',
   },
   {
     id: 'lender',
     icon: '🏦',
     name: 'Lender Due Diligence Pack',
     description:
-      'Full collateral memo: tax, liens, violations, assessor comps, zoning, permits & market',
+      'Full collateral memo: tax, liens, violations, assessor facts, zoning, permits & constraints',
     time: '~20–45 sec live',
     endpoint: 'lender',
+    report_engine: 'deterministic',
   },
 ];
 
@@ -170,8 +169,15 @@ export function reportTier(userType, reportId) {
   return REPORT_ACCESS[userType]?.[reportId] ?? null;
 }
 
+export function reportEngine(reportId) {
+  return REPORT_ENGINE[reportId] || REPORTS.find((r) => r.id === reportId)?.report_engine || 'deterministic';
+}
+
 /** Town-wide reports — no parcel resolve required before generate. */
-export const TOWN_SCOPED_REPORTS = new Set(['deal-radar', 'closing-risk-radar']);
+export const TOWN_SCOPED_REPORTS = new Set([
+  'deal-radar',
+  'closing-risk-radar',
+]);
 
 export function reportRequiresParcel(reportId) {
   return !TOWN_SCOPED_REPORTS.has(reportId);
@@ -179,7 +185,6 @@ export function reportRequiresParcel(reportId) {
 
 export const LOADING_MESSAGES = [
   'Scanning assessor records…',
-  'Filtering tenure & underbuilt lots…',
   'Checking open permits…',
   'Ranking opportunities…',
   'Pulling zoning data…',

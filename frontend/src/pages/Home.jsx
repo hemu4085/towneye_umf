@@ -237,7 +237,7 @@ export default function Home() {
       return;
     }
     if (!userType) {
-      setError('Select your role (RE Agent or Developer) to choose a report.');
+      setError('Select your role (Developer, Attorney, etc.) to choose a report.');
       return;
     }
 

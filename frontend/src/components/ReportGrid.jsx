@@ -1,9 +1,15 @@
-import { reportTier, reportsForUserType } from '../reportCatalog';
+import { reportEngine, reportTier, reportsForUserType } from '../reportCatalog';
 import { buildReportRequestMailto } from '../utils/reportRequest';
 
 const TIER_BADGE = {
   must: { label: 'Must-have', className: 'bg-gold text-navy' },
   useful: { label: 'Useful', className: 'bg-navy-light border border-gold/50 text-gold' },
+};
+
+const ENGINE_BADGE = {
+  deterministic: { label: 'Data-backed', className: 'border border-emerald-500/40 text-emerald-300' },
+  hybrid: { label: 'Data + AI', className: 'border border-sky-500/40 text-sky-300' },
+  llm: { label: 'AI-synthesized', className: 'border border-violet-500/40 text-violet-300' },
 };
 
 export default function ReportGrid({
@@ -31,6 +37,8 @@ export default function ReportGrid({
       {visibleReports.map((r) => {
         const tier = reportTier(userType, r.id);
         const badge = tier ? TIER_BADGE[tier] : null;
+        const engine = reportEngine(r.id);
+        const engineBadge = ENGINE_BADGE[engine] || ENGINE_BADGE.deterministic;
         const isLoading = loadingId === r.id;
         const isDone = completed?.[r.id];
         const status = availability?.[r.id];
@@ -51,13 +59,22 @@ export default function ReportGrid({
           <>
             <div className="flex justify-between items-start gap-2">
               <span className="text-2xl">{r.icon}</span>
-              {badge && !isUnavailable && (
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-semibold shrink-0 ${badge.className}`}
-                >
-                  {badge.label}
-                </span>
-              )}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {badge && !isUnavailable && (
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full font-semibold ${badge.className}`}
+                  >
+                    {badge.label}
+                  </span>
+                )}
+                {!isUnavailable && (
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full ${engineBadge.className}`}
+                  >
+                    {engineBadge.label}
+                  </span>
+                )}
+              </div>
             </div>
             <h3 className="font-display text-lg text-cream mt-2">{r.name}</h3>
             <p className="text-sm text-graytown mt-1">{r.description}</p>

@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, market, neighborhood, proforma, risk, zoning
+from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning
 from backend.services.buildability import collect_brief_data
 from backend.services.closing_risk_radar_config import get_portal_closing_risk_radar_config
 from backend.services.demo_reports import (

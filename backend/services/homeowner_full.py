@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import re
 
-from backend.services import buildability, market, risk, zoning
+from backend.services import buildability, risk, zoning
 from backend.services.buildability import collect_brief_data
 from backend.services.demo_reports import get_demo_report_html
-from backend.services.market import _assessed_value, _lot_sqft, generate_market_report, render_market_html
 from reports.buildability_brief import BriefData
 
 
@@ -68,14 +67,25 @@ def _buildability_section_html(town_slug: str, parcel_id: str, data: BriefData, 
     """
 
 
+def _assessed_value(data: BriefData) -> float | None:
+    if data.property_info is not None and data.property_info.assessed_value is not None:
+        return data.property_info.assessed_value
+    return None
+
+def _lot_sqft(data: BriefData) -> float | None:
+    if data.parcel.area_sqft is not None:
+        return float(data.parcel.area_sqft)
+    if data.property_info is not None and data.property_info.lot_size_sqft is not None:
+        return float(data.property_info.lot_size_sqft)
+    return None
+
 def generate_homeowner_full_html(
     town_slug: str,
     parcel_id: str,
     prepared_for: str | None = None,
 ) -> str:
     data = collect_brief_data(town_slug, parcel_id, prepared_for)
-    market_payload = generate_market_report(data)
-    market_body = _extract_body(render_market_html(market_payload, data.parcel.address or ""))
+    market_body = ""
     risk_body = _extract_body(risk.render_risk_html(data))
     zoning_body = _extract_body(zoning.render_zoning_html(data))
     assessed = _assessed_value(data)
@@ -116,10 +126,6 @@ def generate_homeowner_full_html(
   <section class="te-section page-break" id="risk">
     <h2>Risk &amp; constraints</h2>
     {risk_body}
-  </section>
-  <section class="te-section page-break" id="market">
-    <h2>Market context</h2>
-    {market_body}
   </section>
   <p class="te-disclaimer">
     TownEye Full Property Report — informational only, not an appraisal, legal opinion, or listing.
