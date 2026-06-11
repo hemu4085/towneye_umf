@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning
+from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning, permit_timeline
 from backend.services.buildability import collect_brief_data
 from backend.services.closing_risk_radar_config import get_portal_closing_risk_radar_config
 from backend.services.demo_reports import (
@@ -40,6 +40,7 @@ ReportType = Literal[
     "homeowner-full",
     "deal-radar",
     "closing-risk-radar",
+    "permit-timeline",
 ]
 
 
@@ -405,6 +406,15 @@ def report_deal_radar(req: DealRadarRequest, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+@router.post("/permit-timeline")
+def report_permit_timeline(req: ReportRequest, request: Request):
+    try:
+        payload = permit_timeline.generate_permit_timeline(req.town_slug)
+        html = permit_timeline.render_permit_timeline_html(payload)
+        return _report_response("permit-timeline", html, payload, req, request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @router.get("/closing-risk-radar/config")
 def closing_risk_radar_portal_config(town_slug: str):
