@@ -61,8 +61,11 @@
 {% if d.has_overlay_election %}
 <p>
 This parcel sits under <strong>{{ d.base_zoning_hits|length }} base district(s)</strong>
-and <strong>{{ d.overlay_zoning_hits|length }} overlay district(s)</strong>.  The
-buildable envelope under the overlay is materially larger than under the base
+and <strong>{{ d.overlay_zoning_hits|length }} overlay district(s)</strong>.
+{% if d.has_mbta_communities_overlay %}
+It qualifies for by-right multi-family development under the <strong>MBTA Communities Act (§3A)</strong> overlay.
+{% endif %}
+The buildable envelope under the overlay is materially larger than under the base
 zone — see §3 and §4 for the side-by-side analysis.
 </p>
 {% else %}
@@ -72,6 +75,10 @@ The buildable envelope is governed entirely by the base district's dimensional
 controls; see §3 and §4.
 </p>
 {% endif %}
+
+<p>
+<strong>Statewide ADU law (MA AHA c. 150/2024):</strong> By-right Accessory Dwelling Units (ADUs) ≤ 900 sqft are permitted in single-family zones across the Commonwealth. This right supersedes local bans, subject to dimensional setbacks.
+</p>
 
 <p class="src">
 Sources: {{ d.inputs.town_slug }} Tax Assessor (property.parquet); Town zoning
@@ -312,7 +319,7 @@ each applicable zone code.
   <td>Add Accessory Dwelling Unit (ADU)</td>
   <td>Base zone use table; MA AHA c. 150/2024 dimensional floor</td>
   <td>By-right (subject to setbacks)</td>
-  <td><span class="wn">Lot-size dependent</span></td>
+  <td><span class="ok">Yes (Statewide by-right)</span></td>
 </tr>
 {% endif %}
 

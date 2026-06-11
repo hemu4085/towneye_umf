@@ -183,6 +183,7 @@ class BriefData(BaseModel):
     raw_stack: ParcelOverlayStack
 
     has_overlay_election: bool = False
+    has_mbta_communities_overlay: bool = False
     primary_zone_code: Optional[str] = None
     primary_overlay_code: Optional[str] = None
     headline_verdict_class: str = "v-yellow"
@@ -284,6 +285,7 @@ class BuildabilityBriefGenerator:
             wraparound=wraparound,
             raw_stack=stack,
             has_overlay_election=bool(overlay_hits),
+            has_mbta_communities_overlay=any(h.code in {"MBMF", "NMF"} for h in overlay_hits),
             primary_zone_code=(base_hits[0].code if base_hits else None),
             primary_overlay_code=(overlay_hits[0].code if overlay_hits else None),
             headline_verdict_class=verdict_class,
