@@ -26,6 +26,7 @@ _SIGNAL_LABELS = {
     "long_tenure": "Long owner tenure",
     "underbuilt": "Underbuilt vs zoning envelope",
     "no_active_permit": "No active building permit",
+    "by_right_multifamily": "By-right multi-family zoning",
 }
 
 
@@ -224,6 +225,7 @@ def _passes_filters(
     lot_sqft: float | None,
     assessed: float | None,
     has_open_permit: bool,
+    zone_code: str | None,
     cfg: dict[str, Any],
 ) -> bool:
     min_tenure = float(cfg.get("min_owner_tenure_years") or 15)
@@ -260,6 +262,13 @@ def _passes_filters(
         return False
     if not _in_range(lot_sqft, cfg.get("min_lot_sqft"), cfg.get("max_lot_sqft")):
         return False
+
+    require_multifamily = cfg.get("require_by_right_multifamily", False)
+    if require_multifamily:
+        multifamily_zones = {str(z).upper() for z in (cfg.get("multifamily_zone_codes") or [])}
+        if not zone_code or zone_code.upper() not in multifamily_zones:
+            return False
+
     return True
 
 
@@ -330,6 +339,7 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             lot_sqft=lot_sqft,
             assessed=assessed,
             has_open_permit=has_open,
+            zone_code=zone_code,
             cfg=cfg,
         ):
             continue
@@ -341,6 +351,12 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             lot_sqft=lot_sqft,
             cfg=cfg,
         )
+        
+        signals = ["long_tenure", "underbuilt", "no_active_permit"]
+        multifamily_zones = {str(z).upper() for z in (cfg.get("multifamily_zone_codes") or [])}
+        if zone_code and zone_code.upper() in multifamily_zones:
+            signals.append("by_right_multifamily")
+            
         candidates.append({
             "parcel_id": parcel_id,
             "address": str(row.get("address") or "").strip(),
@@ -357,7 +373,8 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             "assessed_value": assessed,
             "open_permit_count": 1 if has_open else 0,
             "score": score,
-            "signals": ["long_tenure", "underbuilt", "no_active_permit"],
+            "signals": signals,
+            "by_right_multifamily": "by_right_multifamily" in signals,
         })
 
     _sort_candidates(candidates, str(cfg.get("sort_by") or "score"))
@@ -538,6 +555,10 @@ def _criteria_html_lines(criteria: dict[str, Any]) -> str:
     lines.append(
         f"<li>Open permits: <strong>{'Excluded' if permit else 'Allowed'}</strong></li>"
     )
+    multifamily = criteria.get("require_by_right_multifamily", False)
+    lines.append(
+        f"<li>By-right multi-family: <strong>{'Required' if multifamily else 'Any'}</strong></li>"
+    )
     lines.append(f"<li>Sort by: <strong>{criteria.get('sort_by', 'score')}</strong></li>")
     lines.append(f"<li>Top N: <strong>{criteria.get('top_n', 50)}</strong></li>")
     return "".join(lines)
@@ -560,9 +581,10 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
         is_hi = d.get("parcel_id") == highlight_id
         row_cls = ' class="highlight"' if is_hi else ""
         hi_tag = ' <span class="tag">Your parcel</span>' if is_hi else ""
+        mf_tag = ' <span class="tag mf">By-Right MF</span>' if d.get('by_right_multifamily') else ""
         deal_rows += f"""<tr{row_cls}>
           <td class="num">{d.get('rank', '—')}</td>
-          <td>{d.get('address', '—')}{hi_tag}</td>
+          <td>{d.get('address', '—')}{hi_tag}{mf_tag}</td>
           <td class="small">{d.get('parcel_id', '—')}</td>
           <td>{d.get('owner_name') or '—'}</td>
           <td>{d.get('zone_code') or '—'}</td>
@@ -616,6 +638,7 @@ def render_deal_radar_html(payload: dict[str, Any]) -> str:
   .small{{font-size:11px;color:#555}}
   .note{{font-size:12px;color:#555;font-style:italic;margin:8px 0}}
   .tag{{display:inline-block;background:#0b2545;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;margin-left:4px}}
+  .tag.mf{{background:#1a7a1a}}
   .btn{{display:inline-block;margin:8px 0 12px;padding:8px 14px;background:#0b2545;color:#fff;text-decoration:none;border-radius:4px;font-size:12px}}
   ul{{margin:6px 0;padding-left:20px}}
   .footnote{{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}}

@@ -71,6 +71,7 @@ class DealRadarCriteria(BaseModel):
     include_zone_codes: Optional[list[str]] = None
     exclude_zone_codes: Optional[list[str]] = None
     require_no_open_permit: Optional[bool] = None
+    require_by_right_multifamily: Optional[bool] = None
     top_n: Optional[int] = None
     sort_by: Optional[str] = None
 
