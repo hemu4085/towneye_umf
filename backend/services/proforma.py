@@ -611,9 +611,11 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
   ul{{margin:6px 0;padding-left:20px}}
   .footnote{{font-size:10.5px;color:#555;margin-top:16px;border-top:1px solid #ddd;padding-top:10px}}
   .exec{{margin:10px 0 14px;color:#222}}
+  .logo-header {{ position: absolute; top: 20px; right: 28px; height: 32px; opacity: 0.8; }}
 </style></head><body>
 
-<div class="hd">
+<div class="hd" style="position: relative;">
+  <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
   <h1>Development Pro Forma</h1>
   <div style="font-size:15px;color:#0b2545;font-weight:bold">{address}</div>
   <div class="meta">Prepared on {prepared} &nbsp;·&nbsp; Parcel ID {snap.get('parcel_id', payload.get('parcel_id', '—'))}</div>

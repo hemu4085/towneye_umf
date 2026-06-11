@@ -60,8 +60,11 @@ def render_zoning_html(data: BriefData) -> str:
   table{{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}}
   th{{background:#0B1F3A;color:#F5F0E8;text-align:left;padding:8px}}
   td{{padding:8px;border-bottom:1px solid #e5e5e5}}
+  .logo-header {{ position: absolute; top: 24px; right: 20px; height: 32px; opacity: 0.8; }}
 </style></head><body>
-<h1>Zoning Summary Card</h1>
+<div style="position: relative;">
+  <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
+  <h1>Zoning Summary Card</h1>
 <p><strong>{payload['address']}</strong> · Parcel {payload['parcel_id']}</p>
 <table>
 <tr><th>Zone</th><th>Description</th><th>Permitted uses</th><th>Max FAR</th><th>Min lot</th><th>Front setback</th></tr>
