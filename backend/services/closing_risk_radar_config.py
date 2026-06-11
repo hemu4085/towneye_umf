@@ -25,6 +25,8 @@ _DEFAULTS: dict[str, Any] = {
     "require_flood_sfha_only": False,
     "include_wetland": True,
     "include_historic": True,
+    "include_21e_sites": True,
+    "include_ust_sites": True,
     "exclude_zone_codes": [],
     "exclude_luc_prefixes": [],
     "scoring": {
@@ -33,6 +35,8 @@ _DEFAULTS: dict[str, Any] = {
         "flood_weight": 0.25,
         "wetland_weight": 0.15,
         "historic_weight": 0.10,
+        "21e_weight": 0.50,
+        "ust_weight": 0.20,
     },
     "output": {
         "top_n": 50,
@@ -123,6 +127,8 @@ def merge_criteria_overrides(
         "require_flood_sfha_only",
         "include_wetland",
         "include_historic",
+        "include_21e_sites",
+        "include_ust_sites",
     )
     for key in bool_keys:
         if key in raw and raw[key] is not None:
@@ -174,6 +180,8 @@ def criteria_snapshot(cfg: dict[str, Any]) -> dict[str, Any]:
         "require_flood_sfha_only": cfg.get("require_flood_sfha_only", False),
         "include_wetland": cfg.get("include_wetland", True),
         "include_historic": cfg.get("include_historic", True),
+        "include_21e_sites": cfg.get("include_21e_sites", True),
+        "include_ust_sites": cfg.get("include_ust_sites", True),
         "min_assessed_value": cfg.get("min_assessed_value"),
         "max_assessed_value": cfg.get("max_assessed_value"),
         "min_lot_sqft": cfg.get("min_lot_sqft"),

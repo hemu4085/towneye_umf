@@ -32,6 +32,8 @@ _SIGNAL_LABELS = {
     "flood_sfha": "Special Flood Hazard Area",
     "wetland": "Wetland overlay",
     "historic": "Historic resource / district",
+    "21e_site": "MassDEP 21E Contamination Site",
+    "ust_site": "Underground Storage Tank (UST)",
 }
 
 
@@ -284,6 +286,8 @@ def _overlay_risk_index(town_slug: str) -> dict[str, dict[str, Any]]:
             "flood_sfha": "flood_sfha" in flags,
             "wetland": "wetland" in flags,
             "historic": "historic" in flags,
+            "21e_site": "21e_site" in flags,
+            "ust_site": "ust_site" in flags,
         }
     return out
 
@@ -347,6 +351,10 @@ def _active_signals(
         signals.append("wetland")
     if cfg.get("include_historic", True) and overlay.get("historic"):
         signals.append("historic")
+    if cfg.get("include_21e_sites", True) and overlay.get("21e_site"):
+        signals.append("21e_site")
+    if cfg.get("include_ust_sites", True) and overlay.get("ust_site"):
+        signals.append("ust_site")
     return sorted(set(signals))
 
 
@@ -357,6 +365,8 @@ def _score_risk(signals: list[str], permit: dict[str, Any], cfg: dict[str, Any])
     w_flood = float(weights.get("flood_weight") or 0.25)
     w_wetland = float(weights.get("wetland_weight") or 0.15)
     w_hist = float(weights.get("historic_weight") or 0.10)
+    w_21e = float(weights.get("21e_weight") or 0.50)
+    w_ust = float(weights.get("ust_weight") or 0.20)
 
     score = 0.0
     open_n = int(permit.get("open_count") or 0)
@@ -372,6 +382,10 @@ def _score_risk(signals: list[str], permit: dict[str, Any], cfg: dict[str, Any])
         score += w_wetland * 100.0
     if "historic" in signals:
         score += w_hist * 100.0
+    if "21e_site" in signals:
+        score += w_21e * 100.0
+    if "ust_site" in signals:
+        score += w_ust * 100.0
     return round(min(score, 100.0), 1)
 
 
@@ -451,6 +465,8 @@ def scan_town_closing_risks(
                 "flood_sfha": False,
                 "wetland": False,
                 "historic": False,
+                "21e_site": False,
+                "ust_site": False,
             },
         )
         signals = _active_signals(permit, overlay, cfg)
@@ -497,6 +513,8 @@ def scan_town_closing_risks(
             "flood_sfha": bool(overlay.get("flood_sfha")),
             "wetland": bool(overlay.get("wetland")),
             "historic": bool(overlay.get("historic")),
+            "21e_site": bool(overlay.get("21e_site")),
+            "ust_site": bool(overlay.get("ust_site")),
             "risk_score": risk_score,
             "signals": signals,
             "signal_labels": [_SIGNAL_LABELS.get(s, s) for s in signals],
@@ -606,6 +624,8 @@ def closing_risk_radar_to_csv(payload: dict[str, Any]) -> str:
         "flood_sfha",
         "wetland",
         "historic",
+        "21e_site",
+        "ust_site",
         "tenure_years",
         "assessed_value",
         "signals",
@@ -642,6 +662,8 @@ def _criteria_html_lines(criteria: dict[str, Any]) -> str:
         ("include_flood_preliminary", "FEMA flood (preliminary)"),
         ("include_wetland", "Wetlands"),
         ("include_historic", "Historic resources"),
+        ("include_21e_sites", "MassDEP 21E Sites"),
+        ("include_ust_sites", "UST Registry"),
     ]
     enabled = [label for key, label in toggles if criteria.get(key)]
     if enabled:
@@ -685,6 +707,8 @@ def render_closing_risk_radar_html(payload: dict[str, Any]) -> str:
           <td>{'Yes' if row.get('flood_sfha') else '—'}</td>
           <td>{'Yes' if row.get('wetland') else '—'}</td>
           <td>{'Yes' if row.get('historic') else '—'}</td>
+          <td>{'<span class="fl">Yes</span>' if row.get('21e_site') else '—'}</td>
+          <td>{'<span class="wn">Yes</span>' if row.get('ust_site') else '—'}</td>
           <td>{_signal_badges(row.get('signals') or [])}</td>
         </tr>"""
 
@@ -756,7 +780,7 @@ def render_closing_risk_radar_html(payload: dict[str, Any]) -> str:
 
 <h2>3 · Ranked Closing Risks</h2>
 <table>
-<tr><th>#</th><th>Address</th><th>Parcel ID</th><th>Owner</th><th>Zone</th><th>Risk</th><th>Open</th><th>Expired</th><th>SFHA</th><th>Wetland</th><th>Historic</th><th>Signals</th></tr>
+<tr><th>#</th><th>Address</th><th>Parcel ID</th><th>Owner</th><th>Zone</th><th>Risk</th><th>Open</th><th>Expired</th><th>SFHA</th><th>Wetland</th><th>Historic</th><th>21E</th><th>UST</th><th>Signals</th></tr>
 {parcel_rows}
 </table>
 

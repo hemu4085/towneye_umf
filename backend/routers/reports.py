@@ -97,6 +97,8 @@ class ClosingRiskRadarCriteria(BaseModel):
     require_flood_sfha_only: Optional[bool] = None
     include_wetland: Optional[bool] = None
     include_historic: Optional[bool] = None
+    include_21e_sites: Optional[bool] = None
+    include_ust_sites: Optional[bool] = None
     min_assessed_value: Optional[float] = None
     max_assessed_value: Optional[float] = None
     min_lot_sqft: Optional[int] = None
