@@ -2,24 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-50;
+  }
+}
+
 @layer components {
+  /* Legacy buttons, phasing out but keeping to avoid breaks */
   .btn-gold {
-    @apply bg-gold text-navy font-semibold px-6 py-3 rounded-lg
-           hover:bg-gold-light transition-colors disabled:opacity-50;
+    @apply bg-brand-600 text-white font-medium px-5 py-2.5 rounded-md
+           hover:bg-brand-500 transition-colors disabled:opacity-50
+           border border-brand-500/50 shadow-sm shadow-brand-900/50;
   }
   .btn-outline {
-    @apply border border-gold text-cream px-4 py-2 rounded-lg
-           hover:bg-navy-light transition-colors;
+    @apply border border-slate-700 text-slate-300 px-4 py-2 rounded-md
+           hover:bg-slate-800 hover:text-white transition-colors;
   }
   .card {
-    @apply bg-navy-light border border-gold/30 rounded-xl p-5;
+    @apply bg-slate-900/50 border border-slate-800/80 rounded-xl p-5 backdrop-blur-sm shadow-lg;
   }
+  
+  /* New components */
+  .glass-panel {
+    @apply bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-xl shadow-xl;
+  }
+
   .shimmer {
     background: linear-gradient(
       90deg,
-      #122849 0%,
-      #C9A84C44 50%,
-      #122849 100%
+      #0f172a 0%,
+      #1e293b 50%,
+      #0f172a 100%
     );
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
