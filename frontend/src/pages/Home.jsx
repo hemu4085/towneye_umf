@@ -288,19 +288,26 @@ export default function Home() {
   const showAttorneyClosingRiskHint = userType === 'attorney';
 
   return (
-    <>
-      <header className="px-6 py-8 text-center border-b border-gold/20 relative">
-        <a href="/" className="absolute top-6 left-6 sm:top-8 sm:left-8 inline-block">
-          <img src="/logo.png" alt="TownEye Logo" className="h-10 sm:h-12 w-auto" />
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
+      <header className="px-6 py-12 text-center relative border-b border-slate-800 bg-slate-900/50 backdrop-blur-md">
+        <a href="/" className="absolute top-6 left-6 sm:top-8 sm:left-8 inline-flex items-center gap-2 group">
+          <div className="w-8 h-8 rounded bg-brand-500/20 border border-brand-500/50 flex items-center justify-center">
+            <div className="w-4 h-4 bg-brand-400 rounded-sm" />
+          </div>
+          <span className="font-sans font-semibold text-lg tracking-wide text-white group-hover:text-brand-400 transition-colors">TownEye</span>
         </a>
-        <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
-        <p className="text-graytown mt-2 text-lg">
-          The AI Powered Real Estate Platform - Find it, Know it, Build It
+        <h1 className="font-sans font-bold text-4xl md:text-5xl text-white tracking-tight">Municipal Intelligence Engine</h1>
+        <p className="text-slate-400 mt-4 text-lg max-w-2xl mx-auto font-light">
+          Institutional-grade feasibility, underwriting, and risk analysis for real estate developers and lenders.
         </p>
-        <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
+        <p className="text-xs font-mono text-brand-400/80 mt-6 uppercase tracking-widest bg-brand-500/10 inline-block px-3 py-1 rounded-full border border-brand-500/20">
+          Pilot Active: {pilotTown}
+        </p>
       </header>
 
-      <main className="flex-1 flex flex-col items-center px-6 py-12">
+      <main className="flex-1 flex flex-col items-center px-6 py-12 bg-slate-950 relative overflow-hidden">
+        {/* Subtle grid background */}
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDQwIEwgNDAgNDAgTCA0MCAwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4wMykiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] pointer-events-none" />
         <FlowSteps current={userType ? 'pick' : 'address'} />
 
         <div className="w-full max-w-6xl mx-auto flex flex-col items-center">
@@ -334,10 +341,9 @@ export default function Home() {
           <button
             type="button"
             onClick={loadDemoProperty}
-            className="mt-3 text-sm text-gold border border-gold/40 rounded-full px-4 py-2
-                       hover:bg-gold/10 transition-colors"
+            className="mt-4 text-xs font-mono text-slate-400 border border-slate-700/50 rounded px-3 py-1.5 hover:bg-slate-800 hover:text-slate-200 transition-colors"
           >
-            Quick demo — 5-7 Belknap St
+            Load Demo Address (5-7 Belknap St)
           </button>
 
           <ApiStatusBar online={apiOnline} checking={apiChecking} onRetry={refreshApiHealth} />
@@ -399,6 +405,6 @@ export default function Home() {
           {error && <p className="text-red-400 mt-4 text-center max-w-xl pb-4">{error}</p>}
         </div>
       </main>
-    </>
+    </div>
   );
 }

@@ -2,8 +2,8 @@ import { reportEngine, reportTier, reportsForUserType } from '../reportCatalog';
 import { buildReportRequestMailto } from '../utils/reportRequest';
 
 const TIER_BADGE = {
-  must: { label: 'Must-have', className: 'bg-gold text-navy' },
-  useful: { label: 'Useful', className: 'bg-navy-light border border-gold/50 text-gold' },
+  must: { label: 'Primary', className: 'bg-brand-500 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' },
+  useful: { label: 'Secondary', className: 'bg-slate-800 border border-slate-700 text-slate-300' },
 };
 
 const ENGINE_BADGE = {
@@ -45,13 +45,13 @@ export default function ReportGrid({
         const isUnavailable = apiOnline === true && status?.available === false;
         const isChecking = availabilityLoading && apiOnline === true && !status;
 
-        const className = `text-left card transition-all ${
+        const className = `text-left glass-panel transition-all p-5 relative overflow-hidden group ${
           isUnavailable
-            ? 'opacity-70 border-graytown/30 cursor-not-allowed'
-            : 'hover:border-gold cursor-pointer'
-        } ${tier === 'must' && !isUnavailable ? 'ring-2 ring-gold bg-gold/10' : ''} ${
-          isLoading ? 'shimmer' : ''
-        } ${loadingId && !isLoading ? 'opacity-60' : ''}`;
+            ? 'opacity-70 border-slate-800/50 cursor-not-allowed'
+            : 'hover:border-brand-500/50 hover:shadow-[0_0_20px_rgba(59,130,246,0.1)] cursor-pointer'
+        } ${tier === 'must' && !isUnavailable ? 'ring-1 ring-brand-500 bg-brand-500/5' : ''} ${
+          isLoading ? 'shimmer border-brand-500' : ''
+        } ${loadingId && !isLoading ? 'opacity-50 grayscale-[50%]' : ''}`;
 
         const mailto = buildReportRequestMailto(r, address || '', requestEmail, parcel);
 
@@ -76,28 +76,31 @@ export default function ReportGrid({
                 )}
               </div>
             </div>
-            <h3 className="font-display text-lg text-cream mt-2">{r.name}</h3>
-            <p className="text-sm text-graytown mt-1">{r.description}</p>
-            <p className="text-xs text-gold mt-3">{r.time}</p>
+            <h3 className="font-sans font-semibold text-lg text-white mt-4 group-hover:text-brand-300 transition-colors">{r.name}</h3>
+            <p className="text-sm text-slate-400 mt-2 leading-relaxed">{r.description}</p>
+            <p className="text-xs font-mono text-brand-400/80 mt-4 uppercase tracking-wider">{r.time}</p>
             {isChecking && (
-              <p className="text-sm text-graytown mt-2">Checking availability…</p>
+              <p className="text-sm text-slate-500 mt-3 flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></span>
+                Checking availability…
+              </p>
             )}
             {isUnavailable && (
-              <p className="text-sm text-graytown mt-3">
+              <p className="text-sm text-slate-500 mt-3">
                 Not Available.{' '}
                 <a
                   href={mailto}
-                  className="text-gold underline hover:text-gold-light"
+                  className="text-brand-400 hover:text-brand-300 underline underline-offset-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Request to generate it for you
+                  Request Override
                 </a>
               </p>
             )}
             {isDone && !isUnavailable && (
-              <p className="text-sm text-green-400 mt-2 font-medium">✓ View Report</p>
+              <p className="text-sm text-emerald-400 mt-3 font-medium flex items-center gap-1">✓ View Module</p>
             )}
-            {isLoading && <p className="text-sm text-gold mt-2">Generating…</p>}
+            {isLoading && <p className="text-sm text-brand-400 mt-3 font-medium animate-pulse">Running Intelligence Engine…</p>}
           </>
         );
 
