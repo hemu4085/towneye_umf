@@ -16,6 +16,7 @@ export const REPORT_ACCESS = {
   developer: {
     'deal-radar': 'must',
     buildability: 'must',
+    'civic-entitlements': 'must',
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -25,6 +26,7 @@ export const REPORT_ACCESS = {
   attorney: {
     'closing-risk-radar': 'must',
     buildability: 'must',
+    'civic-entitlements': 'must',
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -33,6 +35,7 @@ export const REPORT_ACCESS = {
   },
   architect: {
     buildability: 'must',
+    'civic-entitlements': 'must',
     risk: 'must',
     proforma: null,
     zoning: null,
@@ -41,6 +44,7 @@ export const REPORT_ACCESS = {
   },
   lender: {
     buildability: 'useful',
+    'civic-entitlements': 'useful',
     risk: 'must',
     proforma: 'must',
     zoning: null,
@@ -50,6 +54,7 @@ export const REPORT_ACCESS = {
   homeowner: {
     'homeowner-full': 'must',
     buildability: 'useful',
+    'civic-entitlements': 'useful',
     risk: 'useful',
     proforma: null,
     zoning: null,
@@ -64,6 +69,7 @@ export const REPORT_ENGINE = {
   'closing-risk-radar': 'deterministic',
   'homeowner-full': 'hybrid',
   buildability: 'deterministic',
+  'civic-entitlements': 'llm',
   risk: 'deterministic',
   proforma: 'hybrid',
   zoning: 'deterministic',
@@ -111,6 +117,16 @@ export const REPORTS = [
     time: '~instant on demo parcel',
     endpoint: 'buildability',
     report_engine: 'deterministic',
+  },
+  {
+    id: 'civic-entitlements',
+    icon: '🏛️',
+    name: 'Civic Entitlements Brief',
+    description:
+      'LLM-extracted history of Planning, Zoning, Conservation, and Historical Board decisions',
+    time: '~instant on demo parcel',
+    endpoint: 'civic-entitlements',
+    report_engine: 'llm',
   },
   {
     id: 'risk',

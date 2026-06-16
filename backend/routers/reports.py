@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from backend.config import get_settings
 from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning, permit_timeline
+from reports.civic_entitlements_brief import CivicEntitlementsBriefGenerator, CivicBriefInputs
 from backend.services.buildability import collect_brief_data
 from backend.services.closing_risk_radar_config import get_portal_closing_risk_radar_config
 from backend.services.demo_reports import (
@@ -41,6 +42,7 @@ ReportType = Literal[
     "deal-radar",
     "closing-risk-radar",
     "permit-timeline",
+    "civic-entitlements",
 ]
 
 
@@ -359,6 +361,19 @@ def report_homeowner_full(req: ReportRequest, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+@router.post("/civic-entitlements")
+def report_civic_entitlements(req: ReportRequest, request: Request):
+    try:
+        html = get_demo_report_html(req.town_slug, req.parcel_id, "civic-entitlements")
+        from_cache = html is not None
+        if html is None:
+            generator = CivicEntitlementsBriefGenerator(req.town_slug)
+            inputs = CivicBriefInputs(town_slug=req.town_slug, parcel_id=req.parcel_id)
+            html = generator.generate(inputs)
+        return _report_response("civic-entitlements", html, None, req, request, skip_pdf=from_cache)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @router.get("/deal-radar/config")
 def deal_radar_portal_config(town_slug: str):
