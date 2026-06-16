@@ -226,5 +226,28 @@ export TOWNEYE_GCS_BUCKET=towneye-umf-gold
 
 ---
 
+### 12. Feature Backlog: Cost of Living Intelligence Layer
+
+**Concept:** Extend TownEye's existing parcel and town-level data with a cost-of-living dimension, turning it from a buildability/transaction tool into a full "should I live/invest here" decision platform.
+
+**Core idea:** For any town or parcel TownEye already covers, surface the recurring cost burden, not just the buildability and zoning picture.
+
+**Report components:**
+- **Property tax trend report:** historical mill rate changes, projected trajectory, abatement eligibility
+- **Insurance risk score:** flood zone, wildfire/storm exposure, and resulting premium estimates by area
+- **Utility cost index:** average electric/gas/water rates and trends by town/utility provider
+- **Commute cost calculator:** estimated transportation cost/time to major job centers (Boston, Cambridge) factored against home price
+- **Total cost-of-ownership estimate:** rolls up tax + insurance + utilities + commute into one comparable number per town, parallel to your existing Quick Pro Forma logic
+
+**Why it fits TownEye specifically:**
+- Reuses existing parcel/town data infrastructure (MassGIS, MassLandRecords) rather than requiring new data pipelines
+- Adds a homeowner/buyer-facing report alongside your agent/developer/attorney suite, broadening segment coverage
+- Strong differentiator versus generic real estate sites: ties cost-of-living directly to parcel-level buildability and zoning context, which competitors don't combine
+- Could become a standalone lead-gen report (free or low-cost) that funnels into paid Buildability Brief/Deal Radar subscriptions
+
+**Suggested priority:** secondary/future scope, not a must-have for initial 6-town launch, but a strong candidate for expansion phase or as a marketing/acquisition hook (e.g., "Cost of Living by Town" comparison tool to drive top-of-funnel traffic).
+
+---
+
 # [FILE PATH]: handover.md
 # End of Patch #183
