@@ -83,6 +83,7 @@ _DOMAINS: List[Tuple[str, str, str]] = [
     ("10", "Social Equity / EJ Burden Indices",          "scrapers/ingest_equity.py"),
     ("11", "Town Profile / LLM Synthesis",               "scrapers/ingest_town_profile.py"),   # pending Patch #176
     ("12", "STR Dynamics / LLM Synthesis",               "scrapers/ingest_str.py"),             # pending Patch #177
+    ("13", "Civic Minutes / LLM Extraction",             "scrapers/ingest_civic_minutes.py"),
 ]
 
 # ---------------------------------------------------------------------------

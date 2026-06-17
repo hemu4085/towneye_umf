@@ -1,0 +1,72 @@
+{# [FILE PATH]: reports/templates/civic_entitlements_brief.html.j2 #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Civic Entitlements Brief — {{ d.inputs.parcel_id }}</title>
+<style>
+  body{font-family:Georgia,serif;font-size:13px;line-height:1.55;color:#1a1a1a;max-width:780px;margin:36px auto;padding:0 28px;background:#fff}
+  h1{font-size:22px;margin:0 0 4px 0;letter-spacing:.5px;color:#0b2545}
+  h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#0b2545;border-bottom:2px solid #0b2545;padding:18px 0 4px 0;margin:18px 0 10px 0}
+  .hd{border-bottom:1px solid #ccc;padding-bottom:10px;margin-bottom:8px}
+  .hd .meta{font-size:11px;color:#555;margin-top:6px}
+  table{width:100%;border-collapse:collapse;margin:6px 0 10px 0;font-size:12.5px}
+  th{background:#0b2545;color:#fff;text-align:left;padding:6px 9px;font-size:11.5px;letter-spacing:.5px}
+  td{padding:5px 9px;border-bottom:1px solid #e5e5e5;vertical-align:top}
+  tr:nth-child(even) td{background:#f7f9fc}
+  .v-green{background:#dff1d6;color:#1a5b22;border-left:6px solid #1a7a1a; padding:10px; font-weight:bold; margin-bottom: 12px;}
+  .v-yellow{background:#fff3cf;color:#7a5a00;border-left:6px solid #c89800; padding:10px; font-weight:bold; margin-bottom: 12px;}
+  .src{font-size:10.5px;color:#666;margin:4px 0 12px 0;font-style:italic}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1>Civic Entitlements Brief</h1>
+  <div style="font-size:15px;color:#0b2545;font-weight:bold">
+    {{ d.inputs.parcel_id }}
+  </div>
+  <div class="meta">
+    Prepared on {{ d.report_date_text }}
+  </div>
+</div>
+
+<h2>1 · Executive Summary</h2>
+
+{% if d.has_entitlements %}
+<div class="v-yellow">
+  TownEye AI has detected <strong>{{ d.entitlements|length }}</strong> active or historical civic board dockets associated with this parcel.
+</div>
+{% else %}
+<div class="v-green">
+  No civic board dockets (Planning, Zoning, Conservation, Historical) found in recent records.
+</div>
+{% endif %}
+
+<h2>2 · Docket History & Approvals</h2>
+
+<table>
+<tr>
+  <th>Board / Commission</th>
+  <th>Docket Number</th>
+  <th>Status</th>
+  <th>Summary</th>
+</tr>
+{% for ent in d.entitlements %}
+<tr>
+  <td><strong>{{ ent.board }}</strong></td>
+  <td>{{ ent.docket or "—" }}</td>
+  <td>{{ ent.status }}</td>
+  <td>{{ ent.summary }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4">No dockets found.</td></tr>
+{% endfor %}
+</table>
+
+<p class="src">
+Sources: Scraped and synthesized via LLM from official Municipal Meeting Minutes and Agendas (Domain 13).
+</p>
+
+</body>
+</html>

@@ -313,13 +313,22 @@ each applicable zone code.
 </tr>
 
 {% set base_codes = d.base_zoning_hits | map(attribute='code') | list %}
+{% set is_recent = d.property_info and d.property_info.year_built and d.property_info.year_built >= 2015 %}
+{% set is_multi = d.property_info and d.property_info.building_type and 'Multi' in d.property_info.building_type %}
+
 {% if 'R2' in base_codes or 'R1' in base_codes %}
 <tr>
   <td>3</td>
   <td>Add Accessory Dwelling Unit (ADU)</td>
   <td>Base zone use table; MA AHA c. 150/2024 dimensional floor</td>
   <td>By-right (subject to setbacks)</td>
-  <td><span class="ok">Yes (Statewide by-right)</span></td>
+  <td>
+    {% if is_multi %}
+    <span class="wn">N/A (Already multi-family)</span>
+    {% else %}
+    <span class="ok">Yes (Statewide by-right)</span>
+    {% endif %}
+  </td>
 </tr>
 {% endif %}
 
@@ -329,7 +338,13 @@ each applicable zone code.
   <td>Convert existing structure to two-family</td>
   <td>R2 use table (Two-Family Dwelling permitted)</td>
   <td>By-right; pre-existing non-conforming lot grandfathered</td>
-  <td><span class="ok">Yes</span></td>
+  <td>
+    {% if is_multi %}
+    <span class="wn">N/A (Already multi-family)</span>
+    {% else %}
+    <span class="ok">Yes</span>
+    {% endif %}
+  </td>
 </tr>
 {% endif %}
 
@@ -340,7 +355,13 @@ each applicable zone code.
   <td>Demolish + rebuild as multi-family under <strong>{{ h.code or h.label }}</strong></td>
   <td>{{ h.layer }}</td>
   <td>By-right with Site Plan Review (typical for §3A overlays)</td>
-  <td><span class="ok">Yes</span></td>
+  <td>
+    {% if is_recent %}
+    <span class="wn">Not recommended (Recently built {{ d.property_info.year_built }})</span>
+    {% else %}
+    <span class="ok">Yes</span>
+    {% endif %}
+  </td>
 </tr>
 {% endfor %}
 {% endif %}
@@ -439,6 +460,7 @@ Each flagged item may require additional permits, hearings, or consultations bey
       zoning or the overlay for any given project; the regimes do not stack.  Election is
       project-by-project, not parcel-perpetual.</li>
   {% endif %}
+  <li><strong>Active Board Dockets & Entitlements.</strong> TownEye tracks finalized building permits but does not currently track in-flight Planning Board or Zoning Board of Appeals (ZBA) dockets. You must verify with the Town Clerk if this parcel has recently received or is currently undergoing Site Plan Review, Variances, or Special Permits, as these can drastically alter the buildable envelope and value.</li>
 </ol>
 
 {# ===================== METHODOLOGY ===================== #}
