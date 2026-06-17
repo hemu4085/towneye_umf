@@ -1,10 +1,12 @@
-import { reportEngine, reportTier, reportsForUserType } from '../reportCatalog';
+import { reportEngine, reportTier, reportsForUserType, TOWN_SCOPED_REPORTS } from '../reportCatalog';
 import { buildReportRequestMailto } from '../utils/reportRequest';
 
 const TIER_BADGE = {
   must: { label: 'Must-have', className: 'bg-gold text-navy' },
   useful: { label: 'Useful', className: 'bg-navy-light border border-gold/50 text-gold' },
 };
+
+const TOWN_WIDE_BADGE = { label: 'Town Wide', className: 'bg-indigo-900/50 border border-indigo-400 text-indigo-300' };
 
 const ENGINE_BADGE = {
   deterministic: { label: 'Data-backed', className: 'border border-emerald-500/40 text-emerald-300' },
@@ -36,7 +38,8 @@ export default function ReportGrid({
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6 items-stretch">
       {visibleReports.map((r) => {
         const tier = reportTier(userType, r.id);
-        const badge = tier ? TIER_BADGE[tier] : null;
+        const isTownWide = TOWN_SCOPED_REPORTS.has(r.id);
+        const badge = isTownWide ? TOWN_WIDE_BADGE : null; // Replaced tier badges with Town Wide where applicable
         const engine = reportEngine(r.id);
         const engineBadge = ENGINE_BADGE[engine] || ENGINE_BADGE.deterministic;
         const isLoading = loadingId === r.id;
@@ -49,7 +52,7 @@ export default function ReportGrid({
           isUnavailable
             ? 'opacity-70 border-graytown/30 cursor-not-allowed'
             : 'hover:border-gold cursor-pointer'
-        } ${tier === 'must' && !isUnavailable ? 'ring-2 ring-gold bg-gold/10' : ''} ${
+        } ${tier === 'must' && !isUnavailable && !isTownWide ? 'ring-1 ring-gold/50 bg-gold/5' : ''} ${
           isLoading ? 'shimmer' : ''
         } ${loadingId && !isLoading ? 'opacity-60' : ''}`;
 
