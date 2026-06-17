@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import FlowSteps from '../components/FlowSteps';
 import ReportGrid from '../components/ReportGrid';
 import { useParcel } from '../context/ParcelContext';
 import { resolveParcel } from '../api';
+import { Building2, MapPin, Tag, User, Banknote, Calendar } from 'lucide-react';
 
 export default function Dashboard() {
   const { state } = useLocation();
@@ -13,7 +13,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const address = state?.address;
-  const userType = state?.userType || 'agent';
+  const userType = state?.userType || 'developer';
   const preparedFor = state?.preparedFor;
 
   useEffect(() => {
@@ -49,20 +49,22 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-4">
-        <FlowSteps current="dashboard" />
-        <p className="text-gold animate-pulse">Resolving parcel…</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-12">
+        <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-400 font-mono text-sm uppercase tracking-wider animate-pulse">Resolving Parcel Geometry...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen p-8 text-center">
-        <p className="text-red-400 mb-4">{error}</p>
-        <Link to="/" className="btn-outline inline-block">
-          ← Back
-        </Link>
+      <div className="p-8 text-center max-w-lg mx-auto mt-12">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
+          <p className="text-red-400 mb-6">{error}</p>
+          <Link to="/" className="btn-outline inline-flex items-center gap-2">
+            ← Return to Search
+          </Link>
+        </div>
       </div>
     );
   }
@@ -70,58 +72,80 @@ export default function Dashboard() {
   const snap = parcel?.assessor_snapshot || {};
 
   return (
-    <div className="min-h-screen px-4 py-8 max-w-6xl mx-auto relative">
-      <a href="/" className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-block">
-        <img src="/logo.png" alt="TownEye Logo" className="h-8 sm:h-10 w-auto opacity-80 hover:opacity-100 transition-opacity" />
-      </a>
-      <FlowSteps current="pick" />
-
-      <Link to="/" className="text-gold text-sm hover:underline">
-        ← New search
-      </Link>
-
-      <div className="card mt-6">
-        <h1 className="font-display text-2xl text-gold">{parcel.address}</h1>
-        <p className="text-graytown text-sm mt-1">
-          Parcel {parcel.parcel_id} · {parcel.town_name}, MA
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm">
-          <div>
-            <span className="text-graytown block">Owner</span>
-            <span>{snap.owner || '—'}</span>
-          </div>
-          <div>
-            <span className="text-graytown block">Lot size</span>
-            <span>{snap.lot_size_sqft ? `${Math.round(snap.lot_size_sqft).toLocaleString()} sf` : '—'}</span>
-          </div>
-          <div>
-            <span className="text-graytown block">Year built</span>
-            <span>{snap.year_built || '—'}</span>
-          </div>
-          <div>
-            <span className="text-graytown block">Zoning</span>
-            <span>
-              {snap.zoning_base || '—'}
-              {snap.zoning_overlay ? ` + ${snap.zoning_overlay}` : ''}
+    <div className="p-8 max-w-6xl mx-auto space-y-8">
+      {/* Header Area */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="px-2.5 py-1 rounded bg-slate-800 text-slate-300 text-xs font-mono border border-slate-700">
+              Parcel {parcel.parcel_id}
+            </span>
+            <span className="px-2.5 py-1 rounded bg-brand-500/10 text-brand-400 text-xs font-mono border border-brand-500/20">
+              {parcel.town_name}, MA
             </span>
           </div>
-          <div>
-            <span className="text-graytown block">Assessed</span>
-            <span>
-              {snap.assessed_value
-                ? `$${Math.round(snap.assessed_value).toLocaleString()}`
-                : '—'}
-            </span>
+          <h1 className="text-3xl font-bold text-white tracking-tight">{parcel.address}</h1>
+        </div>
+        <Link to="/" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-1">
+          ← New Search
+        </Link>
+      </div>
+
+      {/* Snapshot Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="glass-panel p-4 hover:border-slate-700 transition-colors">
+          <div className="text-slate-500 mb-2 flex items-center gap-2">
+            <User className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Owner</span>
           </div>
-          <div>
-            <span className="text-graytown block">Use</span>
-            <span>{snap.current_use || '—'}</span>
+          <div className="text-sm text-slate-200 truncate" title={snap.owner}>{snap.owner || '—'}</div>
+        </div>
+        
+        <div className="glass-panel p-4 hover:border-slate-700 transition-colors">
+          <div className="text-slate-500 mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Lot Size</span>
+          </div>
+          <div className="text-sm text-slate-200">
+            {snap.lot_size_sqft ? `${Math.round(snap.lot_size_sqft).toLocaleString()} sf` : '—'}
+          </div>
+        </div>
+
+        <div className="glass-panel p-4 hover:border-slate-700 transition-colors">
+          <div className="text-slate-500 mb-2 flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Year Built</span>
+          </div>
+          <div className="text-sm text-slate-200">{snap.year_built || '—'}</div>
+        </div>
+
+        <div className="glass-panel p-4 hover:border-slate-700 transition-colors lg:col-span-2">
+          <div className="text-slate-500 mb-2 flex items-center gap-2">
+            <Building2 className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Zoning</span>
+          </div>
+          <div className="text-sm text-slate-200">
+            <span className="font-mono text-brand-300">{snap.zoning_base || '—'}</span>
+            {snap.zoning_overlay && <span className="text-slate-400"> + {snap.zoning_overlay}</span>}
+          </div>
+        </div>
+
+        <div className="glass-panel p-4 hover:border-slate-700 transition-colors">
+          <div className="text-slate-500 mb-2 flex items-center gap-2">
+            <Banknote className="w-4 h-4" />
+            <span className="text-xs font-medium uppercase tracking-wider">Assessed</span>
+          </div>
+          <div className="text-sm text-slate-200">
+            {snap.assessed_value ? `$${Math.round(snap.assessed_value).toLocaleString()}` : '—'}
           </div>
         </div>
       </div>
 
-      <h2 className="font-display text-xl mt-10 text-cream">Select a report</h2>
-      <ReportGrid userType={userType} onGenerate={handleGenerate} />
+      {/* Reports Section */}
+      <div className="pt-8 border-t border-slate-800">
+        <h2 className="text-lg font-semibold text-white mb-6">Engine Modules</h2>
+        <ReportGrid userType={userType} onGenerate={handleGenerate} />
+      </div>
     </div>
   );
 }

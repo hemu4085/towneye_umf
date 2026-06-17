@@ -192,30 +192,34 @@ export default function AddressInput({
       className="w-full max-w-2xl mx-auto"
     >
       <div ref={rootRef} className="relative">
-        <input
-          type="text"
-          enterKeyHint="search"
-          role="combobox"
-          aria-expanded={open && suggestions.length > 0}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          value={value}
-          onChange={handleInputChange}
-          onFocus={() => {
-            if (value.trim()) runSuggest(value);
-            if (suggestions.length > 0) setOpen(true);
-          }}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder="Start typing — e.g. 29 wal"
-          className={`w-full px-5 py-4 rounded-xl bg-navy-light border-2 text-cream text-lg
-                     placeholder:text-graytown/80 focus:outline-none focus:border-gold
-                     ${open ? 'border-gold/70' : 'border-gold/40'}`}
-        />
+        <div className="relative flex items-center">
+          <svg className="w-5 h-5 absolute left-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            enterKeyHint="search"
+            role="combobox"
+            aria-expanded={open && suggestions.length > 0}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={value}
+            onChange={handleInputChange}
+            onFocus={() => {
+              if (value.trim()) runSuggest(value);
+              if (suggestions.length > 0) setOpen(true);
+            }}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+            placeholder="Search by Street Address or APN (e.g. 5-7 Belknap St)"
+            className={`w-full pl-12 pr-5 py-4 rounded-xl bg-slate-900/80 border text-white text-lg font-mono placeholder:text-slate-500 placeholder:font-sans focus:outline-none transition-all shadow-lg backdrop-blur-sm
+                       ${open ? 'border-brand-500/50 shadow-[0_0_20px_rgba(59,130,246,0.1)]' : 'border-slate-800 focus:border-slate-600'}`}
+          />
+        </div>
 
         {showIndexLoading && (
           <p className="mt-2 text-center text-xs text-graytown">Loading address list…</p>
@@ -233,8 +237,8 @@ export default function AddressInput({
           <ul
             id={listId}
             role="listbox"
-            className="absolute z-20 left-0 right-0 mt-1 max-h-64 overflow-y-auto
-                       rounded-lg border border-gold/20 bg-navy-light shadow-2xl"
+            className="absolute z-20 left-0 right-0 mt-2 max-h-64 overflow-y-auto
+                       rounded-xl border border-slate-800 bg-slate-900 shadow-2xl backdrop-blur-md"
           >
             {suggestions.map((item, index) => (
               <li key={`${item.parcel_id}-${item.address}`} role="option" aria-selected={index === activeIndex}>
@@ -246,11 +250,12 @@ export default function AddressInput({
                     pickSuggestion(item);
                   }}
                   onClick={() => pickSuggestion(item)}
-                  className={`w-full text-left px-4 py-2.5 text-[15px] transition-colors ${
-                    index === activeIndex ? 'bg-gold/15 text-cream' : 'text-cream/95 hover:bg-white/5'
+                  className={`w-full text-left px-4 py-3 text-[15px] font-mono transition-colors flex items-center justify-between group ${
+                    index === activeIndex ? 'bg-brand-500/10 text-brand-300' : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
                   }`}
                 >
-                  {item.address}
+                  <span>{item.address}</span>
+                  <span className={`text-xs ${index === activeIndex ? 'text-brand-500/50' : 'text-slate-600 group-hover:text-slate-500'}`}>APN {item.parcel_id}</span>
                 </button>
               </li>
             ))}

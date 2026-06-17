@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import DealRadarCriteriaPanel from '../components/DealRadarCriteriaPanel';
 import ClosingRiskCriteriaPanel from '../components/ClosingRiskCriteriaPanel';
-import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
 import { useParcel } from '../context/ParcelContext';
@@ -134,8 +133,6 @@ export default function ReportPage() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-    // Initial load only — regenerations go through handleApplyCriteria.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report?.id, reportCacheKey]);
 
   async function handleShare() {
@@ -145,7 +142,8 @@ export default function ReportPage() {
     }
     const url = absoluteUrl(result.download_url);
     const ok = await copyToClipboard(url);
-    setShareNotice(ok ? 'PDF link copied to clipboard.' : 'Could not copy link. Try Download PDF.');
+    setShareNotice(ok ? 'PDF link copied to clipboard.' : 'Could not copy link.');
+    setTimeout(() => setShareNotice(''), 3000);
   }
 
   function handleApplyCriteria(criteria) {
@@ -168,88 +166,84 @@ export default function ReportPage() {
   const townSlug = townContext?.town_slug || parcel?.town_slug;
 
   return (
-    <div className="min-h-screen w-full px-4 sm:px-8 lg:px-12 xl:px-16 py-8 relative">
-      <a href="/" className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-block">
-        <img src="/logo.png" alt="TownEye Logo" className="h-8 sm:h-10 w-auto opacity-80 hover:opacity-100 transition-opacity" />
-      </a>
-      <FlowSteps current="report" />
-
-      <Link
-        to="/"
-        state={{
-          address: state?.address || parcel?.address,
-          userType: state?.userType,
-          parcel,
-        }}
-        className="text-gold text-sm hover:underline"
-      >
-        ← Back to reports
-      </Link>
-
-      <h1 className="font-display text-2xl text-gold mt-4">
-        {report.icon} {report.name}
-      </h1>
-      <p className="text-graytown">{subtitle}</p>
-
-      {isDealRadar && townSlug && (
-        <DealRadarCriteriaPanel
-          townSlug={townSlug}
-          appliedCriteria={appliedCriteria}
-          loading={loading}
-          onApply={handleApplyCriteria}
-          onReset={handleResetCriteria}
-        />
-      )}
-
-      {isClosingRiskRadar && townSlug && (
-        <ClosingRiskCriteriaPanel
-          townSlug={townSlug}
-          appliedCriteria={appliedCriteria}
-          loading={loading}
-          onApply={handleApplyCriteria}
-          onReset={handleResetCriteria}
-        />
-      )}
-
-      {loading && <LoadingState reportName={report.name} />}
-
-      {error && (
-        <div className="mt-6 p-4 rounded-lg bg-red-950/40 border border-red-800/50">
-          <p className="text-red-300">{error}</p>
-          <p className="text-sm text-graytown mt-2">
-            {townScoped ? (
-              <>
-                {isClosingRiskRadar ? (
-                  <>
-                    Closing Risk Radar scans permits and overlay flags town-wide — wait up to 45
-                    seconds on a cold API and retry.
-                  </>
-                ) : (
-                  <>
-                    Deal Radar scans the pilot town from Gold data — wait 30 seconds on a cold API
-                    and retry.
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                Try <strong>Quick demo — 5-7 Belknap St</strong>, select <strong>Developer</strong>,
-                then retry Buildability or Pro Forma.
-              </>
-            )}
-          </p>
+    <div className="w-full flex flex-col h-[calc(100vh-64px)]">
+      {/* Report Header Bar */}
+      <div className="flex-none bg-slate-900 border-b border-slate-800 px-8 py-4 flex items-center justify-between z-10">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <Link
+              to="/dashboard"
+              state={{
+                address: state?.address || parcel?.address,
+                userType: state?.userType,
+                parcel,
+              }}
+              className="text-slate-400 hover:text-white transition-colors text-sm font-medium"
+            >
+              ← Back to Engine
+            </Link>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            <span className="text-3xl leading-none">{report.icon}</span> 
+            {report.name}
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">{subtitle}</p>
         </div>
-      )}
+      </div>
 
-      {result && !loading && (
-        <ReportViewer
-          html={result.html}
-          downloadUrl={result.download_url}
-          onShare={handleShare}
-          shareNotice={shareNotice}
-        />
-      )}
+      <div className="flex-1 overflow-y-auto px-8 py-6 relative">
+        <div className="max-w-6xl mx-auto">
+          {isDealRadar && townSlug && (
+            <div className="mb-6">
+              <DealRadarCriteriaPanel
+                townSlug={townSlug}
+                appliedCriteria={appliedCriteria}
+                loading={loading}
+                onApply={handleApplyCriteria}
+                onReset={handleResetCriteria}
+              />
+            </div>
+          )}
 
+          {isClosingRiskRadar && townSlug && (
+            <div className="mb-6">
+              <ClosingRiskCriteriaPanel
+                townSlug={townSlug}
+                appliedCriteria={appliedCriteria}
+                loading={loading}
+                onApply={handleApplyCriteria}
+                onReset={handleResetCriteria}
+              />
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex flex-col items-center justify-center p-12 glass-panel mt-4">
+              <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-brand-400 font-mono text-sm uppercase tracking-wider animate-pulse">Running {report.name} Analysis...</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 p-6 rounded-xl bg-red-500/10 border border-red-500/20 backdrop-blur-sm">
+              <p className="text-red-400 font-medium mb-2">Analysis Failed</p>
+              <p className="text-red-300 text-sm">{error}</p>
+              <p className="text-sm text-slate-400 mt-4">
+                {townScoped ? 'Please wait 30-45 seconds on a cold API and retry the operation.' : 'Please try selecting a different address or user type.'}
+              </p>
+            </div>
+          )}
+
+          {result && !loading && (
+            <ReportViewer
+              html={result.html}
+              downloadUrl={result.download_url}
+              onShare={handleShare}
+              shareNotice={shareNotice}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
