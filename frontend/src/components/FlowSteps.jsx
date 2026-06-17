@@ -8,8 +8,8 @@ export default function FlowSteps({ current }) {
   const idx = STEPS.findIndex((s) => s.id === current);
 
   return (
-    <nav aria-label="Portal progress" className="w-full mb-8">
-      <ol className="flex flex-wrap justify-center gap-2 md:gap-0 md:justify-between">
+    <nav aria-label="Portal progress" className="w-full max-w-lg mx-auto mb-8">
+      <ol className="flex flex-wrap justify-center gap-6 sm:gap-12">
         {STEPS.map((step, i) => {
           const done = i < idx;
           const active = i === idx;
