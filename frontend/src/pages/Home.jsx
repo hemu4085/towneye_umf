@@ -289,15 +289,17 @@ export default function Home() {
 
   return (
     <>
-      <header className="px-6 py-8 text-center border-b border-gold/20 relative">
-        <a href="/" className="absolute top-6 left-6 sm:top-8 sm:left-8 inline-block">
-          <img src="/logo.png" alt="TownEye Logo" className="h-10 sm:h-12 w-auto" />
-        </a>
-        <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
-        <p className="text-graytown mt-2 text-lg">
+      <header className="px-6 py-8 flex flex-col items-center border-b border-gold/20 relative">
+        <div className="flex items-center justify-center gap-4">
+          <a href="/" className="inline-block">
+            <img src="/logo.png" alt="TownEye Logo" className="h-10 sm:h-12 w-auto" />
+          </a>
+          <h1 className="font-display text-4xl md:text-5xl text-gold tracking-wide">TownEye</h1>
+        </div>
+        <p className="text-graytown mt-2 text-lg text-center">
           The AI Powered Real Estate Platform - Find it, Know it, Build It
         </p>
-        <p className="text-sm text-gold/80 mt-1">Pilot: {pilotTown} — any address in town</p>
+        <p className="text-sm text-gold/80 mt-1 text-center">Pilot: {pilotTown} — any address in town</p>
       </header>
 
       <main className="flex-1 flex flex-col items-center px-6 py-12">
