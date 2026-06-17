@@ -156,7 +156,7 @@ export default function DealRadarCriteriaPanel({
   }
 
   return (
-    <section className="card mt-6">
+    <section className="card mt-6 transition-[height] duration-200">
       <button
         type="button"
         className="w-full flex items-center justify-between gap-3 text-left"
@@ -179,7 +179,7 @@ export default function DealRadarCriteriaPanel({
       )}
 
       {open && (
-        <div className="mt-5 space-y-6 border-t border-gold/20 pt-5">
+        <div className="mt-5 space-y-6 border-t border-gold/20 pt-5 overflow-y-auto max-h-[60vh] pr-2">
           {presets.length > 0 && (
             <div>
               <p className="text-sm text-cream mb-2">Presets</p>

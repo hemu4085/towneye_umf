@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import DealRadarCriteriaPanel from '../components/DealRadarCriteriaPanel';
 import ClosingRiskCriteriaPanel from '../components/ClosingRiskCriteriaPanel';
-import FlowSteps from '../components/FlowSteps';
 import LoadingState from '../components/LoadingState';
 import ReportViewer from '../components/ReportViewer';
 import { useParcel } from '../context/ParcelContext';
@@ -169,10 +168,12 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen w-full px-4 sm:px-8 lg:px-12 xl:px-16 py-8 relative">
-      <a href="/" className="absolute top-6 right-6 sm:top-8 sm:right-8 inline-block">
-        <img src="/logo.png" alt="TownEye Logo" className="h-8 sm:h-10 w-auto opacity-80 hover:opacity-100 transition-opacity" />
-      </a>
-      <FlowSteps current="report" />
+      <div className="flex items-center justify-center gap-4 mb-6">
+        <a href="/" className="inline-block">
+          <img src="/logo.png" alt="TownEye Logo" className="h-8 sm:h-10 w-auto opacity-80 hover:opacity-100 transition-opacity" />
+        </a>
+        <h1 className="font-display text-2xl sm:text-3xl text-gold tracking-wide">TownEye</h1>
+      </div>
 
       <Link
         to="/"
