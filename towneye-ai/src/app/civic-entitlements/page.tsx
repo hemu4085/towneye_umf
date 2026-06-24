@@ -19,7 +19,7 @@ export default function CivicEntitlementsPage() {
     "89 Appleton St, Arlington, MA",
     "250 Broadway, Arlington, MA",
     "12 Lake St, Arlington, MA"
-  ].filter(s => s.toLowerCase().includes(address.toLowerCase()) && address.length > 0);
+  ].filter(s => address.length === 0 ? true : s.toLowerCase().includes(address.toLowerCase()));
 
   const handleGenerate = () => {
     if (!address.trim()) return;
@@ -83,7 +83,9 @@ export default function CivicEntitlementsPage() {
                     setShowSuggestions(true);
                   }}
                   onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  onBlur={() => {
+                    setTimeout(() => setShowSuggestions(false), 200);
+                  }}
                   onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                 />
                 
