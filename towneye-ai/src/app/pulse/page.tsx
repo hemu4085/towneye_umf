@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area
 } from "recharts";
-import { AlertTriangle, TrendingUp, CheckCircle2, Clock, Users, Calendar, Activity } from "lucide-react";
+import { AlertTriangle, TrendingUp, CheckCircle2, Clock, Users, Calendar, Activity, Map as MapIcon } from "lucide-react";
 import { format, subDays } from "date-fns";
 
 // Mock Data
