@@ -11,12 +11,14 @@ import {
   Bell,
   FileText,
   Home,
-  Landmark
+  Landmark,
+  Activity
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "311 Pulse", href: "/pulse", icon: BarChart3 },
+  { name: "Community Pulse", href: "/community-pulse", icon: Activity },
   { name: "Development Radar", href: "/radar", icon: MapIcon },
   { name: "Buildability Briefs", href: "/briefs", icon: FileText },
   { name: "Civic Entitlements", href: "/civic-entitlements", icon: Landmark },
