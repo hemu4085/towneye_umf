@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, AreaChart, Area
@@ -29,6 +29,19 @@ const recentComplaints = [
 
 
 export default function PulseDashboard() {
+  const [pulseData, setPulseData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/pulse/311")
+      .then(res => res.json())
+      .then(data => setPulseData(data))
+      .catch(err => console.error("Failed to fetch pulse data:", err));
+  }, []);
+
+  if (!pulseData) {
+    return <div className="flex-1 flex items-center justify-center bg-gray-950 text-white">Loading Pulse Data from Arlington databases...</div>;
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-gray-950 p-8 text-gray-100">
       <div className="mb-8">
@@ -40,28 +53,28 @@ export default function PulseDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card
           title="Total Open Requests"
-          value="142"
+          value={pulseData.kpi.total_open}
           trend="+12% from last week"
           icon={<AlertTriangle className="h-6 w-6 text-amber-500" />}
           trendColor="text-red-400"
         />
         <Card
           title="Avg Resolution Time"
-          value="3.2 days"
+          value={`${pulseData.kpi.avg_resolution_days} days`}
           trend="-0.4 days from last week"
           icon={<Clock className="h-6 w-6 text-blue-500" />}
           trendColor="text-green-400"
         />
         <Card
           title="Citizen Sentiment"
-          value="Frustrated"
+          value={pulseData.kpi.sentiment}
           trend="Trending negative in East Arlington"
           icon={<TrendingUp className="h-6 w-6 text-red-500" />}
           trendColor="text-red-400"
         />
         <Card
           title="Resolved This Week"
-          value="89"
+          value={pulseData.kpi.resolved_this_week}
           trend="+24% from last week"
           icon={<CheckCircle2 className="h-6 w-6 text-green-500" />}
           trendColor="text-green-400"
@@ -105,24 +118,15 @@ export default function PulseDashboard() {
           </p>
           
           <div className="space-y-4">
-            <HotspotItem 
-              title="Noise Complaints" 
-              location="Capitol Square" 
-              probability="85%" 
-              color="bg-red-500"
-            />
-            <HotspotItem 
-              title="Pothole Damage" 
-              location="Appleton St" 
-              probability="72%" 
-              color="bg-amber-500"
-            />
-            <HotspotItem 
-              title="Missed Trash" 
-              location="Heights Area" 
-              probability="45%" 
-              color="bg-yellow-500"
-            />
+            {pulseData.hotspots.map((hotspot: any, idx: number) => (
+              <HotspotItem 
+                key={idx}
+                title={hotspot.title} 
+                location={hotspot.location} 
+                probability={hotspot.probability} 
+                color={hotspot.color}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -142,7 +146,7 @@ export default function PulseDashboard() {
               </tr>
             </thead>
             <tbody>
-              {recentComplaints.map((req) => (
+              {pulseData.recent_complaints.map((req: any) => (
                 <tr key={req.id} className="border-b border-gray-800 last:border-0 hover:bg-gray-800/30 transition-colors">
                   <td className="px-6 py-4 font-medium text-white">{req.type}</td>
                   <td className="px-6 py-4 text-gray-300">{req.location}</td>

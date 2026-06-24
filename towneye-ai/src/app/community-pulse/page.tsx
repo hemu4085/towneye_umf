@@ -1,16 +1,23 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Activity, Users, Calendar, Map as MapIcon, ChevronRight } from "lucide-react";
 
-const liveActivities = [
-  { id: 1, name: "Arlington Farmers Market", location: "Russell Common", status: "Live Now", busyness: 85, trend: "increasing", type: "market", description: "Seasonal farm stand with high foot traffic." },
-  { id: 2, name: "Town Day Preparations", location: "Mass Ave (Center)", status: "Upcoming", busyness: 40, trend: "stable", type: "event", description: "Roadway preparation. Expect partial closures." },
-  { id: 3, name: "Spy Pond Park", location: "Spy Pond", status: "Active", busyness: 65, trend: "decreasing", type: "park", description: "Public park and recreation area." },
-  { id: 4, name: "Capitol Square Block Party", location: "Capitol Square", status: "Upcoming", busyness: 20, trend: "increasing", type: "event", description: "Local business association event." },
-  { id: 5, name: "High School Field Events", location: "Arlington High", status: "Active", busyness: 55, trend: "stable", type: "market", description: "Multiple athletic events ongoing." },
-];
 
 export default function CommunityPulsePage() {
+  const [liveActivities, setLiveActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/pulse/community")
+      .then(res => res.json())
+      .then(data => setLiveActivities(data.live_activities))
+      .catch(err => console.error("Failed to fetch community pulse data:", err));
+  }, []);
+
+  if (!liveActivities.length) {
+    return <div className="flex-1 flex items-center justify-center bg-gray-950 text-white">Loading Community Data...</div>;
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-gray-950 p-8 text-gray-100">
       <div className="mb-8">
