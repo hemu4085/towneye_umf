@@ -56,7 +56,7 @@ class Settings:
 
 def _parse_cors_origins(portal_public_url: str) -> tuple[str, ...]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
-    local = ("http://localhost:5173", "http://127.0.0.1:5173")
+    local = ("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000")
     if raw:
         origins = tuple(o.strip().rstrip("/") for o in raw.split(",") if o.strip())
         return origins + local

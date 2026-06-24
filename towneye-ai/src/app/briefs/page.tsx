@@ -29,9 +29,9 @@ export default function BuildabilityBriefsPage() {
     setReport(null);
 
     try {
-      // In production, we'd hit the real backend: /reports/buildability
+      // In production, we'd hit the real backend: /api/reports/buildability
       // For the demo, we simulate the real backend response shape
-      const res = await fetch("http://localhost:8000/reports/buildability", {
+      const res = await fetch("http://localhost:8000/api/reports/buildability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ town_slug: "arlington-ma", address: address })

@@ -32,7 +32,7 @@ export default function PulseDashboard() {
   const [pulseData, setPulseData] = useState<any>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/pulse/311")
+    fetch("http://localhost:8000/api/pulse/311")
       .then(res => res.json())
       .then(data => setPulseData(data))
       .catch(err => console.error("Failed to fetch pulse data:", err));

@@ -8,7 +8,7 @@ export default function CommunityPulsePage() {
   const [liveActivities, setLiveActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/pulse/community")
+    fetch("http://localhost:8000/api/pulse/community")
       .then(res => res.json())
       .then(data => setLiveActivities(data.live_activities))
       .catch(err => console.error("Failed to fetch community pulse data:", err));
