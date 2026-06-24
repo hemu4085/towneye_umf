@@ -10,6 +10,16 @@ export default function CivicEntitlementsPage() {
   const [address, setAddress] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Mock Arlington addresses for autofill
+  const suggestions = [
+    "45 Jason St, Arlington, MA",
+    "142 Mass Ave, Arlington, MA",
+    "89 Appleton St, Arlington, MA",
+    "250 Broadway, Arlington, MA",
+    "12 Lake St, Arlington, MA"
+  ].filter(s => s.toLowerCase().includes(address.toLowerCase()) && address.length > 0);
 
   const handleGenerate = () => {
     if (!address.trim()) return;
@@ -68,9 +78,33 @@ export default function CivicEntitlementsPage() {
                   placeholder="Enter parcel or project address..." 
                   className="w-full bg-gray-950 border border-gray-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                 />
+                
+                {/* Autofill Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {suggestions.map((suggestion, idx) => (
+                      <div 
+                        key={idx}
+                        className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors"
+                        onClick={() => {
+                          setAddress(suggestion);
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        <Building className="h-4 w-4 mr-3 text-amber-500" />
+                        {suggestion}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <button 
                 onClick={handleGenerate}
