@@ -24,7 +24,8 @@ import {
   Clock, 
   Shield, 
   AlertTriangle, 
-  TrendingUp
+  TrendingUp,
+  Map
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -84,7 +85,17 @@ export function Sidebar() {
   const [address, setAddress] = useSharedAddress("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedTown, setSelectedTown] = useState("arlington-ma");
+  const [showTownDropdown, setShowTownDropdown] = useState(false);
+  
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const townDropdownRef = useRef<HTMLDivElement>(null);
+
+  const towns = [
+    { id: "arlington-ma", name: "Arlington, MA" },
+    { id: "lexington-ma", name: "Lexington, MA", disabled: true },
+    { id: "cambridge-ma", name: "Cambridge, MA", disabled: true }
+  ];
 
   // Fetch real suggestions from the backend API as the user types
   useEffect(() => {
@@ -94,7 +105,7 @@ export function Sidebar() {
     }
     
     const timeoutId = setTimeout(() => {
-      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&limit=5`)
+      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&town_slug=${selectedTown}&limit=5`)
         .then(res => res.json())
         .then(data => {
           if (data && data.suggestions) {
@@ -113,6 +124,9 @@ export function Sidebar() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
+      if (townDropdownRef.current && !townDropdownRef.current.contains(event.target as Node)) {
+        setShowTownDropdown(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -120,18 +134,60 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900 border-r border-gray-800 text-white">
-      <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-800">
+      <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-800 bg-gray-950">
         <Building2 className="h-8 w-8 text-blue-500 mr-3" />
         <span className="text-xl font-bold tracking-tight">Towneye.ai</span>
       </div>
 
+      {/* Town / Market Selector */}
+      <div className="p-4 border-b border-gray-800 bg-gray-900/80 relative" ref={townDropdownRef}>
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">Active Market</div>
+        <button 
+          onClick={() => setShowTownDropdown(!showTownDropdown)}
+          className="w-full flex items-center justify-between bg-gray-950 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-2 transition-colors"
+        >
+          <div className="flex items-center text-sm font-medium text-white">
+            <Map className="h-4 w-4 mr-2 text-blue-400" />
+            {towns.find(t => t.id === selectedTown)?.name}
+          </div>
+          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showTownDropdown ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showTownDropdown && (
+          <div className="absolute top-[80px] left-4 right-4 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-[110] overflow-hidden">
+            {towns.map(town => (
+              <div 
+                key={town.id}
+                onClick={() => {
+                  if (!town.disabled) {
+                    setSelectedTown(town.id);
+                    setShowTownDropdown(false);
+                    setAddress(""); // Clear address when switching towns
+                  }
+                }}
+                className={`px-4 py-3 flex items-center justify-between border-b border-gray-800 last:border-0 ${
+                  town.disabled 
+                    ? 'opacity-50 cursor-not-allowed bg-gray-900/50' 
+                    : 'cursor-pointer hover:bg-gray-800 transition-colors'
+                }`}
+              >
+                <span className="text-sm font-medium text-gray-200">{town.name}</span>
+                {town.id === selectedTown && <div className="h-2 w-2 rounded-full bg-blue-500"></div>}
+                {town.disabled && <span className="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-800 px-2 py-0.5 rounded">Coming Soon</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Global Address Search */}
-      <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+      <div className="p-4 border-b border-gray-800 bg-gray-900/30">
+        <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">Target Property</div>
         <div className="relative" ref={dropdownRef}>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input 
             type="text" 
-            placeholder="Search any address..." 
+            placeholder={`Search within ${towns.find(t => t.id === selectedTown)?.name.split(',')[0]}...`}
             className="w-full bg-gray-950 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             value={address}
             onChange={(e) => {
