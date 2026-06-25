@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertTriangle, Loader2, FileDown, ShieldAlert, FileText, ArrowRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, Loader2, FileDown, ShieldAlert, FileText, ArrowRight, ExternalLink, Printer, Share2 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function ClosingRiskPage() {

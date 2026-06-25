@@ -7,7 +7,7 @@ export default function AssistantPage() {
   const [query, setQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<any[]>([
     {
       role: "assistant",
       content: "Hello! I am the Arlington Civic Assistant. I have been trained on the Arlington Zoning Bylaw, the last 12 months of Town Meeting minutes, and public property data. How can I help you today?",
