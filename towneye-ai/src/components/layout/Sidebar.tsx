@@ -18,7 +18,13 @@ import {
   Scale,
   Compass,
   DollarSign,
-  UserCircle
+  UserCircle,
+  MapPin,
+  Search,
+  Clock, 
+  Shield, 
+  AlertTriangle, 
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -70,26 +76,6 @@ const menuGroups = [
   }
 ];
 
-import { 
-  BarChart3, 
-  Map as MapIcon, 
-  MessageSquare, 
-  Building2,
-  Settings,
-  Bell,
-  FileText,
-  Home,
-  Landmark,
-  Activity,
-  ChevronDown,
-  Briefcase,
-  Scale,
-  Compass,
-  DollarSign,
-  UserCircle,
-  MapPin,
-  Search
-} from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
