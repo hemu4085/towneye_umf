@@ -11,24 +11,29 @@ export default function RealtorBriefPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Mock Arlington database for realistic autofill
-  const arlingtonDatabase = [
-    "45 Jason St, Arlington, MA",
-    "142 Mass Ave, Arlington, MA",
-    "89 Appleton St, Arlington, MA",
-    "250 Broadway, Arlington, MA",
-    "12 Lake St, Arlington, MA",
-    "73 Mystic St, Arlington, MA",
-    "19 Park Ave, Arlington, MA",
-    "314 Pleasant St, Arlington, MA"
-  ];
-
-  // Filter based on what the user actually types
-  const suggestions = address.length === 0 
-    ? arlingtonDatabase.slice(0, 5) 
-    : arlingtonDatabase.filter(s => s.toLowerCase().includes(address.toLowerCase()));
+  // Fetch real suggestions from the backend API as the user types
+  useEffect(() => {
+    if (!address.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&limit=5`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.suggestions) {
+            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town}`));
+          }
+        })
+        .catch(err => console.error("Autocomplete failed:", err));
+    }, 150);
+    
+    return () => clearTimeout(timeoutId);
+  }, [address]);
 
   // Handle clicking outside to close dropdown
   useEffect(() => {
@@ -94,8 +99,8 @@ export default function RealtorBriefPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
             <h2 className="text-lg font-semibold text-white mb-4">Select Property for Listing Brief</h2>
-            <div className="flex gap-4">
-              <div className="relative flex-1" ref={dropdownRef}>
+            <div className="flex gap-4 relative" ref={dropdownRef}>
+              <div className="relative flex-1">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input 
                   type="text" 
@@ -109,48 +114,48 @@ export default function RealtorBriefPage() {
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                 />
-                
-                {/* Autofill Dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
-                    {suggestions.map((suggestion, idx) => {
-                      // Highlight the matching part
-                      const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
-                      
-                      return (
-                        <div 
-                          key={idx}
-                          className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
-                          onClick={() => {
-                            setAddress(suggestion);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          <MapPin className="h-4 w-4 mr-3 text-emerald-500 shrink-0" />
-                          <span className="truncate">
-                            {matchIndex >= 0 ? (
-                              <>
-                                {suggestion.substring(0, matchIndex)}
-                                <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
-                                {suggestion.substring(matchIndex + address.length)}
-                              </>
-                            ) : (
-                              suggestion
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
               <button 
                 onClick={handleGenerate}
                 disabled={!address.trim() || isGenerating}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-emerald-900/20"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-emerald-900/20 whitespace-nowrap"
               >
                 {isGenerating ? <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Generating...</> : <><Home className="h-5 w-5 mr-2" /> Generate</>}
               </button>
+              
+              {/* Autofill Dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
+                  {suggestions.map((suggestion, idx) => {
+                    // Highlight the matching part
+                    const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
+                    
+                    return (
+                      <div 
+                        key={idx}
+                        className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
+                        onClick={() => {
+                          setAddress(suggestion);
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        <MapPin className="h-4 w-4 mr-3 text-emerald-500 shrink-0" />
+                        <span className="truncate">
+                          {matchIndex >= 0 ? (
+                            <>
+                              {suggestion.substring(0, matchIndex)}
+                              <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
+                              {suggestion.substring(matchIndex + address.length)}
+                            </>
+                          ) : (
+                            suggestion
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
