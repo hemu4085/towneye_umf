@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Loader2, FileDown, ShieldCheck } from "lucide-react";
+import { Shield, Loader2, FileDown, ShieldCheck, Printer, Share2 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function LenderPage() {
@@ -43,6 +43,14 @@ export default function LenderPage() {
       ) : (
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Generated Report</h2>
+              <div className="flex space-x-3">
+                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><Printer className="h-4 w-4 mr-2" /> Print</button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><Share2 className="h-4 w-4 mr-2" /> Share Link</button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><FileDown className="h-4 w-4 mr-2" /> Download PDF</button>
+              </div>
+            </div>
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
               <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
                 <div>
@@ -50,7 +58,7 @@ export default function LenderPage() {
                   <div className="text-sm font-medium text-blue-400 flex items-center mb-3"><ShieldCheck className="w-4 h-4 mr-2"/> Appraisal Risk: {report.riskScore}</div>
                   <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
                     <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                    <span>Execution Time: 1.50s</span>
+                    <span>Execution Time: {report.executionTime || "1.50s"}</span>
                   </div>
                 </div>
               </div>

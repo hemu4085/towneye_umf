@@ -71,9 +71,9 @@ export default function CivicEntitlementsPage() {
 
         {!report ? (
           <div className="max-w-4xl mx-auto flex flex-col items-center justify-center text-center py-20 bg-gray-900 border border-gray-800 rounded-2xl shadow-xl">
-            <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mb-6">
-              <Landmark className="h-8 w-8 text-amber-500" />
-            </div>
+          <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-6">
+            <Landmark className="h-8 w-8 text-blue-500" />
+          </div>
             <h2 className="text-xl font-bold text-white mb-2">Entitlements & Risk Analysis</h2>
             <p className="text-gray-400 max-w-md mb-8">
               Select a target property in the sidebar and click Generate to predict permit requirements, timeline, and political risk for proposed developments.
@@ -101,7 +101,7 @@ export default function CivicEntitlementsPage() {
                 <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
                   <Share2 className="h-4 w-4 mr-2" /> Share Link
                 </button>
-                <button className="flex items-center text-sm text-white transition-colors bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg border border-amber-500/50">
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
                   <FileDown className="h-4 w-4 mr-2" /> Download PDF
                 </button>
               </div>

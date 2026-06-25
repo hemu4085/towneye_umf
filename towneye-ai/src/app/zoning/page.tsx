@@ -52,8 +52,8 @@ export default function ZoningReportPage() {
               <h2 className="text-xl font-bold text-white">Generated Report</h2>
               <div className="flex space-x-3">
                 <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><Printer className="h-4 w-4 mr-2" /> Print</button>
-                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><Share2 className="h-4 w-4 mr-2" /> Share</button>
-                <button className="flex items-center text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg"><FileDown className="h-4 w-4 mr-2" /> Download PDF</button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><Share2 className="h-4 w-4 mr-2" /> Share Link</button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800"><FileDown className="h-4 w-4 mr-2" /> Download PDF</button>
               </div>
             </div>
             
