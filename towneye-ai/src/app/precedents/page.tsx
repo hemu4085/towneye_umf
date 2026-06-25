@@ -43,8 +43,14 @@ export default function PrecedentsPage() {
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="p-6 border-b border-gray-800 bg-gray-800/30">
-                <h3 className="text-lg font-bold text-white mb-2">Precedents near {report.address}</h3>
+              <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2">Precedents near {report.address}</h3>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: 1.40s</span>
+                  </div>
+                </div>
               </div>
               <div className="p-6 space-y-4">
                 {report.cases.map((c: any, i: number) => (

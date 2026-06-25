@@ -52,9 +52,15 @@ export default function TimelinePage() {
             </div>
             
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="p-6 border-b border-gray-800 bg-gray-800/30">
-                <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
-                <div className="text-sm text-gray-400">Total Pre-Construction: <span className="font-bold text-white">{report.totalDuration}</span></div>
+              <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
+                  <div className="text-sm text-gray-400 mb-3">Total Pre-Construction: <span className="font-bold text-white">{report.totalDuration}</span></div>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: {report.executionTime}</span>
+                  </div>
+                </div>
               </div>
 
               <div className="p-8">

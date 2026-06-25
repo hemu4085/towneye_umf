@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertTriangle, Loader2, FileDown, ShieldAlert, FileText } from "lucide-react";
+import { AlertTriangle, Loader2, FileDown, ShieldAlert, FileText, ArrowRight, ExternalLink } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function ClosingRiskPage() {
@@ -48,17 +48,31 @@ export default function ClosingRiskPage() {
               <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
-                  <div className="text-sm font-medium text-red-400 flex items-center"><ShieldAlert className="w-4 h-4 mr-2"/> Overall Risk: {report.riskScore}</div>
+                  <div className="text-sm font-medium text-red-400 flex items-center mb-3"><ShieldAlert className="w-4 h-4 mr-2"/> Overall Risk: {report.riskScore}</div>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: {report.executionTime}</span>
+                  </div>
                 </div>
               </div>
               <div className="p-6 grid grid-cols-2 gap-6">
-                <div className="bg-gray-950 p-5 rounded-xl border border-red-500/20">
-                  <div className="text-sm text-gray-400 mb-2">Open Building Permits</div>
-                  <div className="text-3xl font-bold text-white">{report.openPermits} <span className="text-sm font-normal text-red-400 ml-2">Requires closure</span></div>
+                <div className="bg-gray-950 p-5 rounded-xl border border-red-500/20 flex flex-col justify-between">
+                  <div>
+                    <div className="text-sm text-gray-400 mb-2">Open Building Permits</div>
+                    <div className="text-3xl font-bold text-white mb-2">{report.openPermits} <span className="text-sm font-normal text-red-400 ml-2">Requires closure</span></div>
+                  </div>
+                  <button className="flex items-center text-xs font-medium text-blue-400 hover:text-blue-300 mt-2">
+                    <ExternalLink className="w-3 h-3 mr-1" /> View ISD Permit Records
+                  </button>
                 </div>
-                <div className="bg-gray-950 p-5 rounded-xl border border-red-500/20">
-                  <div className="text-sm text-gray-400 mb-2">Active Code Violations</div>
-                  <div className="text-3xl font-bold text-white">{report.codeViolations} <span className="text-sm font-normal text-gray-500 ml-2">Trash ordinance</span></div>
+                <div className="bg-gray-950 p-5 rounded-xl border border-red-500/20 flex flex-col justify-between">
+                  <div>
+                    <div className="text-sm text-gray-400 mb-2">Active Code Violations</div>
+                    <div className="text-3xl font-bold text-white mb-2">{report.codeViolations} <span className="text-sm font-normal text-gray-500 ml-2">Trash ordinance</span></div>
+                  </div>
+                  <button className="flex items-center text-xs font-medium text-blue-400 hover:text-blue-300 mt-2">
+                    <ExternalLink className="w-3 h-3 mr-1" /> View Violation Details
+                  </button>
                 </div>
               </div>
             </div>
