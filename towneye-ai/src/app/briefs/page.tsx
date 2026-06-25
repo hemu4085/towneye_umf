@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { 
   FileText, Search, Loader2, MapPin, Building2, Ruler, 
   AlertTriangle, CheckCircle2, ChevronRight, FileDown,
-  Info
+  Info, Printer, Share2
 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
@@ -49,8 +49,8 @@ export default function BuildabilityBriefsPage() {
 
     // Simulate AI thinking and generating a report based on Arlington Zoning
     // We keep the mock payload here so the UI doesn't break if the real API shape differs
-    setReport({
-        address: address,
+      setReport({
+        address: address.replace(", undefined", ""),
         parcelId: "042-014-000A",
         zoningDistrict: "R1 - Single Family Residential",
         lotSize: "7,500 sq ft",
@@ -126,9 +126,17 @@ export default function BuildabilityBriefsPage() {
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Generated Brief</h2>
-              <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
-                <FileDown className="h-4 w-4 mr-2" /> Download PDF
-              </button>
+              <div className="flex items-center space-x-3">
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Printer className="h-4 w-4 mr-2" /> Print
+                </button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Share2 className="h-4 w-4 mr-2" /> Share Link
+                </button>
+                <button className="flex items-center text-sm text-white transition-colors bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg border border-purple-500/50">
+                  <FileDown className="h-4 w-4 mr-2" /> Download PDF
+                </button>
+              </div>
             </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
@@ -136,11 +144,15 @@ export default function BuildabilityBriefsPage() {
               {/* Report Header */}
               <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
                 <div>
-                  <h3 className="text-3xl font-bold text-white mb-2">{report.address}</h3>
-                  <div className="flex flex-wrap gap-3 text-sm text-gray-400">
+                  <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
+                  <div className="flex flex-wrap gap-3 text-sm text-gray-400 mb-3">
                     <span className="flex items-center"><Building2 className="h-4 w-4 mr-1" /> Parcel: {report.parcelId}</span>
                     <span className="flex items-center"><MapPin className="h-4 w-4 mr-1" /> Zone: {report.zoningDistrict}</span>
                     <span className="flex items-center"><Ruler className="h-4 w-4 mr-1" /> {report.lotSize}</span>
+                  </div>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: {report.executionTime || "0.42s"}</span>
                   </div>
                 </div>
                 <div className="text-right">

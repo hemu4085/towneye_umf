@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   FileText, MapPin, Loader2, Home, TrendingUp, DollarSign, 
-  Users, CheckCircle2, ChevronRight, FileDown, BookOpen
+  Users, CheckCircle2, ChevronRight, FileDown, BookOpen,
+  Printer, Share2
 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
@@ -30,7 +31,7 @@ export default function RealtorBriefPage() {
     // Simulate AI generation for Realtor Brief
     setTimeout(() => {
       setReport({
-        address: address,
+        address: address.replace(", undefined", ""),
         propertyType: "Single Family",
         estimatedValue: "$1,150,000",
         marketTrend: "+4.2% YOY",
@@ -97,14 +98,30 @@ export default function RealtorBriefPage() {
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Listing Brief</h2>
-              <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
-                <FileDown className="h-4 w-4 mr-2" /> Export PDF
-              </button>
+              <div className="flex items-center space-x-3">
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Printer className="h-4 w-4 mr-2" /> Print
+                </button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Share2 className="h-4 w-4 mr-2" /> Share Link
+                </button>
+                <button className="flex items-center text-sm text-white transition-colors bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg border border-emerald-500/50">
+                  <FileDown className="h-4 w-4 mr-2" /> Download PDF
+                </button>
+              </div>
             </div>
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="p-6 border-b border-gray-800 bg-gray-800/30">
-                <h3 className="text-3xl font-bold text-white mb-4">{report.address}</h3>
+              <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800 mb-4">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: {report.executionTime || "0.55s"}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-gray-950 p-4 rounded-xl border border-gray-800">
                     <div className="text-gray-400 text-sm mb-1 flex items-center"><DollarSign className="w-4 h-4 mr-1"/> Est. Value</div>

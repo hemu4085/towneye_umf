@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   FileText, Search, Loader2, Landmark, Clock, AlertCircle, 
-  CheckCircle2, Building, Scale, ArrowRight, Users
+  CheckCircle2, Building, Scale, ArrowRight, Users,
+  Printer, FileDown, Share2
 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
@@ -30,7 +31,7 @@ export default function CivicEntitlementsPage() {
     // Simulate AI generation for Civic Entitlements
     setTimeout(() => {
       setReport({
-        address: address,
+        address: address.replace(", undefined", ""),
         projectType: "Mixed-Use Redevelopment",
         jurisdiction: "Arlington, MA",
         estimatedTimeline: "12-18 Months",
@@ -91,14 +92,33 @@ export default function CivicEntitlementsPage() {
           </div>
         ) : (
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Generated Brief</h2>
+              <div className="flex items-center space-x-3">
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Printer className="h-4 w-4 mr-2" /> Print
+                </button>
+                <button className="flex items-center text-sm text-gray-400 hover:text-white transition-colors bg-gray-900 px-3 py-1.5 rounded-lg border border-gray-800">
+                  <Share2 className="h-4 w-4 mr-2" /> Share Link
+                </button>
+                <button className="flex items-center text-sm text-white transition-colors bg-amber-600 hover:bg-amber-700 px-3 py-1.5 rounded-lg border border-amber-500/50">
+                  <FileDown className="h-4 w-4 mr-2" /> Download PDF
+                </button>
+              </div>
+            </div>
+            
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
               
               {/* Header */}
               <div className="p-6 border-b border-gray-800 bg-gray-800/30 flex justify-between items-start">
                 <div>
-                  <h3 className="text-3xl font-bold text-white mb-2">{report.address}</h3>
-                  <div className="flex items-center text-amber-500 text-sm font-medium">
+                  <h3 className="text-lg font-bold text-white mb-2">{report.address}</h3>
+                  <div className="flex items-center text-amber-500 text-sm font-medium mb-3">
                     <Building className="w-4 h-4 mr-1.5" /> Proposed: {report.projectType}
+                  </div>
+                  <div className="flex items-center text-xs text-gray-500 bg-gray-950 px-2 py-1 rounded inline-flex border border-gray-800">
+                    <span className="mr-3">Generated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span>Execution Time: {report.executionTime || "0.68s"}</span>
                   </div>
                 </div>
                 <div className="text-right">
