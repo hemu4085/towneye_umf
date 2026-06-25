@@ -13,6 +13,15 @@ export default function BuildabilityBriefsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
 
+  // Auto-generate report when address changes
+  useEffect(() => {
+    if (address.trim()) {
+      handleGenerate();
+    } else {
+      setReport(null);
+    }
+  }, [address]);
+
   const handleGenerate = async () => {
     if (!address.trim()) return;
     

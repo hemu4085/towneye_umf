@@ -109,7 +109,7 @@ export function Sidebar() {
         .then(res => res.json())
         .then(data => {
           if (data && data.suggestions) {
-            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town}`));
+            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town_name || s.town}`));
           }
         })
         .catch(err => console.error("Autocomplete failed:", err));

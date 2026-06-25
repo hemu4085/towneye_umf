@@ -12,6 +12,15 @@ export default function RealtorBriefPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
 
+  // Auto-generate report when address changes
+  useEffect(() => {
+    if (address.trim()) {
+      handleGenerate();
+    } else {
+      setReport(null);
+    }
+  }, [address]);
+
   const handleGenerate = () => {
     if (!address.trim()) return;
     
