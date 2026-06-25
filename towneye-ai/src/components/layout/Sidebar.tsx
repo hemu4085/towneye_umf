@@ -70,17 +70,123 @@ const menuGroups = [
   }
 ];
 
-// Need these extra icons
-import { Clock, Search, Shield, AlertTriangle, TrendingUp } from "lucide-react";
+import { 
+  BarChart3, 
+  Map as MapIcon, 
+  MessageSquare, 
+  Building2,
+  Settings,
+  Bell,
+  FileText,
+  Home,
+  Landmark,
+  Activity,
+  ChevronDown,
+  Briefcase,
+  Scale,
+  Compass,
+  DollarSign,
+  UserCircle,
+  MapPin,
+  Search
+} from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [address, setAddress] = useSharedAddress("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch real suggestions from the backend API as the user types
+  useEffect(() => {
+    if (!address.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
+    const timeoutId = setTimeout(() => {
+      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&limit=5`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.suggestions) {
+            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town}`));
+          }
+        })
+        .catch(err => console.error("Autocomplete failed:", err));
+    }, 150);
+    
+    return () => clearTimeout(timeoutId);
+  }, [address]);
+
+  // Handle clicking outside to close dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900 border-r border-gray-800 text-white">
       <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-800">
         <Building2 className="h-8 w-8 text-blue-500 mr-3" />
         <span className="text-xl font-bold tracking-tight">Towneye.ai</span>
+      </div>
+
+      {/* Global Address Search */}
+      <div className="p-4 border-b border-gray-800 bg-gray-900/50">
+        <div className="relative" ref={dropdownRef}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Search any address..." 
+            className="w-full bg-gray-950 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            value={address}
+            onChange={(e) => {
+              setAddress(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+          />
+          
+          {/* Autofill Dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-[100] overflow-hidden">
+              {suggestions.map((suggestion, idx) => {
+                const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
+                return (
+                  <div 
+                    key={idx}
+                    className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-xs text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-700 last:border-0"
+                    onClick={() => {
+                      setAddress(suggestion);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <MapPin className="h-3 w-3 mr-2 text-blue-400 shrink-0" />
+                    <span className="truncate">
+                      {matchIndex >= 0 ? (
+                        <>
+                          {suggestion.substring(0, matchIndex)}
+                          <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
+                          {suggestion.substring(matchIndex + address.length)}
+                        </>
+                      ) : (
+                        suggestion
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
       
       <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6">

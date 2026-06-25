@@ -8,44 +8,9 @@ import {
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function CivicEntitlementsPage() {
-  const [address, setAddress] = useSharedAddress("");
+  const [address] = useSharedAddress("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Fetch real suggestions from the backend API as the user types
-  useEffect(() => {
-    if (!address.trim()) {
-      setSuggestions([]);
-      return;
-    }
-    
-    const timeoutId = setTimeout(() => {
-      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&limit=5`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.suggestions) {
-            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town}`));
-          }
-        })
-        .catch(err => console.error("Autocomplete failed:", err));
-    }, 150);
-    
-    return () => clearTimeout(timeoutId);
-  }, [address]);
-
-  // Handle clicking outside to close dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleGenerate = () => {
     if (!address.trim()) return;
@@ -96,55 +61,12 @@ export default function CivicEntitlementsPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-t-2xl"></div>
             <h2 className="text-lg font-semibold text-white mb-4">Analyze Entitlement Risk</h2>
-            <div className="flex gap-4 relative" ref={dropdownRef}>
-              <div className="relative flex-1">
-                <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Enter parcel or project address..." 
-                  className="w-full bg-gray-950 border border-gray-700 rounded-xl py-3 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  value={address}
-                  onChange={(e) => {
-                    setAddress(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                />
-                
-                {/* Autofill Dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
-                    {suggestions.map((suggestion, idx) => {
-                      // Highlight the matching part
-                      const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
-                      
-                      return (
-                        <div 
-                          key={idx}
-                          className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
-                          onClick={() => {
-                            setAddress(suggestion);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          <Building className="h-4 w-4 mr-3 text-amber-500 shrink-0" />
-                          <span className="truncate">
-                            {matchIndex >= 0 ? (
-                              <>
-                                {suggestion.substring(0, matchIndex)}
-                                <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
-                                {suggestion.substring(matchIndex + address.length)}
-                              </>
-                            ) : (
-                              suggestion
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+            <div className="flex gap-4">
+              <div className="flex-1 bg-gray-950 border border-gray-700 rounded-xl py-3 px-4 text-white flex items-center">
+                <Building className="h-5 w-5 text-amber-500 mr-3 shrink-0" />
+                <span className={address ? "text-white font-medium truncate" : "text-gray-500 italic"}>
+                  {address || "Use the global search bar in the left menu to select a project address..."}
+                </span>
               </div>
               <button 
                 onClick={handleGenerate}
