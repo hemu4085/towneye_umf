@@ -95,7 +95,3 @@ export default function RadarPage() {
     </div>
   );
 }
-      </div>
-    </div>
-  );
-}
