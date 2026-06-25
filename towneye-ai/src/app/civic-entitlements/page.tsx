@@ -12,6 +12,23 @@ export default function CivicEntitlementsPage() {
   const [report, setReport] = useState<any>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Mock Arlington database for realistic autofill
+  const arlingtonDatabase = [
+    "45 Jason St, Arlington, MA",
+    "142 Mass Ave, Arlington, MA",
+    "89 Appleton St, Arlington, MA",
+    "250 Broadway, Arlington, MA",
+    "12 Lake St, Arlington, MA",
+    "73 Mystic St, Arlington, MA",
+    "19 Park Ave, Arlington, MA",
+    "314 Pleasant St, Arlington, MA"
+  ];
+
+  // Filter based on what the user actually types
+  const suggestions = address.length === 0 
+    ? arlingtonDatabase.slice(0, 5) 
+    : arlingtonDatabase.filter(s => s.toLowerCase().includes(address.toLowerCase()));
+
   // Close dropdown if clicking outside
   if (typeof window !== 'undefined') {
     window.onclick = function(event) {
@@ -87,28 +104,21 @@ export default function CivicEntitlementsPage() {
                 />
                 
                 {/* Autofill Dropdown */}
-                {showSuggestions && address.length > 0 && (
+                {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
-                    <div 
-                      className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800"
-                      onClick={() => {
-                        setAddress(`${address}, Arlington, MA`);
-                        setShowSuggestions(false);
-                      }}
-                    >
-                      <Building className="h-4 w-4 mr-3 text-amber-500" />
-                      <span className="font-semibold text-white mr-1">{address}</span>, Arlington, MA
-                    </div>
-                    <div 
-                      className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors"
-                      onClick={() => {
-                        setAddress(`${address} Unit 2, Arlington, MA`);
-                        setShowSuggestions(false);
-                      }}
-                    >
-                      <Building className="h-4 w-4 mr-3 text-amber-500 opacity-50" />
-                      <span className="font-semibold text-white mr-1">{address}</span> Unit 2, Arlington, MA
-                    </div>
+                    {suggestions.map((suggestion, idx) => (
+                      <div 
+                        key={idx}
+                        className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
+                        onClick={() => {
+                          setAddress(suggestion);
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        <Building className="h-4 w-4 mr-3 text-amber-500 shrink-0" />
+                        <span className="truncate">{suggestion}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
