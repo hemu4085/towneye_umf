@@ -6,9 +6,10 @@ import {
   AlertTriangle, CheckCircle2, ChevronRight, FileDown,
   Info
 } from "lucide-react";
+import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function BuildabilityBriefsPage() {
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useSharedAddress("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);

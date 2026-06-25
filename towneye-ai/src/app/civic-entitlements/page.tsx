@@ -5,9 +5,10 @@ import {
   FileText, Search, Loader2, Landmark, Clock, AlertCircle, 
   CheckCircle2, Building, Scale, ArrowRight
 } from "lucide-react";
+import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function CivicEntitlementsPage() {
-  const [address, setAddress] = useState("");
+  const [address, setAddress] = useSharedAddress("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<any>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
