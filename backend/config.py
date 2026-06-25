@@ -28,6 +28,9 @@ def _default_reports_path() -> Path:
 def _default_gold_path() -> Path:
     if os.getenv("GOLD_DATA_PATH"):
         return Path(os.getenv("GOLD_DATA_PATH"))
+    # Fallback to demo-data if data/gold doesn't exist
+    if (REPO_ROOT / "demo-data" / "gold").exists():
+        return REPO_ROOT / "demo-data" / "gold"
     return REPO_ROOT / "data" / "gold"
 
 
