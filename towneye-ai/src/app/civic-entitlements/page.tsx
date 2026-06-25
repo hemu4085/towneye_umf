@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { 
   FileText, Search, Loader2, Landmark, Clock, AlertCircle, 
-  CheckCircle2, Building, Scale, ArrowRight
+  CheckCircle2, Building, Scale, ArrowRight, Users
 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
