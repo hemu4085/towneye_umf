@@ -3,10 +3,10 @@
 import { MapPin, Filter, Search, Building, Home, DollarSign, ArrowUpRight } from "lucide-react";
 
 const properties = [
-  { id: 1, address: "142 Mass Ave", type: "Commercial", status: "Zoning Change", value: "$2.4M", date: "2 days ago", coords: { top: "30%", left: "45%" } },
-  { id: 2, address: "89 Appleton St", type: "Residential", status: "Demolition Permit", value: "$950K", date: "1 week ago", coords: { top: "60%", left: "30%" } },
-  { id: 3, address: "250 Broadway", type: "Mixed Use", status: "Recent Sale", value: "$4.1M", date: "3 weeks ago", coords: { top: "40%", left: "65%" } },
-  { id: 4, address: "12 Lake St", type: "Residential", status: "New Construction", value: "N/A", date: "1 month ago", coords: { top: "75%", left: "55%" } },
+  { id: 1, address: "142 Mass Ave", type: "Commercial", status: "Zoning Change", value: "$2.4M", date: "2 days ago", coords: { top: "30%", left: "35%" } },
+  { id: 2, address: "89 Appleton St", type: "Residential", status: "Demolition Permit", value: "$950K", date: "1 week ago", coords: { top: "50%", left: "20%" } },
+  { id: 3, address: "250 Broadway", type: "Mixed Use", status: "Recent Sale", value: "$4.1M", date: "3 weeks ago", coords: { top: "45%", left: "75%" } },
+  { id: 4, address: "12 Lake St", type: "Residential", status: "New Construction", value: "N/A", date: "1 month ago", coords: { top: "80%", left: "55%" } },
 ];
 
 export default function RadarPage() {
@@ -81,33 +81,43 @@ export default function RadarPage() {
         </div>
 
         {/* Right Panel - Map View Mockup */}
-        <div className="flex-1 relative bg-[#f8f9fa] overflow-hidden border-l border-gray-800">
-          {/* Mock Map Grid Background */}
+        <div className="flex-1 relative bg-[#f1f3f4] overflow-hidden border-l border-gray-800">
+          {/* Base map layer with subtle texture */}
+          <div className="absolute inset-0 opacity-[0.02] bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-overlay"></div>
+          
+          {/* Mock Map Grid Background (scaled down for wider zoom effect) */}
           <div 
-            className="absolute inset-0 opacity-40"
+            className="absolute inset-0 opacity-[0.15]"
             style={{
-              backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)',
-              backgroundSize: '40px 40px'
+              backgroundImage: 'linear-gradient(#cbd5e1 1px, transparent 1px), linear-gradient(90deg, #cbd5e1 1px, transparent 1px)',
+              backgroundSize: '20px 20px'
             }}
           />
           
           {/* Mock Water Body (Mystic River/Lakes) */}
-          <div className="absolute top-0 right-0 w-1/3 h-full bg-blue-100 blur-2xl transform skew-x-12 translate-x-1/4 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-1/2 h-1/3 bg-blue-100 blur-2xl rounded-full translate-y-1/4 -translate-x-1/4 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-1/4 h-full bg-[#e3f2fd] blur-xl transform skew-x-6 translate-x-1/3 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-1/3 h-1/4 bg-[#e3f2fd] blur-xl rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
           
           {/* Major arterial road mockup */}
-          <div className="absolute top-1/4 left-0 w-full h-3 bg-white border-y border-gray-200 transform rotate-[-5deg] pointer-events-none shadow-sm" />
-          <div className="absolute top-[23%] left-[15%] text-gray-500 text-[10px] font-bold tracking-widest uppercase rotate-[-5deg]">Massachusetts Ave</div>
+          <div className="absolute top-1/3 left-0 w-full h-1.5 bg-white border-y border-gray-300 transform rotate-[-3deg] pointer-events-none shadow-sm" />
+          <div className="absolute top-[31%] left-[20%] text-gray-500 text-[9px] font-bold tracking-widest uppercase rotate-[-3deg]">Massachusetts Ave</div>
           
-          {/* Mock Map Labels */}
-          <div className="absolute top-[20%] left-[20%] text-gray-400 font-bold text-3xl tracking-widest uppercase rotate-[-10deg] opacity-70 pointer-events-none">
+          {/* Secondary road mockup */}
+          <div className="absolute top-0 left-1/2 w-1.5 h-full bg-white border-x border-gray-300 transform rotate-[15deg] pointer-events-none shadow-sm opacity-60" />
+          <div className="absolute top-[60%] left-[51%] text-gray-500 text-[9px] font-bold tracking-widest uppercase rotate-[15deg]">Pleasant St</div>
+          
+          {/* Mock Map Labels (Scaled down) */}
+          <div className="absolute top-[15%] left-[25%] text-gray-400 font-bold text-xl tracking-widest uppercase opacity-80 pointer-events-none">
             Arlington Heights
           </div>
-          <div className="absolute top-[60%] left-[60%] text-gray-400 font-bold text-3xl tracking-widest uppercase rotate-[-10deg] opacity-70 pointer-events-none">
+          <div className="absolute top-[75%] left-[65%] text-gray-400 font-bold text-xl tracking-widest uppercase opacity-80 pointer-events-none">
             East Arlington
           </div>
+          <div className="absolute top-[45%] left-[45%] text-gray-500 font-extrabold text-sm tracking-widest uppercase opacity-60 pointer-events-none">
+            Arlington Center
+          </div>
 
-          {/* Map Pins */}
+          {/* Map Pins (Slightly smaller, positioned better) */}
           {properties.map((prop) => (
             <div 
               key={prop.id} 
@@ -115,31 +125,31 @@ export default function RadarPage() {
               style={prop.coords}
             >
               {/* Pulse effect */}
-              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-30 scale-150" />
+              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20 scale-125" />
               
               {/* Pin */}
-              <div className={`relative flex items-center justify-center w-8 h-8 rounded-full shadow-md border-2 border-white ${
+              <div className={`relative flex items-center justify-center w-6 h-6 rounded-full shadow border border-white ${
                 prop.type === 'Commercial' ? 'bg-blue-500' :
                 prop.type === 'Mixed Use' ? 'bg-purple-500' : 'bg-emerald-500'
               }`}>
-                {prop.type === 'Commercial' ? <Building size={14} className="text-white" /> : 
-                 prop.type === 'Mixed Use' ? <MapPin size={14} className="text-white" /> :
-                 <Home size={14} className="text-white" />}
+                {prop.type === 'Commercial' ? <Building size={10} className="text-white" /> : 
+                 prop.type === 'Mixed Use' ? <MapPin size={10} className="text-white" /> :
+                 <Home size={10} className="text-white" />}
               </div>
 
               {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-white border border-gray-200 text-gray-900 text-xs py-2 px-3 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white border border-gray-200 text-gray-900 text-xs py-1.5 px-2.5 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
                 <p className="font-bold">{prop.address}</p>
-                <p className="text-gray-500">{prop.status}</p>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white drop-shadow-sm" />
+                <p className="text-gray-500 text-[10px] uppercase font-semibold mt-0.5">{prop.status}</p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-[3px] border-transparent border-t-white drop-shadow-sm" />
               </div>
             </div>
           ))}
 
           {/* Map Controls */}
-          <div className="absolute bottom-6 right-6 flex flex-col bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-            <button className="p-2 hover:bg-gray-50 text-gray-700 font-bold transition-colors border-b border-gray-200">+</button>
-            <button className="p-2 hover:bg-gray-50 text-gray-700 font-bold transition-colors">-</button>
+          <div className="absolute bottom-6 right-6 flex flex-col bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+            <button className="p-1.5 hover:bg-gray-50 text-gray-600 font-bold transition-colors border-b border-gray-200 text-sm">+</button>
+            <button className="p-1.5 hover:bg-gray-50 text-gray-600 font-bold transition-colors text-sm">-</button>
           </div>
         </div>
       </div>
