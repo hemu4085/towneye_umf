@@ -81,25 +81,32 @@ export default function RadarPage() {
         </div>
 
         {/* Right Panel - Map View Mockup */}
-        <div className="flex-1 relative bg-[#0a0f18] overflow-hidden">
+        <div className="flex-1 relative bg-gray-900 overflow-hidden border-l border-gray-800">
+          {/* Base map layer with subtle texture */}
+          <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/cartographer.png')] mix-blend-overlay"></div>
+          
           {/* Mock Map Grid Background */}
           <div 
-            className="absolute inset-0 opacity-10"
+            className="absolute inset-0 opacity-20"
             style={{
-              backgroundImage: 'linear-gradient(#374151 1px, transparent 1px), linear-gradient(90deg, #374151 1px, transparent 1px)',
+              backgroundImage: 'linear-gradient(#1f2937 1px, transparent 1px), linear-gradient(90deg, #1f2937 1px, transparent 1px)',
               backgroundSize: '40px 40px'
             }}
           />
           
           {/* Mock Water Body (Mystic River/Lakes) */}
-          <div className="absolute top-0 right-0 w-1/3 h-full bg-blue-900/10 blur-3xl transform skew-x-12 translate-x-1/4" />
-          <div className="absolute bottom-0 left-0 w-1/2 h-1/3 bg-blue-900/10 blur-3xl rounded-full translate-y-1/4 -translate-x-1/4" />
+          <div className="absolute top-0 right-0 w-1/3 h-full bg-blue-500/5 blur-3xl transform skew-x-12 translate-x-1/4 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-1/2 h-1/3 bg-blue-500/5 blur-3xl rounded-full translate-y-1/4 -translate-x-1/4 pointer-events-none" />
+          
+          {/* Major arterial road mockup */}
+          <div className="absolute top-1/4 left-0 w-full h-2 bg-gray-800/30 transform rotate-[-5deg] pointer-events-none" />
+          <div className="absolute top-1/4 left-[15%] text-gray-500 text-[10px] font-bold tracking-widest uppercase rotate-[-5deg]">Massachusetts Ave</div>
           
           {/* Mock Map Labels */}
-          <div className="absolute top-[20%] left-[20%] text-gray-700 font-bold text-2xl tracking-widest uppercase rotate-[-15deg] opacity-40">
+          <div className="absolute top-[20%] left-[20%] text-gray-600 font-bold text-3xl tracking-widest uppercase rotate-[-10deg] opacity-30 pointer-events-none">
             Arlington Heights
           </div>
-          <div className="absolute top-[50%] left-[60%] text-gray-700 font-bold text-2xl tracking-widest uppercase rotate-[-15deg] opacity-40">
+          <div className="absolute top-[60%] left-[60%] text-gray-600 font-bold text-3xl tracking-widest uppercase rotate-[-10deg] opacity-30 pointer-events-none">
             East Arlington
           </div>
 

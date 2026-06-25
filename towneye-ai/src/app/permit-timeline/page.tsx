@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clock, Loader2, Calendar, FileDown, CheckCircle2, Circle } from "lucide-react";
+import { Clock, Loader2, Calendar, FileDown, CheckCircle2, Circle, Printer, Share2 } from "lucide-react";
 import { useSharedAddress } from "@/hooks/useSharedAddress";
 
 export default function TimelinePage() {
