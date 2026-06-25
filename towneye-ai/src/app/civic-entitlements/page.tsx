@@ -92,8 +92,8 @@ export default function CivicEntitlementsPage() {
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-4xl mx-auto mb-10">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-t-2xl"></div>
             <h2 className="text-lg font-semibold text-white mb-4">Analyze Entitlement Risk</h2>
             <div className="flex gap-4 relative" ref={dropdownRef}>
               <div className="relative flex-1">
