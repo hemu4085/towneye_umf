@@ -50,7 +50,7 @@ export default function AssistantPage() {
   return (
     <div className="flex-1 flex flex-col bg-gray-950 h-full">
       <div className="px-8 py-6 border-b border-gray-800 shrink-0">
-        <h1 className="text-2xl font-bold text-white mb-2">Zoning AI Assistant</h1>
+        <h1 className="text-2xl font-bold text-white mb-2">Town Plaza</h1>
         <p className="text-gray-400 text-sm">Ask questions about zoning codes, meeting minutes, and municipal data.</p>
       </div>
 

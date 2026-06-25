@@ -21,7 +21,7 @@ export default function CommunityPulsePage() {
   return (
     <div className="flex-1 overflow-auto bg-gray-950 p-8 text-gray-100">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Community Pulse</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">Town Activity</h1>
         <p className="text-gray-400">Real-time public activity, events, and foot traffic monitoring.</p>
       </div>
 

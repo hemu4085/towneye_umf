@@ -45,7 +45,7 @@ export default function PulseDashboard() {
   return (
     <div className="flex-1 overflow-auto bg-gray-950 p-8 text-gray-100">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">311 Pulse Dashboard</h1>
+        <h1 className="text-3xl font-bold text-white mb-2">Town Pulse</h1>
         <p className="text-gray-400">Arlington Civic Health & Predictive Analytics</p>
       </div>
 

@@ -26,16 +26,16 @@ const menuGroups = [
   {
     persona: "Platform",
     items: [
-      { name: "Deal Radar", href: "/radar", icon: MapIcon },
-      { name: "Zoning AI Assistant", href: "/assistant", icon: MessageSquare },
-      { name: "311 Dashboard", href: "/pulse", icon: BarChart3 },
-      { name: "Community Activity", href: "/community-pulse", icon: Activity },
+      { name: "Town Plaza", href: "/assistant", icon: MessageSquare },
+      { name: "Town Pulse", href: "/pulse", icon: BarChart3 },
+      { name: "Town Activity", href: "/community-pulse", icon: Activity },
     ]
   },
   {
     persona: "Developer & Architect",
     icon: Briefcase,
     items: [
+      { name: "Deal Radar", href: "/radar", icon: MapIcon },
       { name: "Buildability Brief", href: "/briefs", icon: FileText },
       { name: "Zoning Report", href: "/zoning", icon: Building2 },
       { name: "Proforma Analysis", href: "/proforma", icon: DollarSign },
