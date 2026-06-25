@@ -114,6 +114,40 @@ export default function RealtorBriefPage() {
                   onFocus={() => setShowSuggestions(true)}
                   onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                 />
+                
+                {/* Autofill Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
+                    {suggestions.map((suggestion, idx) => {
+                      // Highlight the matching part
+                      const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
+                      
+                      return (
+                        <div 
+                          key={idx}
+                          className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
+                          onClick={() => {
+                            setAddress(suggestion);
+                            setShowSuggestions(false);
+                          }}
+                        >
+                          <MapPin className="h-4 w-4 mr-3 text-emerald-500 shrink-0" />
+                          <span className="truncate">
+                            {matchIndex >= 0 ? (
+                              <>
+                                {suggestion.substring(0, matchIndex)}
+                                <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
+                                {suggestion.substring(matchIndex + address.length)}
+                              </>
+                            ) : (
+                              suggestion
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <button 
                 onClick={handleGenerate}
@@ -122,40 +156,6 @@ export default function RealtorBriefPage() {
               >
                 {isGenerating ? <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Generating...</> : <><Home className="h-5 w-5 mr-2" /> Generate</>}
               </button>
-              
-              {/* Autofill Dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 w-full mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
-                  {suggestions.map((suggestion, idx) => {
-                    // Highlight the matching part
-                    const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
-                    
-                    return (
-                      <div 
-                        key={idx}
-                        className="px-4 py-3 hover:bg-gray-800 cursor-pointer text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-800 last:border-0"
-                        onClick={() => {
-                          setAddress(suggestion);
-                          setShowSuggestions(false);
-                        }}
-                      >
-                        <MapPin className="h-4 w-4 mr-3 text-emerald-500 shrink-0" />
-                        <span className="truncate">
-                          {matchIndex >= 0 ? (
-                            <>
-                              {suggestion.substring(0, matchIndex)}
-                              <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
-                              {suggestion.substring(matchIndex + address.length)}
-                            </>
-                          ) : (
-                            suggestion
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
         </div>
