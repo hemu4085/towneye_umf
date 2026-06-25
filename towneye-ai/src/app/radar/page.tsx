@@ -1,12 +1,13 @@
 "use client";
 
-import { MapPin, Filter, Search, Building, Home, DollarSign, ArrowUpRight } from "lucide-react";
-import { useState } from "react";
-import Map, { Marker, NavigationControl } from "react-map-gl";
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { Filter, Search, Building, Home, DollarSign, ArrowUpRight } from "lucide-react";
+import dynamic from "next/dynamic";
 
-// For the demo to run locally, please add NEXT_PUBLIC_MAPBOX_TOKEN to your .env.local file
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+// Dynamically import the map so Leaflet's window requirement doesn't break Next.js SSR
+const RadarMap = dynamic(() => import("@/components/RadarMap"), {
+  ssr: false,
+  loading: () => <div className="flex-1 bg-gray-100 flex items-center justify-center text-gray-500">Initializing Map Engine...</div>
+});
 
 const properties = [
   { id: 1, address: "142 Mass Ave", type: "Commercial", status: "Zoning Change", value: "$2.4M", date: "2 days ago", coords: { lat: 42.404, lng: -71.144 } },
@@ -16,12 +17,6 @@ const properties = [
 ];
 
 export default function RadarPage() {
-  const [viewState, setViewState] = useState({
-    longitude: -71.1565,
-    latitude: 42.4154, // Centered roughly on Arlington, MA
-    zoom: 12.5
-  });
-
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-950">
       {/* Header */}
@@ -93,57 +88,8 @@ export default function RadarPage() {
         </div>
 
         {/* Right Panel - Real Interactive Map */}
-        <div className="flex-1 relative border-l border-gray-800">
-          {!MAPBOX_TOKEN ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-gray-400 p-8 text-center">
-              <MapPin className="w-12 h-12 mb-4 text-gray-600" />
-              <h3 className="text-lg font-bold text-white mb-2">Mapbox Token Required</h3>
-              <p>To view the professional interactive map, please add a <code className="bg-gray-800 px-1 rounded text-blue-400">NEXT_PUBLIC_MAPBOX_TOKEN</code> to your <code className="bg-gray-800 px-1 rounded text-blue-400">.env.local</code> file.</p>
-              <a href="https://account.mapbox.com/access-tokens/" target="_blank" className="mt-4 text-blue-500 hover:underline">Get a free token here</a>
-            </div>
-          ) : (
-            <Map
-              {...viewState}
-              onMove={evt => setViewState(evt.viewState)}
-              mapStyle="mapbox://styles/mapbox/light-v11"
-              mapboxAccessToken={MAPBOX_TOKEN}
-              style={{ width: "100%", height: "100%" }}
-            >
-              <NavigationControl position="bottom-right" />
-              
-              {/* Map Pins */}
-              {properties.map((prop) => (
-                <Marker 
-                  key={prop.id} 
-                  longitude={prop.coords.lng} 
-                  latitude={prop.coords.lat} 
-                  anchor="center"
-                >
-                  <div className="relative group cursor-pointer">
-                    {/* Pulse effect */}
-                    <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-30 scale-150" />
-                    
-                    {/* Pin */}
-                    <div className={`relative flex items-center justify-center w-8 h-8 rounded-full shadow-md border-2 border-white ${
-                      prop.type === 'Commercial' ? 'bg-blue-500' :
-                      prop.type === 'Mixed Use' ? 'bg-purple-500' : 'bg-emerald-500'
-                    }`}>
-                      {prop.type === 'Commercial' ? <Building size={14} className="text-white" /> : 
-                       prop.type === 'Mixed Use' ? <MapPin size={14} className="text-white" /> :
-                       <Home size={14} className="text-white" />}
-                    </div>
-
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-white border border-gray-200 text-gray-900 text-xs py-2 px-3 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
-                      <p className="font-bold">{prop.address}</p>
-                      <p className="text-gray-500 font-medium mt-0.5">{prop.status}</p>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-white" />
-                    </div>
-                  </div>
-                </Marker>
-              ))}
-            </Map>
-          )}
+        <div className="flex-1 relative border-l border-gray-800 z-0">
+          <RadarMap />
         </div>
       </div>
     </div>
