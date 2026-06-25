@@ -84,7 +84,7 @@ export default function CivicEntitlementsPage() {
       <div className="px-8 py-6 border-b border-gray-800 shrink-0 bg-gray-950 z-10">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-white mb-2">Civic Entitlements Brief</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">Entitlements & Risk Brief</h1>
             <p className="text-gray-400 text-sm">Predict permit requirements, timeline, and political risk for proposed developments.</p>
           </div>
         </div>

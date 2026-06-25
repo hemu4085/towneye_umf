@@ -12,19 +12,66 @@ import {
   FileText,
   Home,
   Landmark,
-  Activity
+  Activity,
+  ChevronDown,
+  Briefcase,
+  Scale,
+  Compass,
+  DollarSign,
+  UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const navigation = [
-  { name: "311 Pulse", href: "/pulse", icon: BarChart3 },
-  { name: "Community Pulse", href: "/community-pulse", icon: Activity },
-  { name: "Development Radar", href: "/radar", icon: MapIcon },
-  { name: "Buildability Briefs", href: "/briefs", icon: FileText },
-  { name: "Civic Entitlements", href: "/civic-entitlements", icon: Landmark },
-  { name: "Realtor Briefs", href: "/realtor", icon: Home },
-  { name: "Civic Assistant", href: "/assistant", icon: MessageSquare },
+const menuGroups = [
+  {
+    persona: "Platform",
+    items: [
+      { name: "Deal Radar", href: "/radar", icon: MapIcon },
+      { name: "Zoning AI Assistant", href: "/assistant", icon: MessageSquare },
+      { name: "311 Dashboard", href: "/pulse", icon: BarChart3 },
+      { name: "Community Activity", href: "/community-pulse", icon: Activity },
+    ]
+  },
+  {
+    persona: "Developer & Architect",
+    icon: Briefcase,
+    items: [
+      { name: "Buildability Brief", href: "/briefs", icon: FileText },
+      { name: "Zoning Report", href: "/zoning", icon: Building2 },
+      { name: "Proforma Analysis", href: "/proforma", icon: DollarSign },
+      { name: "Permit Timeline", href: "/permit-timeline", icon: Clock },
+    ]
+  },
+  {
+    persona: "Zoning Attorney",
+    icon: Scale,
+    items: [
+      { name: "Entitlements & Risk", href: "/civic-entitlements", icon: Landmark },
+      { name: "Closing Risk Radar", href: "/closing-risk", icon: AlertTriangle },
+      { name: "Precedent Search", href: "/precedents", icon: Search },
+    ]
+  },
+  {
+    persona: "Lender & Appraiser",
+    icon: DollarSign,
+    items: [
+      { name: "Lender Risk Report", href: "/lender", icon: Shield },
+      { name: "Market Trend Report", href: "/market", icon: TrendingUp },
+    ]
+  },
+  {
+    persona: "Realtor & Homeowner",
+    icon: Home,
+    items: [
+      { name: "Listing Brief", href: "/realtor", icon: Home },
+      { name: "Neighborhood Guide", href: "/neighborhood", icon: Compass },
+      { name: "Homeowner Report", href: "/homeowner", icon: UserCircle },
+    ]
+  }
 ];
+
+// Need these extra icons
+import { Clock, Search, Shield, AlertTriangle, TrendingUp } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -37,35 +84,39 @@ export function Sidebar() {
       </div>
       
       <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6">
-        <div className="space-y-1 mb-8">
-          <p className="px-2 text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4">
-            Arlington MVP
-          </p>
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || (pathname === '/' && item.href === '/pulse');
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  isActive
-                    ? "bg-blue-600/10 text-blue-400"
-                    : "text-gray-300 hover:bg-gray-800 hover:text-white",
-                  "group flex items-center rounded-md px-3 py-2.5 text-sm font-medium transition-colors"
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    isActive ? "text-blue-400" : "text-gray-400 group-hover:text-white",
-                    "mr-3 h-5 w-5 flex-shrink-0 transition-colors"
-                  )}
-                  aria-hidden="true"
-                />
-                {item.name}
-              </Link>
-            );
-          })}
-        </div>
+        {menuGroups.map((group, groupIdx) => (
+          <div key={group.persona} className="mb-6">
+            <div className="px-2 mb-2 flex items-center text-xs font-bold uppercase tracking-wider text-gray-500">
+              {group.persona}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const isActive = pathname === item.href || (pathname === '/' && item.href === '/radar');
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      isActive
+                        ? "bg-purple-600/10 text-purple-400 border border-purple-500/20"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-white border border-transparent",
+                      "group flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                    )}
+                  >
+                    <item.icon
+                      className={cn(
+                        isActive ? "text-purple-400" : "text-gray-500 group-hover:text-gray-300",
+                        "mr-3 h-4 w-4 flex-shrink-0 transition-colors"
+                      )}
+                      aria-hidden="true"
+                    />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       
       <div className="flex shrink-0 p-4 border-t border-gray-800 space-x-2">
