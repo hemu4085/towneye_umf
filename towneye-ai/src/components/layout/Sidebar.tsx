@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 const menuGroups = [
   {
-    persona: "Platform",
+    persona: "Town Eye",
     items: [
       { name: "Town Plaza", href: "/assistant", icon: MessageSquare },
       { name: "Town Pulse", href: "/pulse", icon: BarChart3 },
