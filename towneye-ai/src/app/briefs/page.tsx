@@ -89,41 +89,31 @@ export default function BuildabilityBriefsPage() {
       <div className="flex-1 overflow-y-auto p-8">
         
         {/* Search / Generator Input */}
-        <div className="max-w-4xl mx-auto mb-10">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 rounded-t-2xl"></div>
-            
-            <h2 className="text-lg font-semibold text-white mb-4">Select Property for Analysis</h2>
-            
-            <div className="flex gap-4">
-              <div className="flex-1 bg-gray-950 border border-gray-700 rounded-xl py-3 px-4 text-white flex items-center">
-                <MapPin className="h-5 w-5 text-purple-500 mr-3 shrink-0" />
-                <span className={address ? "text-white font-medium truncate" : "text-gray-500 italic"}>
-                  {address || "Use the global search bar in the left menu to select a property..."}
-                </span>
-              </div>
-              <button 
-                onClick={handleGenerate}
-                disabled={!address.trim() || isGenerating}
-                className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-purple-900/20 whitespace-nowrap"
-              >
-                {isGenerating ? (
-                  <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Analyzing Zoning...</>
-                ) : (
-                  <><FileText className="h-5 w-5 mr-2" /> Generate Brief</>
-                )}
-              </button>
-            </div>
-            
-            <div className="mt-4 flex items-center text-xs text-gray-500">
-              <Info className="h-4 w-4 mr-1.5" />
-              This agent references the Arlington 2024 Zoning Bylaw, GIS Parcel Data, and Assessor's Database.
-            </div>
-          </div>
-        </div>
+        {/* Removed redundant address input, relying entirely on sidebar */}
 
-        {/* The Generated Report */}
-        {report && (
+        {/* The Generated Report (or empty state) */}
+        {!report ? (
+          <div className="max-w-4xl mx-auto flex flex-col items-center justify-center text-center py-20 bg-gray-900 border border-gray-800 rounded-2xl shadow-xl">
+            <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mb-6">
+              <FileText className="h-8 w-8 text-purple-500" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Buildability Brief</h2>
+            <p className="text-gray-400 max-w-md mb-8">
+              Select a target property in the sidebar and click Generate to instantly analyze zoning constraints, by-right uses, and development potential.
+            </p>
+            <button 
+              onClick={handleGenerate}
+              disabled={!address.trim() || isGenerating}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-8 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-purple-900/20"
+            >
+              {isGenerating ? (
+                <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Analyzing Zoning...</>
+              ) : (
+                <><FileText className="h-5 w-5 mr-2" /> Generate Report for {address || "Selected Property"}</>
+              )}
+            </button>
+          </div>
+        ) : (
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Generated Brief</h2>

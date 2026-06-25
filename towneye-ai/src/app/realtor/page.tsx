@@ -61,29 +61,30 @@ export default function RealtorBriefPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-4xl mx-auto mb-10">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-t-2xl"></div>
-            <h2 className="text-lg font-semibold text-white mb-4">Select Property for Listing Brief</h2>
-            <div className="flex gap-4">
-              <div className="flex-1 bg-gray-950 border border-gray-700 rounded-xl py-3 px-4 text-white flex items-center">
-                <MapPin className="h-5 w-5 text-emerald-500 mr-3 shrink-0" />
-                <span className={address ? "text-white font-medium truncate" : "text-gray-500 italic"}>
-                  {address || "Use the global search bar in the left menu to select a property..."}
-                </span>
-              </div>
-              <button 
-                onClick={handleGenerate}
-                disabled={!address.trim() || isGenerating}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-6 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-emerald-900/20 whitespace-nowrap"
-              >
-                {isGenerating ? <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Generating...</> : <><Home className="h-5 w-5 mr-2" /> Generate</>}
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Removed redundant address input, relying entirely on sidebar */}
 
-        {report && (
+        {!report ? (
+          <div className="max-w-4xl mx-auto flex flex-col items-center justify-center text-center py-20 bg-gray-900 border border-gray-800 rounded-2xl shadow-xl">
+            <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mb-6">
+              <Home className="h-8 w-8 text-emerald-500" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Listing Brief</h2>
+            <p className="text-gray-400 max-w-md mb-8">
+              Select a target property in the sidebar and click Generate to instantly pull neighborhood insights, comparables, and zoning selling points.
+            </p>
+            <button 
+              onClick={handleGenerate}
+              disabled={!address.trim() || isGenerating}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-800 disabled:text-gray-500 text-white px-8 py-3 rounded-xl font-medium transition-colors flex items-center shadow-lg shadow-emerald-900/20"
+            >
+              {isGenerating ? (
+                <><Loader2 className="animate-spin h-5 w-5 mr-2" /> Generating...</>
+              ) : (
+                <><Home className="h-5 w-5 mr-2" /> Generate Brief for {address || "Selected Property"}</>
+              )}
+            </button>
+          </div>
+        ) : (
           <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Listing Brief</h2>
