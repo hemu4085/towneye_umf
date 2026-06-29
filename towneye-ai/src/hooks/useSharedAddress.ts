@@ -1,37 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSharedParcel } from "./useSharedParcel";
 
-export function useSharedAddress(initialValue: string = "") {
-  const [address, setAddressState] = useState<string>(initialValue);
+/** Address string synced with the globally selected parcel (sidebar). */
+export function useSharedAddress(_initialValue = "") {
+  const [parcel, setParcel] = useSharedParcel();
 
-  // Load from sessionStorage on mount and listen to global changes
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("towneye_shared_address");
-      if (stored) {
-        setAddressState(stored);
-      }
-
-      // Listen for updates from other components
-      const handleSync = (e: Event) => {
-        const customEvent = e as CustomEvent;
-        setAddressState(customEvent.detail);
-      };
-
-      window.addEventListener("towneye_address_changed", handleSync);
-      return () => window.removeEventListener("towneye_address_changed", handleSync);
+  const setAddress = (address: string) => {
+    if (!address.trim()) {
+      setParcel(null);
+      return;
     }
-  }, []);
-
-  // Sync to sessionStorage and emit event to other components
-  const setAddress = (newAddress: string) => {
-    setAddressState(newAddress);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("towneye_shared_address", newAddress);
-      window.dispatchEvent(new CustomEvent("towneye_address_changed", { detail: newAddress }));
+    if (parcel) {
+      setParcel({ ...parcel, address });
     }
   };
 
-  return [address, setAddress] as const;
+  return [parcel?.address || "", setAddress] as const;
 }

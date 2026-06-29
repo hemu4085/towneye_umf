@@ -1,80 +1,191 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import { useEffect, useMemo, useState } from "react";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import type { DealRadarDeal } from "@/lib/api";
 
-// Properties data
-const properties = [
-  { id: 1, address: "142 Mass Ave", type: "Commercial", status: "Zoning Change", value: "$2.4M", date: "2 days ago", lat: 42.410, lng: -71.144 },
-  { id: 2, address: "89 Appleton St", type: "Residential", status: "Demolition Permit", value: "$950K", date: "1 week ago", lat: 42.421, lng: -71.182 },
-  { id: 3, address: "250 Broadway", type: "Mixed Use", status: "Recent Sale", value: "$4.1M", date: "3 weeks ago", lat: 42.415, lng: -71.150 },
-  { id: 4, address: "12 Lake St", type: "Residential", status: "New Construction", value: "N/A", date: "1 month ago", lat: 42.400, lng: -71.160 },
-];
+const ARLINGTON_CENTER: [number, number] = [42.4154, -71.1565];
 
-const createCustomIcon = (type: string) => {
-  const bgColor = type === 'Commercial' ? '#3b82f6' : type === 'Mixed Use' ? '#a855f7' : '#10b981';
-  
-  return L.divIcon({
-    className: 'custom-icon',
-    html: `
-      <div style="
-        background-color: ${bgColor}; 
-        width: 20px; 
-        height: 20px; 
-        border-radius: 50%; 
-        border: 2px solid white; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      "></div>
-    `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10]
-  });
-};
+/**
+ * Google Maps–style palette (Material / Maps brand colors).
+ * Base tiles: Esri World Street — light land, pale water, soft green parks, readable road hierarchy.
+ * (Same visual language as Google Maps; no Google API key required.)
+ */
+const GOOGLE = {
+  land: "#e8e4df",
+  red: "#ea4335",
+  blue: "#1a73e8",
+  green: "#34a853",
+  purple: "#9334e6",
+  stroke: "#ffffff",
+  strokeSelected: "#b31412",
+} as const;
 
-export default function RadarMap() {
-  const [mounted, setMounted] = useState(false);
+/** Esri World Street Map — closest free raster match to Google Maps road view */
+const MAP_TILES =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}";
+
+const MAP_ATTRIBUTION =
+  '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; TomTom, USGS, OpenStreetMap contributors';
+
+function markerFill(signals: string[] = [], highlighted: boolean) {
+  if (highlighted) return GOOGLE.red;
+  if (signals.includes("by_right_multifamily")) return GOOGLE.purple;
+  if (signals.includes("entity_owner")) return GOOGLE.green;
+  return GOOGLE.blue;
+}
+
+function FitBounds({ deals }: { deals: DealRadarDeal[] }) {
+  const map = useMap();
+  const boundsKey = useMemo(
+    () => deals.map((d) => `${d.rank}:${d.lat}:${d.lng}`).join("|"),
+    [deals],
+  );
 
   useEffect(() => {
-    setMounted(true);
+    const points = deals
+      .filter((d) => d.lat != null && d.lng != null)
+      .map((d) => [d.lat as number, d.lng as number] as [number, number]);
+
+    if (points.length === 0) {
+      map.setView(ARLINGTON_CENTER, 13.5);
+      return;
+    }
+    if (points.length === 1) {
+      map.setView(points[0], 15);
+      return;
+    }
+    map.fitBounds(L.latLngBounds(points), { padding: [56, 56], maxZoom: 15 });
+  }, [boundsKey, deals, map]);
+
+  return null;
+}
+
+function InvalidateSize({ visible }: { visible: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!visible) return;
+    const id = window.setTimeout(() => {
+      map.invalidateSize({ animate: false });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [visible, map]);
+
+  return null;
+}
+
+type RadarMapProps = {
+  townSlug: string;
+  deals?: DealRadarDeal[];
+  highlightParcelId?: string | null;
+  highlightRank?: number | null;
+  visible?: boolean;
+  onSelectDeal?: (deal: DealRadarDeal) => void;
+};
+
+export default function RadarMap({
+  townSlug,
+  deals = [],
+  highlightParcelId,
+  highlightRank,
+  visible = true,
+  onSelectDeal,
+}: RadarMapProps) {
+  const [clientReady, setClientReady] = useState(false);
+  const mappable = deals.filter((d) => d.lat != null && d.lng != null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      if (!cancelled) setClientReady(true);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+      setClientReady(false);
+    };
   }, []);
 
-  if (!mounted) return <div className="flex-1 bg-gray-100 flex items-center justify-center">Loading map engine...</div>;
+  if (!clientReady) {
+    return (
+      <div
+        className="w-full h-full min-h-[240px] flex items-center justify-center text-[#5f6368] text-sm"
+        style={{ background: GOOGLE.land }}
+      >
+        Loading map…
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-full z-0 relative">
-      <MapContainer 
-        center={[42.4154, -71.1565]} 
-        zoom={13.5} 
-        scrollWheelZoom={true} 
-        className="w-full h-full"
-        style={{ background: '#f8f9fa' }}
+    <div className="towneye-radar-map towneye-radar-map--google w-full h-full relative">
+      <MapContainer
+        key={`deal-radar-map-${townSlug}`}
+        center={ARLINGTON_CENTER}
+        zoom={13.5}
+        scrollWheelZoom
+        className="w-full h-full z-0"
+        style={{ background: GOOGLE.land, minHeight: "100%" }}
       >
-        {/* Enterprise-grade Light Map Tiles from CartoDB (No API key required) */}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        />
+        <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILES} maxZoom={19} />
+        <InvalidateSize visible={visible} />
+        <FitBounds deals={mappable} />
+        {mappable.map((deal, index) => {
+          const highlighted =
+            (highlightRank != null && deal.rank === highlightRank) ||
+            (highlightParcelId != null && deal.parcel_id === highlightParcelId);
+          const fill = markerFill(deal.signals, highlighted);
+          const radius = highlighted ? 9 : 6;
 
-        {properties.map((prop) => (
-          <Marker 
-            key={prop.id} 
-            position={[prop.lat, prop.lng]} 
-            icon={createCustomIcon(prop.type)}
-          >
-            <Popup className="custom-popup">
-              <div className="font-sans">
-                <div className="font-bold text-gray-900 text-sm">{prop.address}</div>
-                <div className="text-xs font-semibold text-gray-500 uppercase mt-1 tracking-wide">{prop.status}</div>
-                <div className="mt-2 text-sm text-gray-700">Value: <span className="font-medium text-gray-900">{prop.value}</span></div>
-                <div className="mt-1 text-xs text-blue-600 font-medium cursor-pointer hover:underline">View Parcel Details &rarr;</div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+          return (
+            <CircleMarker
+              key={`${deal.rank ?? index}-${deal.parcel_id}`}
+              center={[deal.lat as number, deal.lng as number]}
+              radius={radius}
+              pathOptions={{
+                color: highlighted ? GOOGLE.strokeSelected : GOOGLE.stroke,
+                weight: highlighted ? 2.5 : 2,
+                fillColor: fill,
+                fillOpacity: 1,
+                opacity: 1,
+              }}
+              eventHandlers={{
+                click: () => onSelectDeal?.(deal),
+              }}
+            >
+              <Popup>
+                <div className="font-sans text-sm min-w-[180px]">
+                  <div className="font-medium text-[#202124] leading-snug">{deal.address}</div>
+                  <div className="text-[#5f6368] mt-1.5 text-xs">
+                    Score <strong className="text-[#202124]">{deal.score ?? "—"}</strong> ·{" "}
+                    {deal.zone_code || "—"}
+                  </div>
+                  <div className="text-[#5f6368] text-xs mt-1">
+                    +{deal.expansion_room_sqft?.toLocaleString() ?? "—"} sf ·{" "}
+                    {deal.tenure_years ?? "—"} yr tenure
+                  </div>
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
+
+      {deals.length > 0 && mappable.length === 0 && (
+        <div className="absolute top-3 left-3 right-3 z-[500] bg-white border border-[#dadce0] text-[#202124] text-xs px-3 py-2 rounded-lg shadow-md">
+          Results loaded but coordinates are missing — restart the API (
+          <code className="text-[10px]">./start_demo.sh</code>).
+        </div>
+      )}
+
+      {mappable.length > 0 && (
+        <div className="absolute top-3 left-3 z-[500] bg-white text-[#202124] text-xs font-medium px-3 py-1.5 rounded-full shadow-md border border-[#dadce0]">
+          {mappable.length} on map
+        </div>
+      )}
     </div>
   );
 }

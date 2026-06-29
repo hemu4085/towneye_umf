@@ -78,13 +78,15 @@ const menuGroups = [
 ];
 
 import { useState, useRef, useEffect } from "react";
-import { useSharedAddress } from "@/hooks/useSharedAddress";
+import { useSharedParcel } from "@/hooks/useSharedParcel";
+import { suggestAddresses, type AddressSuggestion } from "@/lib/api";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [address, setAddress] = useSharedAddress("");
+  const [parcel, setParcel] = useSharedParcel();
+  const [query, setQuery] = useState(parcel?.address || "");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [selectedTown, setSelectedTown] = useState("arlington-ma");
   const [showTownDropdown, setShowTownDropdown] = useState(false);
   
@@ -97,26 +99,24 @@ export function Sidebar() {
     { id: "cambridge-ma", name: "Cambridge, MA", disabled: true }
   ];
 
-  // Fetch real suggestions from the backend API as the user types
   useEffect(() => {
-    if (!address.trim()) {
+    if (parcel?.address) setQuery(parcel.address);
+  }, [parcel?.address, parcel?.parcel_id]);
+
+  useEffect(() => {
+    if (!query.trim()) {
       setSuggestions([]);
       return;
     }
-    
+
     const timeoutId = setTimeout(() => {
-      fetch(`http://localhost:8000/api/parcels/suggest?q=${encodeURIComponent(address)}&town_slug=${selectedTown}&limit=5`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.suggestions) {
-            setSuggestions(data.suggestions.map((s: any) => `${s.address}, ${s.town_name || s.town}`));
-          }
-        })
-        .catch(err => console.error("Autocomplete failed:", err));
+      suggestAddresses(query, selectedTown, 5)
+        .then(setSuggestions)
+        .catch((err) => console.error("Autocomplete failed:", err));
     }, 150);
-    
+
     return () => clearTimeout(timeoutId);
-  }, [address]);
+  }, [query, selectedTown]);
 
   // Handle clicking outside to close dropdown
   useEffect(() => {
@@ -162,7 +162,8 @@ export function Sidebar() {
                   if (!town.disabled) {
                     setSelectedTown(town.id);
                     setShowTownDropdown(false);
-                    setAddress(""); // Clear address when switching towns
+                    setParcel(null);
+                    setQuery("");
                   }
                 }}
                 className={`px-4 py-3 flex items-center justify-between border-b border-gray-800 last:border-0 ${
@@ -189,9 +190,9 @@ export function Sidebar() {
             type="text" 
             placeholder={`Search within ${towns.find(t => t.id === selectedTown)?.name.split(',')[0]}...`}
             className="w-full bg-gray-950 border border-gray-700 rounded-lg py-2 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            value={address}
+            value={query}
             onChange={(e) => {
-              setAddress(e.target.value);
+              setQuery(e.target.value);
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
@@ -201,13 +202,20 @@ export function Sidebar() {
           {showSuggestions && suggestions.length > 0 && (
             <div className="absolute top-full left-0 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-[100] overflow-hidden">
               {suggestions.map((suggestion, idx) => {
-                const matchIndex = address.length > 0 ? suggestion.toLowerCase().indexOf(address.toLowerCase()) : -1;
+                const label = suggestion.address;
+                const matchIndex = query.length > 0 ? label.toLowerCase().indexOf(query.toLowerCase()) : -1;
                 return (
                   <div 
-                    key={idx}
+                    key={`${suggestion.parcel_id}-${idx}`}
                     className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-xs text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-700 last:border-0"
                     onClick={() => {
-                      setAddress(suggestion);
+                      setParcel({
+                        address: suggestion.address,
+                        parcel_id: suggestion.parcel_id,
+                        town_slug: suggestion.town_slug,
+                        town_name: suggestion.town_name,
+                      });
+                      setQuery(suggestion.address);
                       setShowSuggestions(false);
                     }}
                   >
@@ -215,12 +223,12 @@ export function Sidebar() {
                     <span className="truncate">
                       {matchIndex >= 0 ? (
                         <>
-                          {suggestion.substring(0, matchIndex)}
-                          <strong className="text-white font-bold">{suggestion.substring(matchIndex, matchIndex + address.length)}</strong>
-                          {suggestion.substring(matchIndex + address.length)}
+                          {label.substring(0, matchIndex)}
+                          <strong className="text-white font-bold">{label.substring(matchIndex, matchIndex + query.length)}</strong>
+                          {label.substring(matchIndex + query.length)}
                         </>
                       ) : (
-                        suggestion
+                        label
                       )}
                     </span>
                   </div>

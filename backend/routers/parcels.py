@@ -63,3 +63,46 @@ async def resolve_parcel(body: ResolveRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ParcelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/dossier")
+async def parcel_dossier(town_slug: str, parcel_id: str, address: str = ""):
+    """Permit ledger + code violations for closing-risk drill-down."""
+    if town_slug not in get_settings().town_slugs:
+        raise HTTPException(status_code=422, detail=f"Town '{town_slug}' is not supported.")
+
+    from backend.services.buildability import collect_brief_data
+    from backend.services.lender_phase3 import _analyze_violations
+    from backend.services.parcel_permits import summarize_parcel_permits
+    from backend.utils.parcel_lookup import _load_town_config
+
+    if not address.strip():
+        try:
+            data = collect_brief_data(town_slug, parcel_id, None)
+            address = data.parcel.address or address
+        except Exception:
+            pass
+
+    permits = summarize_parcel_permits(town_slug, parcel_id, address)
+    violations: dict = {
+        "status": "clear",
+        "note": "Violation detail unavailable.",
+        "rows": [],
+        "open_count": 0,
+        "isd_url": "",
+        "sources": [],
+    }
+    try:
+        data = collect_brief_data(town_slug, parcel_id, None)
+        town_cfg = _load_town_config(town_slug)
+        violations = _analyze_violations(data, town_cfg)
+    except Exception:
+        pass
+
+    return {
+        "town_slug": town_slug,
+        "parcel_id": parcel_id,
+        "address": address,
+        "permits": permits,
+        "violations": violations,
+    }
