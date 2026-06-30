@@ -12,24 +12,32 @@ const SORT_LABELS: Record<string, string> = {
   tenure: "Owner tenure",
 };
 
+function formField(value: unknown, fallback: string | number = ""): string | number {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function formFromCriteria(criteria: Record<string, unknown> | null | undefined) {
   const c = criteria || {};
   return {
     preset: String(c.preset || ""),
-    min_owner_tenure_years: c.min_owner_tenure_years ?? "",
-    max_utilization_pct: c.max_utilization_pct ?? "",
-    min_expansion_room_sqft: c.min_expansion_room_sqft ?? "",
-    min_existing_gfa_sqft: c.min_existing_gfa_sqft ?? "",
-    max_existing_gfa_sqft: c.max_existing_gfa_sqft ?? "",
-    min_max_gfa_sqft: c.min_max_gfa_sqft ?? "",
-    max_max_gfa_sqft: c.max_max_gfa_sqft ?? "",
-    min_assessed_value: c.min_assessed_value ?? "",
-    max_assessed_value: c.max_assessed_value ?? "",
-    min_lot_sqft: c.min_lot_sqft ?? "",
-    max_lot_sqft: c.max_lot_sqft ?? "",
+    min_owner_tenure_years: formField(c.min_owner_tenure_years),
+    max_utilization_pct: formField(c.max_utilization_pct),
+    min_expansion_room_sqft: formField(c.min_expansion_room_sqft),
+    min_existing_gfa_sqft: formField(c.min_existing_gfa_sqft),
+    max_existing_gfa_sqft: formField(c.max_existing_gfa_sqft),
+    min_max_gfa_sqft: formField(c.min_max_gfa_sqft),
+    max_max_gfa_sqft: formField(c.max_max_gfa_sqft),
+    min_assessed_value: formField(c.min_assessed_value),
+    max_assessed_value: formField(c.max_assessed_value),
+    min_lot_sqft: formField(c.min_lot_sqft),
+    max_lot_sqft: formField(c.max_lot_sqft),
     include_zone_codes: [...((c.include_zone_codes as string[]) || [])],
     require_no_open_permit: c.require_no_open_permit !== false,
-    top_n: c.top_n ?? "",
+    top_n: formField(c.top_n),
     sort_by: String(c.sort_by || "score"),
   };
 }

@@ -1,7 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
+  ArrowUpRight,
   Building2,
   DollarSign,
   Filter,
@@ -19,7 +22,16 @@ import {
   type DealRadarPayload,
 } from "@/lib/api";
 import { useSharedParcel, writeSharedParcel } from "@/hooks/useSharedParcel";
-import RadarMap from "@/components/RadarMap";
+import { readDealRadarSession, saveDealRadarSession } from "@/lib/dealRadarSession";
+
+const RadarMap = dynamic(() => import("@/components/RadarMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-gray-900 text-gray-500 text-sm">
+      Loading map…
+    </div>
+  ),
+});
 
 /** Always send criteria so the API returns live JSON (not cached demo HTML with no deals). */
 const DEFAULT_CRITERIA: Record<string, unknown> = { preset: "aggressive" };
@@ -52,22 +64,29 @@ function filterChips(criteria: Record<string, unknown> | null): string[] {
 type DealCardProps = {
   deal: DealRadarDeal;
   selected: boolean;
+  hovered: boolean;
   compact?: boolean;
-  onSelect: (deal: DealRadarDeal) => void;
+  onHover: (deal: DealRadarDeal | null) => void;
+  onOpenDetails: (deal: DealRadarDeal) => void;
 };
 
-function DealCard({ deal, selected, compact, onSelect }: DealCardProps) {
+function DealCard({ deal, selected, hovered, compact, onHover, onOpenDetails }: DealCardProps) {
+  const active = selected || hovered;
   return (
     <button
       type="button"
-      onClick={() => onSelect(deal)}
+      onMouseEnter={() => onHover(deal)}
+      onMouseLeave={() => onHover(null)}
+      onFocus={() => onHover(deal)}
+      onBlur={() => onHover(null)}
+      onClick={() => onOpenDetails(deal)}
       className={`text-left shrink-0 transition-all ${
         compact
           ? `w-[min(88vw,300px)] snap-center rounded-xl border p-3 shadow-lg ${
-              selected ? "border-amber-500 bg-white ring-2 ring-amber-500/30" : "border-gray-200 bg-white"
+              active ? "border-amber-500 bg-white ring-2 ring-amber-500/40" : "border-gray-200 bg-white"
             }`
           : `w-full rounded-xl border p-4 ${
-              selected ? "border-amber-500/60 bg-gray-900" : "border-gray-800 bg-gray-950 hover:border-blue-500/40"
+              active ? "border-amber-500/70 bg-gray-900 ring-1 ring-amber-500/30" : "border-gray-800 bg-gray-950 hover:border-blue-500/40"
             }`
       }`}
     >
@@ -97,18 +116,24 @@ function DealCard({ deal, selected, compact, onSelect }: DealCardProps) {
         <span>+{deal.expansion_room_sqft?.toLocaleString() ?? "—"} sf</span>
       </div>
       <div
-        className={`flex items-center mt-2 pt-2 border-t text-sm font-medium ${
+        className={`flex items-center justify-between mt-2 pt-2 border-t text-sm font-medium ${
           compact ? "border-gray-100 text-gray-800" : "border-gray-800 text-gray-300"
         }`}
       >
-        <DollarSign size={14} className={compact ? "text-gray-400 mr-0.5" : "text-gray-500 mr-0.5"} />
-        {fmtMoney(deal.assessed_value)}
+        <span className="flex items-center">
+          <DollarSign size={14} className={compact ? "text-gray-400 mr-0.5" : "text-gray-500 mr-0.5"} />
+          {fmtMoney(deal.assessed_value)}
+        </span>
+        <span className={`text-xs flex items-center ${compact ? "text-blue-600" : "text-blue-400"}`}>
+          View brief <ArrowUpRight size={14} className="ml-0.5" />
+        </span>
       </div>
     </button>
   );
 }
 
 export default function DealRadarPage() {
+  const router = useRouter();
   const [parcel] = useSharedParcel();
   const townSlug = parcel?.town_slug || "arlington-ma";
   const [search, setSearch] = useState("");
@@ -120,6 +145,9 @@ export default function DealRadarPage() {
   const [payload, setPayload] = useState<DealRadarPayload | null>(null);
   const [criteria, setCriteria] = useState<Record<string, unknown> | null>(DEFAULT_CRITERIA);
   const [selected, setSelected] = useState<DealRadarDeal | null>(null);
+  const [hovered, setHovered] = useState<DealRadarDeal | null>(null);
+  const restoredRank = useRef<number | undefined>(undefined);
+  const sessionRestored = useRef(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scanAbort = useRef<AbortController | null>(null);
 
@@ -183,21 +211,58 @@ export default function DealRadarPage() {
     );
   }, [payload?.deals, search]);
 
+  useEffect(() => {
+    if (sessionRestored.current) return;
+    const saved = readDealRadarSession();
+    if (!saved) return;
+    sessionRestored.current = true;
+    if (saved.criteria) setCriteria(saved.criteria);
+    if (saved.view) setView(saved.view);
+    if (saved.search) setSearch(saved.search);
+    if (saved.selectedRank != null) restoredRank.current = saved.selectedRank;
+  }, []);
+
+  useEffect(() => {
+    if (restoredRank.current == null || !deals.length) return;
+    const deal = deals.find((d) => d.rank === restoredRank.current);
+    if (deal) {
+      setSelected(deal);
+      setHovered(deal);
+    }
+    restoredRank.current = undefined;
+  }, [deals]);
+
   const chips = useMemo(() => filterChips(criteria), [criteria]);
   const activeFilterCount = criteria && Object.keys(criteria).length > 0 ? chips.length : 0;
 
-  const selectDeal = (deal: DealRadarDeal) => {
-    setSelected(deal);
-    writeSharedParcel({
-      address: deal.address,
-      parcel_id: deal.parcel_id,
-      town_slug: townSlug,
-      lat: deal.lat,
-      lng: deal.lng,
-    });
+  const openDealDetails = useCallback(
+    (deal: DealRadarDeal) => {
+      setSelected(deal);
+      setHovered(null);
+      saveDealRadarSession({
+        criteria,
+        selectedRank: deal.rank,
+        view,
+        search,
+      });
+      writeSharedParcel({
+        address: deal.address,
+        parcel_id: deal.parcel_id,
+        town_slug: townSlug,
+        lat: deal.lat,
+        lng: deal.lng,
+      });
+      router.push("/briefs?from=deal-radar");
+    },
+    [criteria, router, search, townSlug, view],
+  );
+
+  const handleHover = useCallback((deal: DealRadarDeal | null) => {
+    setHovered(deal);
+    if (!deal) return;
     const key = String(deal.rank ?? deal.parcel_id);
     cardRefs.current[key]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  };
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-950">
@@ -323,7 +388,10 @@ export default function DealRadarPage() {
             visible={view === "map"}
             highlightParcelId={selected?.parcel_id ?? parcel?.parcel_id}
             highlightRank={selected?.rank}
-            onSelectDeal={selectDeal}
+            hoverRank={hovered?.rank}
+            hoverDeal={hovered}
+            onSelectDeal={openDealDetails}
+            onHoverDeal={setHovered}
           />
 
           {deals.length > 0 && (
@@ -340,8 +408,10 @@ export default function DealRadarPage() {
                       <DealCard
                         deal={deal}
                         selected={selected?.rank === deal.rank}
+                        hovered={hovered?.rank === deal.rank}
                         compact
-                        onSelect={selectDeal}
+                        onHover={handleHover}
+                        onOpenDetails={openDealDetails}
                       />
                     </div>
                   ))}
@@ -363,7 +433,9 @@ export default function DealRadarPage() {
                   key={`${deal.rank ?? index}-${deal.parcel_id}`}
                   deal={deal}
                   selected={selected?.rank === deal.rank}
-                  onSelect={selectDeal}
+                  hovered={hovered?.rank === deal.rank}
+                  onHover={handleHover}
+                  onOpenDetails={openDealDetails}
                 />
               ))}
             </div>
@@ -386,7 +458,9 @@ export default function DealRadarPage() {
                 key={`${deal.rank ?? index}-${deal.parcel_id}`}
                 deal={deal}
                 selected={selected?.rank === deal.rank}
-                onSelect={selectDeal}
+                hovered={hovered?.rank === deal.rank}
+                onHover={handleHover}
+                onOpenDetails={openDealDetails}
               />
             ))}
         </div>

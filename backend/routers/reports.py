@@ -265,13 +265,15 @@ def _report_response(
 @router.post("/buildability")
 def report_buildability(req: ReportRequest, request: Request):
     try:
+        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+        payload = buildability.generate_buildability_json(data)
         html = get_demo_report_html(req.town_slug, req.parcel_id, "buildability")
         from_cache = html is not None
         if html is None:
             html = buildability.generate_buildability_html(
                 req.town_slug, req.parcel_id, req.prepared_for,
             )
-        return _report_response("buildability", html, None, req, request, skip_pdf=from_cache)
+        return _report_response("buildability", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

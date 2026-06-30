@@ -200,15 +200,15 @@ export default function ParcelDossierPanel({ townSlug, parcelId, address, onClos
                         {permits.map((p, i) => (
                           <tr key={`${p.permit_number}-${i}`} className="border-b border-gray-800/80">
                             <td className="py-2.5 pr-3 font-mono text-xs text-gray-300">
-                              {p.permit_number || "—"}
+                              {String(p.permit_number ?? "") || "—"}
                             </td>
-                            <td className="py-2.5 pr-3 text-gray-300">{p.permit_type || "—"}</td>
+                            <td className="py-2.5 pr-3 text-gray-300">{String(p.permit_type ?? "") || "—"}</td>
                             <td className="py-2.5 pr-3">
                               <span className={`text-xs px-2 py-0.5 rounded border ${statusClass(String(p.status || ""))}`}>
-                                {p.status || "—"}
+                                {String(p.status ?? "") || "—"}
                               </span>
                             </td>
-                            <td className="py-2.5 pr-3 text-gray-400 text-xs">{p.application_date || "—"}</td>
+                            <td className="py-2.5 pr-3 text-gray-400 text-xs">{String(p.application_date ?? "") || "—"}</td>
                             <td className="py-2.5 text-gray-400 text-xs max-w-xs">
                               {String(p.description || "—")}
                             </td>

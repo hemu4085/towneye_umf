@@ -30,11 +30,26 @@ const MAP_TILES =
 const MAP_ATTRIBUTION =
   '&copy; <a href="https://www.esri.com/">Esri</a> &mdash; TomTom, USGS, OpenStreetMap contributors';
 
-function markerFill(signals: string[] = [], highlighted: boolean) {
-  if (highlighted) return GOOGLE.red;
+function markerFill(signals: string[] = [], state: "default" | "hover" | "selected") {
+  if (state === "selected") return GOOGLE.red;
+  if (state === "hover") return "#e37400";
   if (signals.includes("by_right_multifamily")) return GOOGLE.purple;
   if (signals.includes("entity_owner")) return GOOGLE.green;
   return GOOGLE.blue;
+}
+
+function markerState(
+  deal: DealRadarDeal,
+  hoverRank?: number | null,
+  highlightRank?: number | null,
+  highlightParcelId?: string | null,
+): "default" | "hover" | "selected" {
+  const selected =
+    (highlightRank != null && deal.rank === highlightRank) ||
+    (highlightParcelId != null && deal.parcel_id === highlightParcelId);
+  if (selected) return "selected";
+  if (hoverRank != null && deal.rank === hoverRank) return "hover";
+  return "default";
 }
 
 function FitBounds({ deals }: { deals: DealRadarDeal[] }) {
@@ -63,6 +78,18 @@ function FitBounds({ deals }: { deals: DealRadarDeal[] }) {
   return null;
 }
 
+function FlyToDeal({ deal }: { deal: DealRadarDeal | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (deal?.lat == null || deal?.lng == null) return;
+    const zoom = Math.max(map.getZoom(), 15);
+    map.flyTo([deal.lat, deal.lng], zoom, { duration: 0.35, easeLinearity: 0.25 });
+  }, [deal?.rank, deal?.lat, deal?.lng, map]);
+
+  return null;
+}
+
 function InvalidateSize({ visible }: { visible: boolean }) {
   const map = useMap();
 
@@ -82,8 +109,11 @@ type RadarMapProps = {
   deals?: DealRadarDeal[];
   highlightParcelId?: string | null;
   highlightRank?: number | null;
+  hoverRank?: number | null;
+  hoverDeal?: DealRadarDeal | null;
   visible?: boolean;
   onSelectDeal?: (deal: DealRadarDeal) => void;
+  onHoverDeal?: (deal: DealRadarDeal | null) => void;
 };
 
 export default function RadarMap({
@@ -91,8 +121,11 @@ export default function RadarMap({
   deals = [],
   highlightParcelId,
   highlightRank,
+  hoverRank,
+  hoverDeal = null,
   visible = true,
   onSelectDeal,
+  onHoverDeal,
 }: RadarMapProps) {
   const [clientReady, setClientReady] = useState(false);
   const mappable = deals.filter((d) => d.lat != null && d.lng != null);
@@ -133,12 +166,11 @@ export default function RadarMap({
         <TileLayer attribution={MAP_ATTRIBUTION} url={MAP_TILES} maxZoom={19} />
         <InvalidateSize visible={visible} />
         <FitBounds deals={mappable} />
+        <FlyToDeal deal={hoverDeal} />
         {mappable.map((deal, index) => {
-          const highlighted =
-            (highlightRank != null && deal.rank === highlightRank) ||
-            (highlightParcelId != null && deal.parcel_id === highlightParcelId);
-          const fill = markerFill(deal.signals, highlighted);
-          const radius = highlighted ? 9 : 6;
+          const state = markerState(deal, hoverRank, highlightRank, highlightParcelId);
+          const fill = markerFill(deal.signals, state);
+          const radius = state === "selected" ? 10 : state === "hover" ? 8 : 6;
 
           return (
             <CircleMarker
@@ -146,14 +178,16 @@ export default function RadarMap({
               center={[deal.lat as number, deal.lng as number]}
               radius={radius}
               pathOptions={{
-                color: highlighted ? GOOGLE.strokeSelected : GOOGLE.stroke,
-                weight: highlighted ? 2.5 : 2,
+                color: state === "selected" ? GOOGLE.strokeSelected : state === "hover" ? "#c26401" : GOOGLE.stroke,
+                weight: state === "selected" ? 2.5 : state === "hover" ? 2.5 : 2,
                 fillColor: fill,
                 fillOpacity: 1,
                 opacity: 1,
               }}
               eventHandlers={{
                 click: () => onSelectDeal?.(deal),
+                mouseover: () => onHoverDeal?.(deal),
+                mouseout: () => onHoverDeal?.(null),
               }}
             >
               <Popup>

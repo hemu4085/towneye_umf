@@ -226,6 +226,153 @@ export type ClosingRiskPayload = {
   criteria?: Record<string, unknown>;
 };
 
+export type BuildabilityAllowableUse = {
+  use: string;
+  status: string;
+  zone_code: string;
+};
+
+export type BuildabilityDimensionalControl = {
+  metric: string;
+  limit: string;
+  current: string;
+};
+
+export type BuildabilityEnvelope = {
+  zone_code: string;
+  label: string;
+  is_overlay: boolean;
+  rationale: string;
+  lot_sqft: number;
+  max_far?: number | null;
+  max_gfa_sqft?: number | null;
+  existing_gfa_sqft?: number | null;
+  expansion_room_sqft?: number | null;
+  pct_of_far_cap?: number | null;
+  height_max_ft?: number | null;
+  height_max_stories?: number | null;
+  setback_front_ft?: number | null;
+  setback_side_ft?: number | null;
+  setback_rear_ft?: number | null;
+  qualifies?: boolean | null;
+};
+
+export type BuildabilityWraparound = {
+  label: string;
+  status: string;
+  detail: string;
+  source: string;
+  hit_count?: number;
+};
+
+export type BuildabilityZone = {
+  code?: string | null;
+  label?: string | null;
+  layer?: string | null;
+  rule?: {
+    zone_code?: string;
+    description?: string | null;
+    allowed_uses?: string[];
+    max_far?: number | null;
+    min_lot_sqft?: number | null;
+    min_frontage_ft?: number | null;
+    max_height_ft?: number | null;
+    setback_front_ft?: number | null;
+    setback_side_ft?: number | null;
+    setback_rear_ft?: number | null;
+    is_overlay?: boolean;
+  } | null;
+};
+
+export type BuildabilityDimensionalComparison = {
+  columns: string[];
+  rows: { standard: string; values: string[] }[];
+};
+
+export type BuildabilityEnvelopeCalc = {
+  label: string;
+  rationale: string;
+  lines: string[];
+  notes?: string | null;
+};
+
+export type BuildabilityDevelopmentOption = {
+  num: number | string;
+  option: string;
+  path: string;
+  process: string;
+  lot_qualifies?: string;
+  scale?: string;
+  time_to_permit?: string;
+  available: string;
+  status: string;
+};
+
+export type BuildabilityProcessStage = {
+  stage: string;
+  body: string;
+  duration: string;
+};
+
+export type BuildabilityPayload = {
+  address?: string;
+  parcel_id: string;
+  town_slug: string;
+  report_date?: string;
+  map_block_lot?: string | null;
+  headline_verdict_class?: string;
+  headline_verdict_text?: string;
+  overlay_narrative?: string;
+  adu_law_note?: string;
+  executive_sources?: string;
+  primary_zone_code?: string | null;
+  primary_overlay_code?: string | null;
+  zoning_district?: string;
+  has_overlay_election?: boolean;
+  has_mbta_communities_overlay?: boolean;
+  has_property_record?: boolean;
+  property?: {
+    owner_name?: string | null;
+    year_built?: number | null;
+    building_type?: string | null;
+    luc?: string | null;
+    luc_description?: string | null;
+    beds?: number | null;
+    baths?: number | null;
+    book_page?: string | null;
+    assessed_value?: number | null;
+    lot_size_sqft?: number | null;
+    finished_area_sqft?: number | null;
+    last_sale_date?: string | null;
+    last_sale_price?: number | null;
+  };
+  parcel?: {
+    area_sqft?: number | null;
+    longest_edge_ft?: number | null;
+    perimeter_ft?: number | null;
+    edges_ft?: number[];
+    lot_shape?: string | null;
+    centroid_lat?: number;
+    centroid_lon?: number;
+  };
+  base_zones?: BuildabilityZone[];
+  overlay_zones?: BuildabilityZone[];
+  dimensional_comparison?: BuildabilityDimensionalComparison;
+  envelopes?: BuildabilityEnvelope[];
+  envelope_calcs?: BuildabilityEnvelopeCalc[];
+  development_options?: BuildabilityDevelopmentOption[];
+  development_options_footnote?: string | null;
+  wraparound?: BuildabilityWraparound[];
+  wraparound_section_title?: string;
+  wraparound_summary?: string;
+  process_pathway?: BuildabilityProcessStage[];
+  open_items?: string[];
+  allowable_uses?: BuildabilityAllowableUse[];
+  dimensional_controls?: BuildabilityDimensionalControl[];
+  opportunity_score?: number;
+  insights?: string[];
+};
+
 export type ParcelDossier = {
   town_slug: string;
   parcel_id: string;

@@ -12,12 +12,20 @@ const SORT_LABELS: Record<string, string> = {
   tenure: "Owner tenure",
 };
 
+function formField(value: unknown, fallback: string | number = ""): string | number {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function formFromCriteria(criteria: Record<string, unknown> | null | undefined) {
   const c = criteria || {};
   return {
     preset: String(c.preset || ""),
-    min_risk_signals: c.min_risk_signals ?? 1,
-    min_open_permit_count: c.min_open_permit_count ?? "",
+    min_risk_signals: formField(c.min_risk_signals, 1),
+    min_open_permit_count: formField(c.min_open_permit_count),
     include_open_permit: c.include_open_permit !== false,
     include_expired_permit: c.include_expired_permit !== false,
     include_flood_effective: c.include_flood_effective !== false,
@@ -25,10 +33,10 @@ function formFromCriteria(criteria: Record<string, unknown> | null | undefined) 
     require_flood_sfha_only: Boolean(c.require_flood_sfha_only),
     include_wetland: c.include_wetland !== false,
     include_historic: c.include_historic !== false,
-    min_assessed_value: c.min_assessed_value ?? "",
-    max_assessed_value: c.max_assessed_value ?? "",
+    min_assessed_value: formField(c.min_assessed_value),
+    max_assessed_value: formField(c.max_assessed_value),
     include_zone_codes: [...((c.include_zone_codes as string[]) || [])],
-    top_n: c.top_n ?? "",
+    top_n: formField(c.top_n),
     sort_by: String(c.sort_by || "risk_score"),
   };
 }
@@ -183,7 +191,7 @@ export default function ClosingRiskCriteriaPanel({
               value={form.min_risk_signals}
               min={lim("min_risk_signals", [1, 8])[0]}
               max={lim("min_risk_signals", [1, 8])[1]}
-              onChange={(v) => patchForm({ min_risk_signals: v })}
+              onChange={(v) => patchForm({ min_risk_signals: Number(v) || 1 })}
             />
             <RangeField
               label="Min open permits"
