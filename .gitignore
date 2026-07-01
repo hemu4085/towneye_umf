@@ -38,12 +38,16 @@ reports/output/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+web/node_modules/
+web/.next/
 
 # IDE and OS
 .vscode/
 .cursor/
 .DS_Store
 Thumbs.db
+sync.ffs_db
+*.ffs_db
 
 # Jupyter
 .ipynb_checkpoints/

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Boot FastAPI (:8000) + Next.js MVP (:3000) from towneye-ai/
+# Boot FastAPI (:8000) + Next.js MVP (:3000) from repo root.
+#   ./start_demo.sh
 set -u
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 UVICORN=""
@@ -28,7 +29,7 @@ pkill -f 'next dev -H 0.0.0.0' 2>/dev/null || true
 sleep 1
 
 echo "Installing Next.js dependencies…"
-(cd towneye-ai && npm install)
+(cd web && npm install)
 
 cleanup() {
   echo ""
@@ -43,7 +44,7 @@ echo "Starting FastAPI Backend on :8000…"
 BACKEND_PID=$!
 
 echo "Starting Next.js Frontend on :3000…"
-(cd towneye-ai && npm run dev -- -H 0.0.0.0) &
+(cd web && npm run dev -- -H 0.0.0.0) &
 FRONTEND_PID=$!
 
 echo ""

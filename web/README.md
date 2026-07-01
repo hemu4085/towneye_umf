@@ -1,6 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TownEye Next.js MVP (`web/`)
 
-## Getting Started
+Investor-demo UI (Deal Radar, Buildability Brief, etc.). The Python API lives in `../backend/`.
+
+**Boot everything from the repo root:**
+
+```bash
+cd ~/projects/fine_tuned_models/towneye-ai
+./start_demo.sh
+```
+
+Or run only the frontend from this folder:
+
+```bash
+npm run dev
+```
+
+## Getting Started (frontend only)
 
 First, run the development server:
 
