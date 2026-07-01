@@ -664,6 +664,52 @@ zoning_bylaws_mock_data:
       max_far: 0.80
       truck_loading_required: true
 
+  # MBTA Communities Act §3A overlays — spatial polygons live in
+  # zoning-overlay.parquet; dimensional rules are ingested here so envelope
+  # math and development-path matrices can compute overlay capacity.
+  - zone_code: "NMF"
+    zone_description: "Neighborhood Multi-Family Housing (MBTA §3A)"
+    allowed_uses:
+      - "Multi-Family Dwelling"
+      - "Two-Family Dwelling"
+      - "Accessory Dwelling Unit"
+    max_height_ft: 45
+    metadata:
+      is_overlay: true
+      max_far: 2.0
+      min_lot_sqft: null
+      min_frontage_ft: null
+      setback_front_ft: 10
+      setback_side_ft: 5
+      setback_rear_ft: 10
+      max_stories: 3
+      notes: >-
+        MBTA Communities Act §3A overlay (Arlington ZBL §5.8). Base-district
+        min-lot and FAR minimums are waived when the owner elects the overlay
+        for a project. Site Plan Review by the ARB is required. Non-residential
+        uses are excluded under §5.8.B.
+
+  - zone_code: "MBMF"
+    zone_description: "Massachusetts Avenue Multi-Family Housing (MBTA §3A)"
+    allowed_uses:
+      - "Multi-Family Dwelling"
+      - "Mixed-Use Dwelling (residential predominant)"
+      - "Accessory Dwelling Unit"
+    max_height_ft: 55
+    metadata:
+      is_overlay: true
+      max_far: 2.0
+      min_lot_sqft: null
+      min_frontage_ft: null
+      setback_front_ft: 5
+      setback_side_ft: 0
+      setback_rear_ft: 10
+      max_stories: 4
+      notes: >-
+        MBTA Communities Act §3A corridor overlay along Massachusetts Avenue.
+        Higher height and FAR than NMF; ground-floor retail may be permitted
+        per corridor standards. Site Plan Review required.
+
 # HTTP client settings applied to every requests.Session created by scrapers
 # in this town context.  ssl_verify mirrors requests' verify= parameter:
 #   true  → enforce SSL certificate validation (production default)

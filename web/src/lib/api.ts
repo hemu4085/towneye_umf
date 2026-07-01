@@ -281,6 +281,7 @@ export type BuildabilityZone = {
     setback_side_ft?: number | null;
     setback_rear_ft?: number | null;
     is_overlay?: boolean;
+    notes?: string | null;
   } | null;
 };
 
@@ -371,6 +372,104 @@ export type BuildabilityPayload = {
   dimensional_controls?: BuildabilityDimensionalControl[];
   opportunity_score?: number;
   insights?: string[];
+};
+
+export type ZoningAllowableUse = BuildabilityAllowableUse;
+export type ZoningDimensionalControl = BuildabilityDimensionalControl;
+export type ZoningDimensionalComparison = BuildabilityDimensionalComparison;
+export type ZoningZone = BuildabilityZone;
+
+export type ZoningEnvelopeSummary = {
+  zone_code?: string;
+  label?: string;
+  is_overlay?: boolean;
+  max_gfa_sqft?: number | null;
+  existing_gfa_sqft?: number | null;
+  expansion_room_sqft?: number | null;
+  max_far?: number | null;
+  max_gfa_display?: string;
+  existing_gfa_display?: string;
+  expansion_display?: string;
+};
+
+export type ZoningGisMetadata = {
+  district_name?: string | null;
+  adoption_reference?: string | null;
+  gis_notes?: string | null;
+};
+
+export type ZoningRegulatorySignal = {
+  signal: string;
+  severity: string;
+  detail: string;
+};
+
+export type ZoningOverlayElection = {
+  recommended_regime?: string;
+  alternative_regime?: string | null;
+  election_type?: string;
+  rationale?: string;
+};
+
+export type ZoningDevelopmentPath = {
+  option: string;
+  path: string;
+  process: string;
+  scale?: string;
+  time_to_permit?: string;
+  available?: string;
+  lot_qualifies?: string;
+  status?: string;
+};
+
+export type ZoningConstraint = {
+  label: string;
+  status: string;
+  detail: string;
+  source?: string;
+};
+
+export type ZoningProcessStage = {
+  stage: string;
+  body: string;
+  duration: string;
+};
+
+export type ZoningPayload = {
+  address?: string;
+  parcel_id: string;
+  town_slug: string;
+  report_date?: string;
+  primary_zone_code?: string | null;
+  primary_overlay_code?: string | null;
+  zoning_district?: string;
+  has_overlay_election?: boolean;
+  has_mbta_communities_overlay?: boolean;
+  headline_verdict_class?: string;
+  headline_verdict_text?: string;
+  zoning_opportunity_score?: number;
+  overlay_narrative?: string;
+  overlay_election?: ZoningOverlayElection | null;
+  regulatory_signals?: ZoningRegulatorySignal[];
+  zoning_insights?: string[];
+  base_zones?: (ZoningZone & { gis?: ZoningGisMetadata })[];
+  overlay_zones?: (ZoningZone & { gis?: ZoningGisMetadata })[];
+  base_labels?: string[];
+  overlay_labels?: string[];
+  allowable_uses?: ZoningAllowableUse[];
+  dimensional_controls?: ZoningDimensionalControl[];
+  dimensional_comparison?: ZoningDimensionalComparison;
+  envelopes?: BuildabilityEnvelope[];
+  envelope_summary?: ZoningEnvelopeSummary[];
+  development_paths?: ZoningDevelopmentPath[];
+  development_paths_footnote?: string | null;
+  zoning_constraints?: ZoningConstraint[];
+  process_pathway?: ZoningProcessStage[];
+  open_items?: string[];
+  sources?: string;
+  lot_size_sqft?: number | null;
+  existing_gfa_sqft?: number | null;
+  assessor_use_code?: string | null;
 };
 
 export type ParcelDossier = {

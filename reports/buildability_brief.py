@@ -50,6 +50,7 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -329,6 +330,12 @@ class BuildabilityBriefGenerator:
 
     def _load_zoning_rules(self, hits: List[OverlayHit]) -> Dict[str, ZoningRule]:
         """Read zoning.parquet and project rule metadata for each hit zone code."""
+        wanted = {h.code for h in hits if h.code}
+        rules = self._load_zoning_rules_parquet(wanted)
+        rules.update(self._load_zoning_rules_config(wanted - set(rules.keys())))
+        return rules
+
+    def _load_zoning_rules_parquet(self, wanted: set[str]) -> Dict[str, ZoningRule]:
         path = self._data_dir / self.town_slug / "zoning.parquet"
         if not path.exists():
             logger.warning(
@@ -339,38 +346,80 @@ class BuildabilityBriefGenerator:
             return {}
         df = pd.read_parquet(path)
         rules: Dict[str, ZoningRule] = {}
-        wanted = {h.code for h in hits if h.code}
         for _, row in df.iterrows():
             zc = row.get("zone_code")
             if zc not in wanted:
                 continue
-            md = row.get("metadata", {}) or {}
-            if isinstance(md, str):
-                try:
-                    md = json.loads(md)
-                except Exception:  # noqa: BLE001
-                    md = {}
+            rules[str(zc)] = self._rule_from_row(row, is_overlay=False)
+        return rules
+
+    def _load_zoning_rules_config(self, missing: set[str]) -> Dict[str, ZoningRule]:
+        """Supplement parquet rules from town config fixtures (§3A overlays, etc.)."""
+        if not missing:
+            return {}
+        cfg_path = self._config_dir / self.town_slug / "config.yaml"
+        if not cfg_path.exists():
+            return {}
+        try:
+            with cfg_path.open(encoding="utf-8") as fh:
+                town_cfg = yaml.safe_load(fh) or {}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("BuildabilityBriefGenerator | could not read %s: %s", cfg_path, exc)
+            return {}
+        rules: Dict[str, ZoningRule] = {}
+        overlay_codes = {"NMF", "MBMF"}
+        for row in town_cfg.get("zoning_bylaws_mock_data") or []:
+            zc = str(row.get("zone_code") or "").strip()
+            if zc not in missing:
+                continue
+            md = row.get("metadata") or {}
+            is_overlay = bool(md.get("is_overlay")) or zc in overlay_codes
             uses = row.get("allowed_uses", []) or []
-            if isinstance(uses, str):
-                try:
-                    uses = json.loads(uses)
-                except Exception:  # noqa: BLE001
-                    uses = []
-            rules[str(zc)] = ZoningRule(
-                zone_code=str(zc),
+            rules[zc] = ZoningRule(
+                zone_code=zc,
                 zone_description=row.get("zone_description"),
-                allowed_uses=list(uses) if uses is not None else [],
+                allowed_uses=list(uses),
                 max_height_ft=_safe_float(row.get("max_height_ft")),
-                min_lot_sqft=_safe_int(md.get("min_lot_sqft")),
-                min_frontage_ft=_safe_int(md.get("min_frontage_ft")),
+                min_lot_sqft=_safe_int(md.get("min_lot_sqft")) if md.get("min_lot_sqft") is not None else None,
+                min_frontage_ft=_safe_int(md.get("min_frontage_ft")) if md.get("min_frontage_ft") is not None else None,
                 max_far=_safe_float(md.get("max_far")),
                 setback_front_ft=_safe_float(md.get("setback_front_ft")),
                 setback_side_ft=_safe_float(md.get("setback_side_ft")),
                 setback_rear_ft=_safe_float(md.get("setback_rear_ft")),
-                is_overlay=False,
+                is_overlay=is_overlay,
                 notes=md.get("notes"),
             )
         return rules
+
+    @staticmethod
+    def _rule_from_row(row, *, is_overlay: bool) -> ZoningRule:
+        zc = row.get("zone_code")
+        md = row.get("metadata", {}) or {}
+        if isinstance(md, str):
+            try:
+                md = json.loads(md)
+            except Exception:  # noqa: BLE001
+                md = {}
+        uses = row.get("allowed_uses", []) or []
+        if isinstance(uses, str):
+            try:
+                uses = json.loads(uses)
+            except Exception:  # noqa: BLE001
+                uses = []
+        return ZoningRule(
+            zone_code=str(zc),
+            zone_description=row.get("zone_description"),
+            allowed_uses=list(uses) if uses is not None else [],
+            max_height_ft=_safe_float(row.get("max_height_ft")),
+            min_lot_sqft=_safe_int(md.get("min_lot_sqft")),
+            min_frontage_ft=_safe_int(md.get("min_frontage_ft")),
+            max_far=_safe_float(md.get("max_far")),
+            setback_front_ft=_safe_float(md.get("setback_front_ft")),
+            setback_side_ft=_safe_float(md.get("setback_side_ft")),
+            setback_rear_ft=_safe_float(md.get("setback_rear_ft")),
+            is_overlay=is_overlay or bool(md.get("is_overlay")),
+            notes=md.get("notes"),
+        )
 
     def _load_property_info(self, parcel_id: str) -> Optional[PropertyInfo]:
         """Pull assessor record from property.parquet, if a row matches."""
