@@ -63,3 +63,77 @@ async def resolve_parcel(body: ResolveRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ParcelNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/dossier")
+async def parcel_dossier(town_slug: str, parcel_id: str, address: str = ""):
+    """Permit ledger + code violations for closing-risk drill-down."""
+    if town_slug not in get_settings().town_slugs:
+        raise HTTPException(status_code=422, detail=f"Town '{town_slug}' is not supported.")
+
+    from backend.services.buildability import collect_brief_data
+    from backend.services.lender_phase3 import _analyze_violations
+    from backend.services.parcel_permits import summarize_parcel_permits
+    from backend.utils.parcel_lookup import _load_town_config
+
+    if not address.strip():
+        try:
+            data = collect_brief_data(town_slug, parcel_id, None)
+            address = data.parcel.address or address
+        except Exception:
+            pass
+
+    town_cfg: dict = {}
+    try:
+        town_cfg = _load_town_config(town_slug) or {}
+    except Exception:
+        town_cfg = {}
+
+    permits = summarize_parcel_permits(town_slug, parcel_id, address)
+    violations: dict = {
+        "status": "clear",
+        "note": "Violation detail unavailable.",
+        "rows": [],
+        "open_count": 0,
+        "isd_url": "",
+        "sources": [],
+    }
+    try:
+        data = collect_brief_data(town_slug, parcel_id, None)
+        violations = _analyze_violations(data, town_cfg)
+    except Exception:
+        pass
+
+    lender_cfg = town_cfg.get("lender_report") or town_cfg.get("lender") or {}
+    isd_url = (
+        (violations.get("isd_url") if isinstance(violations, dict) else None)
+        or lender_cfg.get("isd_portal_url")
+        or ""
+    )
+    if isinstance(violations, dict) and not violations.get("isd_url"):
+        violations["isd_url"] = isd_url
+
+    permits_portal_url = (
+        (permits.get("permits_portal_url") if isinstance(permits, dict) else None)
+        or lender_cfg.get("permits_portal_url")
+        or ""
+    )
+    permits_activity_url = (
+        (permits.get("permits_activity_url") if isinstance(permits, dict) else None)
+        or lender_cfg.get("permits_activity_url")
+        or ""
+    )
+
+    # Do NOT invent OpenGov searchKey / ?q= / portal-home links — those hang or
+    # do not accept paste lookup. Violation deep links only when Gold has IDs.
+
+    return {
+        "town_slug": town_slug,
+        "parcel_id": parcel_id,
+        "address": address,
+        "permits": permits,
+        "violations": violations,
+        "isd_url": isd_url,
+        "permits_portal_url": permits_portal_url,
+        "permits_activity_url": permits_activity_url,
+    }

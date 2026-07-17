@@ -134,6 +134,28 @@ def _parcel_lot_map(town_slug: str) -> dict[str, float]:
 
 
 @lru_cache(maxsize=8)
+def _parcel_centroid_map(town_slug: str) -> dict[str, tuple[float, float]]:
+    path = get_settings().gold_data_path / town_slug / "parcel.parquet"
+    if not path.is_file():
+        return {}
+    df = pd.read_parquet(path, columns=["parcel_id", "centroid_lat", "centroid_lon"])
+    if df.empty:
+        return {}
+    out: dict[str, tuple[float, float]] = {}
+    for _, row in df.iterrows():
+        pid = str(row.get("parcel_id") or "")
+        lat = row.get("centroid_lat")
+        lon = row.get("centroid_lon")
+        if not pid or lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
+            continue
+        try:
+            out[pid] = (float(lat), float(lon))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+@lru_cache(maxsize=8)
 def _open_permit_parcel_ids(town_slug: str) -> frozenset[str]:
     path = get_settings().gold_data_path / town_slug / "permits.parquet"
     if not path.is_file():
@@ -295,6 +317,7 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
     cfg = effective_cfg or merge_criteria_overrides(town_slug, {})
     far_map = base_zone_far_map(town_slug)
     lot_map = _parcel_lot_map(town_slug)
+    centroid_map = _parcel_centroid_map(town_slug)
     open_permits = _open_permit_parcel_ids(town_slug)
     prop_df = _property_frame(town_slug)
     if prop_df.empty:
@@ -390,7 +413,8 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             signals.append("absentee_owner")
         if is_entity:
             signals.append("entity_owner")
-            
+
+        centroid = centroid_map.get(parcel_id)
         candidates.append({
             "parcel_id": parcel_id,
             "address": str(row.get("address") or "").strip(),
@@ -411,6 +435,8 @@ def scan_town_deals(town_slug: str, effective_cfg: dict[str, Any] | None = None)
             "by_right_multifamily": "by_right_multifamily" in signals,
             "is_absentee": is_absentee,
             "is_entity": is_entity,
+            "lat": centroid[0] if centroid else None,
+            "lng": centroid[1] if centroid else None,
         })
 
     _sort_candidates(candidates, str(cfg.get("sort_by") or "score"))

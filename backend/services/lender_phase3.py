@@ -296,19 +296,44 @@ def _analyze_violations(data: BriefData, town_cfg: dict[str, Any]) -> dict[str, 
     address = data.parcel.address
     tokens = _street_tokens(address, town_cfg)
 
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
 
     cfg_hits = _filter_parcel_records(
         _cfg_records(town_cfg, "code_violation_records"), parcel_id,
     )
+
+    def _violation_row(
+        *,
+        source: str,
+        violation_type: str,
+        status: str,
+        opened: str,
+        detail: str,
+        detail_url: str | None = None,
+        external_id: str | None = None,
+    ) -> dict[str, str | None]:
+        text = detail or "—"
+        return {
+            "source": source,
+            "violation_type": violation_type,
+            "status": status,
+            "opened": opened,
+            "detail": text[:120],
+            "detail_full": text,
+            "detail_url": detail_url,
+            "external_id": external_id,
+        }
+
     for rec in cfg_hits:
-        rows.append({
-            "source": str(rec.get("source") or "town-isd"),
-            "violation_type": str(rec.get("violation_type") or "—"),
-            "status": str(rec.get("status") or "—"),
-            "opened": _fmt_date(rec.get("opened_date")),
-            "detail": str(rec.get("detail") or rec.get("description") or "—")[:120],
-        })
+        rows.append(_violation_row(
+            source=str(rec.get("source") or "town-isd"),
+            violation_type=str(rec.get("violation_type") or "—"),
+            status=str(rec.get("status") or "—"),
+            opened=_fmt_date(rec.get("opened_date")),
+            detail=str(rec.get("detail") or rec.get("description") or "—"),
+            detail_url=str(rec.get("detail_url") or rec.get("url") or "") or None,
+            external_id=str(rec.get("case_number") or rec.get("id") or "") or None,
+        ))
 
     path = _gold_parquet(data.inputs.town_slug, "311")
     if path.is_file():
@@ -328,13 +353,19 @@ def _analyze_violations(data: BriefData, town_cfg: dict[str, Any]) -> dict[str, 
             if not _violation_matches(blob, address, tokens):
                 continue
             status = str(meta.get("status") or row.get("status") or "Open")
-            rows.append({
-                "source": "311-seeclickfix",
-                "violation_type": str(row.get("event_name") or "311 request"),
-                "status": status,
-                "opened": _fmt_date(row.get("start_time")),
-                "detail": str(row.get("description") or meta.get("description") or "—")[:120],
-            })
+            scf_url = meta.get("html_url") or meta.get("url") or meta.get("permalink")
+            issue_id = meta.get("id") or meta.get("issue_id") or row.get("source_id")
+            if not scf_url and issue_id:
+                scf_url = f"https://seeclickfix.com/issues/{issue_id}"
+            rows.append(_violation_row(
+                source="311-seeclickfix",
+                violation_type=str(row.get("event_name") or "311 request"),
+                status=status,
+                opened=_fmt_date(row.get("start_time")),
+                detail=str(row.get("description") or meta.get("description") or "—"),
+                detail_url=str(scf_url) if scf_url else None,
+                external_id=str(issue_id) if issue_id else None,
+            ))
 
     cv_path = _gold_parquet(data.inputs.town_slug, "code-violations")
     if cv_path.is_file():
@@ -346,13 +377,15 @@ def _analyze_violations(data: BriefData, town_cfg: dict[str, Any]) -> dict[str, 
             ],
             parcel_id,
         ):
-            rows.append({
-                "source": str(rec.get("te_source") or "code-violations"),
-                "violation_type": str(rec.get("violation_type") or "—"),
-                "status": str(rec.get("status") or "—"),
-                "opened": _fmt_date(rec.get("opened_date")),
-                "detail": str(rec.get("detail") or rec.get("description") or "—")[:120],
-            })
+            rows.append(_violation_row(
+                source=str(rec.get("te_source") or "code-violations"),
+                violation_type=str(rec.get("violation_type") or "—"),
+                status=str(rec.get("status") or "—"),
+                opened=_fmt_date(rec.get("opened_date")),
+                detail=str(rec.get("detail") or rec.get("description") or "—"),
+                detail_url=str(rec.get("detail_url") or rec.get("url") or "") or None,
+                external_id=str(rec.get("case_number") or rec.get("id") or "") or None,
+            ))
 
     open_count = sum(
         1 for r in rows

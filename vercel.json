@@ -1,28 +1,5 @@
 {
   "$schema": "https://openapi.vercel.com/vercel.json",
-  "installCommand": "cd frontend && npm install",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
-  "framework": null,
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://towneye-umf.onrender.com/api/:path*"
-    },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/address-index/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
-      ]
-    },
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" }
-      ]
-    }
-  ]
+  "buildCommand": "echo 'Set Vercel Root Directory to web — see portal/WIPE-AND-DEPLOY-NEXT.md' && exit 1",
+  "installCommand": "echo 'Set Vercel Root Directory to web — see portal/WIPE-AND-DEPLOY-NEXT.md' && exit 1"
 }

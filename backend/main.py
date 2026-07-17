@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
-from backend.routers import auth, parcels, reports
+from backend.routers import auth, parcels, precedents, reports, pulse
 
 app = FastAPI(
     title="TownEye Portal API",
@@ -60,6 +60,8 @@ app.add_middleware(
 app.include_router(parcels.router)
 app.include_router(reports.router)
 app.include_router(auth.router)
+app.include_router(pulse.router)
+app.include_router(precedents.router)
 
 
 @app.on_event("startup")

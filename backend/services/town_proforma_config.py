@@ -14,9 +14,18 @@ _DEFAULTS: dict[str, Any] = {
     "sale_psf": 875.0,
     "soft_cost_pct": 0.18,
     "avg_unit_sf": 900,
+    "contingency_pct": 0.05,
+    "new_construction_premium_pct": 0.40,
     "financing": {
         "annual_carry_pct": 0.075,
         "construction_months": 14,
+    },
+    "investor_financing": {
+        "ltc_pct": 0.70,
+        "sellout_months": 6,
+        "hurdle_equity_multiple": 1.35,
+        "hurdle_equity_irr_pct": 18.0,
+        "hurdle_project_roi_pct": 12.0,
     },
     "irr_grid": {
         "land_price_multiples": [0.90, 1.00, 1.10],
@@ -38,6 +47,10 @@ def get_developer_proforma_config(town_slug: str) -> dict[str, Any]:
     section = town_cfg.get("developer_proforma") or {}
     merged = {**_DEFAULTS, **section}
     merged["financing"] = {**_DEFAULTS["financing"], **(section.get("financing") or {})}
+    merged["investor_financing"] = {
+        **_DEFAULTS["investor_financing"],
+        **(section.get("investor_financing") or {}),
+    }
     merged["irr_grid"] = {**_DEFAULTS["irr_grid"], **(section.get("irr_grid") or {})}
     return merged
 

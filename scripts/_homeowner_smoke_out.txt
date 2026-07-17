@@ -1,0 +1,17 @@
+ADDR 5-7 Belknap St
+ assessed 2174500.0
+ zhvi 1097625.5119554172
+ ideas 4
+ actions 4
+ fake_roi False
+ roi_note True
+ tax_portal True
+ADDR 34 ACTON ST
+ assessed 999400.0
+ zhvi 1071056.5054065294
+ ideas 5
+ actions 4
+ fake_roi False
+ roi_note True
+ tax_portal True
+OK

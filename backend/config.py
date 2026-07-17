@@ -28,6 +28,9 @@ def _default_reports_path() -> Path:
 def _default_gold_path() -> Path:
     if os.getenv("GOLD_DATA_PATH"):
         return Path(os.getenv("GOLD_DATA_PATH"))
+    # Fallback to demo-data if data/gold doesn't exist
+    if (REPO_ROOT / "demo-data" / "gold").exists():
+        return REPO_ROOT / "demo-data" / "gold"
     return REPO_ROOT / "data" / "gold"
 
 
@@ -56,7 +59,7 @@ class Settings:
 
 def _parse_cors_origins(portal_public_url: str) -> tuple[str, ...]:
     raw = os.getenv("CORS_ORIGINS", "").strip()
-    local = ("http://localhost:5173", "http://127.0.0.1:5173")
+    local = ("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000", "http://127.0.0.1:3000")
     if raw:
         origins = tuple(o.strip().rstrip("/") for o in raw.split(",") if o.strip())
         return origins + local
