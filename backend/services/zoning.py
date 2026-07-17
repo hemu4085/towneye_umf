@@ -19,6 +19,7 @@ from backend.services.buildability import (
     _open_items,
     _overlay_narrative,
     _process_pathway,
+    _process_pathway_footnote,
 )
 
 # Constraints that can trigger extra hearings beyond standard zoning review.
@@ -176,6 +177,7 @@ def _regulatory_signals(data: BriefData) -> list[dict[str, str]]:
 
 
 def _overlay_election_recommendation(data: BriefData) -> dict[str, Any] | None:
+    """Memo-grade overlay election — base vs overlay do not stack; cite bylaw / §3A."""
     if not data.has_overlay_election:
         return None
     base_env = next((e for e in data.envelopes if not e.is_overlay), None)
@@ -184,27 +186,71 @@ def _overlay_election_recommendation(data: BriefData) -> dict[str, Any] | None:
         return None
 
     recommended = overlay_env.zone_code
+    base_code = base_env.zone_code if base_env else (data.primary_zone_code or "base")
     rationale_parts: list[str] = []
     if overlay_env.max_gfa_sqft and base_env and base_env.max_gfa_sqft:
         delta = overlay_env.max_gfa_sqft - base_env.max_gfa_sqft
         if delta > 0:
             rationale_parts.append(
-                f"+{_fmt_num(delta)} sf GFA vs base {base_env.zone_code}"
+                f"Overlay max GFA {_fmt_num(overlay_env.max_gfa_sqft)} sf vs "
+                f"base {_fmt_num(base_env.max_gfa_sqft)} sf (+{_fmt_num(delta)} sf)"
             )
+        elif delta < 0:
+            rationale_parts.append(
+                f"Base max GFA {_fmt_num(base_env.max_gfa_sqft)} sf exceeds overlay "
+                f"{_fmt_num(overlay_env.max_gfa_sqft)} sf — confirm program fit before election"
+            )
+    elif overlay_env.max_gfa_sqft and (not base_env or base_env.max_gfa_sqft is None):
+        rationale_parts.append(
+            f"Overlay envelope computes to {_fmt_num(overlay_env.max_gfa_sqft)} sf max GFA"
+        )
     if base_env and base_env.qualifies is False:
         rationale_parts.append(
-            f"base lot is non-conforming for new construction under {base_env.zone_code}"
+            f"Lot is non-conforming to {base_code} minimum lot size for new construction — "
+            f"tear-down/rebuild under base zoning typically requires ZBA relief"
         )
     if data.has_mbta_communities_overlay:
-        rationale_parts.append("MBTA §3A by-right multi-family path available")
+        rationale_parts.append(
+            "NMF/MBMF implements M.G.L. c. 40A §3A; multi-family under the elected overlay "
+            "proceeds by Site Plan Review (Arlington ZBL §5.8), not a density variance"
+        )
+
+    legal_basis = (
+        "Arlington Zoning Bylaw §5.8 (Neighborhood Multi-Family / §3A overlay); "
+        "M.G.L. c. 40A §3A (MBTA Communities Act)"
+        if data.has_mbta_communities_overlay
+        else "Town overlay zoning bylaw — confirm section citation with Town Clerk"
+    )
+
+    rationale = (
+        "; ".join(rationale_parts)
+        if rationale_parts
+        else (
+            f"{recommended} overlay provides alternate dimensional standards and uses "
+            f"vs base {base_code}."
+        )
+    )
+
+    memo_text = (
+        f"Legal note — overlay election: The owner must elect either base zoning "
+        f"({base_code}) or the overlay ({recommended}) for a given project. The regimes "
+        f"do not stack; dimensional controls and permitted uses of the non-elected regime "
+        f"do not apply concurrently. Election is project-by-project, not a perpetual "
+        f"parcel designation. Authority: {legal_basis}. "
+        f"Capacity basis: {rationale}."
+    )
 
     return {
         "recommended_regime": recommended,
-        "alternative_regime": base_env.zone_code if base_env else None,
-        "election_type": "project-by-project (regimes do not stack)",
-        "rationale": "; ".join(rationale_parts) if rationale_parts else (
-            f"{recommended} overlay provides additional development paths vs base zoning."
+        "alternative_regime": base_code,
+        "does_not_stack": True,
+        "election_type": (
+            "Project-by-project election — base and overlay regimes do not stack"
         ),
+        "legal_basis": legal_basis,
+        "citation": legal_basis,
+        "rationale": rationale,
+        "memo_text": memo_text,
     }
 
 
@@ -312,21 +358,43 @@ def _zoning_sources(data: BriefData) -> str:
         if z.get("layer")
     })
     layer_txt = ", ".join(layers) if layers else "town zoning GIS"
+    config_overlays = [
+        code for code in data.zoning_rules
+        if data.zoning_rules[code].is_overlay
+        and any(h.code == code for h in data.overlay_zoning_hits)
+    ]
+    config_note = (
+        f" Overlay dimensional rules for {', '.join(config_overlays)} may come from "
+        f"town config bylaw fixture (§3A fallback) when absent from zoning.parquet — "
+        f"verify against consolidated ZBL before citing."
+        if config_overlays
+        else ""
+    )
     return (
         f"Sources: {town} zoning GIS ({layer_txt}); zoning.parquet bylaw rules; "
         f"property.parquet assessor; parcel.parquet GIS polygon — resolved via "
-        f"OverlayResolver point-in-polygon at parcel centroid."
+        f"OverlayResolver point-in-polygon at parcel centroid.{config_note} "
+        f"Board dockets (ZBA/Planning/ARB) are not in Gold."
     )
 
 
 def _open_items_zoning(data: BriefData) -> list[str]:
-    keywords = ("overlay", "election", "bylaw", "setback", "survey", "non-conform", "docket", "Site Plan")
-    items = []
+    """Attorney diligence checklist — prefer election / bylaw / docket items."""
+    keywords = (
+        "overlay", "election", "bylaw", "setback", "survey", "non-conform",
+        "docket", "site plan", "[confirm]", "[verify]", "[election]", "[dockets]",
+        "§5.8", "§3a", "zba",
+    )
+    preferred: list[str] = []
+    rest: list[str] = []
     for item in _open_items(data):
         lower = item.lower()
         if any(k in lower for k in keywords):
-            items.append(item)
-    return items[:6]
+            preferred.append(item)
+        else:
+            rest.append(item)
+    # Keep lead/title items after zoning-critical ones
+    return (preferred + rest)[:8]
 
 
 def generate_zoning_json(data: BriefData) -> dict[str, Any]:
@@ -367,7 +435,15 @@ def generate_zoning_json(data: BriefData) -> dict[str, Any]:
         "development_paths_footnote": _development_options_footnote(data),
         "zoning_constraints": _zoning_constraints(data),
         "process_pathway": _process_pathway(data),
+        "process_pathway_footnote": _process_pathway_footnote(data),
         "open_items": _open_items_zoning(data),
+        "board_dockets_status": {
+            "status": "missing",
+            "detail": (
+                "In-flight ZBA / Planning / ARB / Conservation dockets are not in "
+                "TownEye Gold. Verify with Town Clerk before a clear-path opinion."
+            ),
+        },
         "sources": _zoning_sources(data),
         "lot_size_sqft": lot_sqft,
         "existing_gfa_sqft": prop.finished_area_sqft if prop else None,

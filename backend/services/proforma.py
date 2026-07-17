@@ -9,7 +9,10 @@ import pandas as pd
 
 from backend.config import get_settings
 from backend.services.buildability import collect_brief_data
+from backend.services.lender import _load_market_metrics, _zip_from_address
+from backend.services.lender_phase3 import _analyze_sale_comps
 from backend.services.llm import generate_json_report
+from backend.utils.parcel_lookup import _load_town_config
 from backend.services.town_proforma_config import (
     compute_permit_fees,
     get_developer_proforma_config,
@@ -43,29 +46,323 @@ def _fmt_pct(value: float | None) -> str:
     return f"{value:.1f}%"
 
 
-def _town_market_context(town_slug: str) -> dict[str, Any]:
-    path = get_settings().gold_data_path / town_slug / "market-trends.parquet"
-    if not path.is_file():
-        return {}
-    df = pd.read_parquet(path)
-    if df.empty:
-        return {}
-    row = df.iloc[-1].to_dict()
-    return {k: (None if pd.isna(v) else v) for k, v in row.items()}
+def _resolve_land_basis(
+    data: BriefData,
+    overrides: dict[str, Any] | None = None,
+) -> tuple[float, str]:
+    o = overrides or {}
+    mode = str(o.get("land_basis_mode") or "assessed").lower()
+    pi = data.property_info
+
+    if mode == "acquisition" and o.get("acquisition_price") is not None:
+        try:
+            price = float(o["acquisition_price"])
+            if price > 0:
+                return price, "User acquisition / option price"
+        except (TypeError, ValueError):
+            pass
+
+    if mode == "last_sale" and pi and pi.last_sale_price:
+        try:
+            price = float(pi.last_sale_price)
+            if price > 0:
+                return price, "Last recorded sale (assessor/CAMA)"
+        except (TypeError, ValueError):
+            pass
+
+    assessed = _assessed_value(data)
+    if assessed is not None and assessed > 0:
+        return assessed, "Assessed value (Mass. CAMA)"
+
+    lot = data.parcel.area_sqft or 0.0
+    return lot * 55.0, "Lot area × $55/sf indicative proxy"
+
+
+def _land_basis(data: BriefData, overrides: dict[str, Any] | None = None) -> float:
+    return _resolve_land_basis(data, overrides)[0]
+
+
+def _resolve_exit_pricing(
+    pf_cfg: dict[str, Any],
+    market: dict[str, Any],
+    comps: dict[str, Any],
+    overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    o = overrides or {}
+    config_psf = float(pf_cfg["sale_psf"])
+    premium = float(pf_cfg.get("new_construction_premium_pct", 0.40))
+    comp_resale = comps.get("median_ppsf")
+    zip_psf = market.get("price_per_sqft")
+
+    comp_new_psf = round(comp_resale * (1.0 + premium), 0) if comp_resale else None
+    zip_new_psf = round(zip_psf * (1.0 + premium * 0.5), 0) if zip_psf else None
+
+    if o.get("sale_psf") is not None:
+        chosen = float(o["sale_psf"])
+        method = "User override"
+    elif comp_new_psf and zip_new_psf:
+        chosen = round(0.55 * comp_new_psf + 0.25 * zip_new_psf + 0.20 * config_psf, 0)
+        method = (
+            "Blend: CAMA comps (+new-construction premium), zip MLS trend, town config"
+        )
+    elif comp_new_psf:
+        chosen = round(0.70 * comp_new_psf + 0.30 * config_psf, 0)
+        method = "CAMA comparable sales (+new-construction premium) blended with town config"
+    elif zip_new_psf:
+        chosen = round(0.60 * zip_new_psf + 0.40 * config_psf, 0)
+        method = "Zip price/sf trend (+premium) blended with town config"
+    else:
+        chosen = config_psf
+        method = "Town config indicative new-construction $/sf (no comps in radius)"
+
+    return {
+        "sale_psf_used": chosen,
+        "method": method,
+        "comp_median_resale_psf": comp_resale,
+        "comp_adjusted_new_psf": comp_new_psf,
+        "zip_price_per_sqft": zip_psf,
+        "zip_adjusted_new_psf": zip_new_psf,
+        "config_indicative_psf": config_psf,
+        "new_construction_premium_pct": premium,
+    }
+
+
+def _scenario_equity_returns(
+    scenario: dict[str, Any],
+    pf_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    inv = pf_cfg.get("investor_financing") or {}
+    fin = pf_cfg.get("financing") or {}
+    ltc = float(inv.get("ltc_pct", 0.70))
+    sellout_mo = int(inv.get("sellout_months", 6))
+    construction_mo = int(fin.get("construction_months", 14))
+    total_mo = max(1, construction_mo + sellout_mo)
+
+    construction_cost = (
+        float(scenario.get("hard_cost") or 0)
+        + float(scenario.get("soft_cost") or 0)
+        + float(scenario.get("permit_fees") or 0)
+        + float(scenario.get("contingency") or 0)
+    )
+    total_uses = float(scenario.get("total_cost") or 0)
+    sale = float(scenario.get("sale_price") or 0)
+
+    debt = int(round(construction_cost * ltc))
+    equity = int(round(max(0.0, total_uses - debt)))
+    net_to_equity = int(round(sale - debt))
+    equity_profit = int(round(net_to_equity - equity))
+
+    equity_multiple = round(net_to_equity / equity, 2) if equity > 0 else None
+    equity_irr = None
+    if equity_multiple and equity_multiple > 0:
+        equity_irr = round((equity_multiple ** (12.0 / total_mo) - 1.0) * 100.0, 1)
+
+    return {
+        "ltc_pct": ltc,
+        "construction_loan": debt,
+        "equity_required": equity,
+        "net_sale_proceeds": net_to_equity,
+        "equity_profit": equity_profit,
+        "equity_multiple": equity_multiple,
+        "equity_irr_pct": equity_irr,
+        "hold_months": total_mo,
+    }
+
+
+def _overlay_economics_delta(
+    scenarios: list[dict[str, Any]],
+    primary: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not primary:
+        return None
+    base = next((s for s in scenarios if not s.get("is_overlay")), None)
+    if not base or base.get("name") == primary.get("name"):
+        return None
+    pe = primary.get("equity_returns") or {}
+    be = base.get("equity_returns") or {}
+    return {
+        "base_scenario": base.get("name"),
+        "primary_scenario": primary.get("name"),
+        "profit_delta": int(primary.get("profit", 0) - base.get("profit", 0)),
+        "roi_delta_pct": round(float(primary.get("roi_pct", 0)) - float(base.get("roi_pct", 0)), 1),
+        "units_delta": int(primary.get("units", 0) - base.get("units", 0)),
+        "gfa_delta": int(primary.get("total_gfa", 0) - base.get("total_gfa", 0)),
+        "equity_multiple_delta": round(
+            float(pe.get("equity_multiple") or 0) - float(be.get("equity_multiple") or 0),
+            2,
+        ) if pe.get("equity_multiple") and be.get("equity_multiple") else None,
+    }
+
+
+def _investor_verdict(
+    primary: dict[str, Any] | None,
+    constraints: list[dict[str, str]],
+    pf_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    inv = pf_cfg.get("investor_financing") or {}
+    hurdle_em = float(inv.get("hurdle_equity_multiple", 1.35))
+    hurdle_irr = float(inv.get("hurdle_equity_irr_pct", 18.0))
+    hurdle_roi = float(inv.get("hurdle_project_roi_pct", 12.0))
+
+    if primary is None:
+        return {
+            "rating": "pass",
+            "label": "Pass — no buildable envelope economics computed",
+            "summary": "Indicative returns could not be anchored to a zoning envelope.",
+        }
+
+    equity = primary.get("equity_returns") or {}
+    em = float(equity.get("equity_multiple") or 0)
+    irr = float(equity.get("equity_irr_pct") or 0)
+    roi = float(primary.get("roi_pct") or 0)
+    flagged = any(c.get("status") == "flagged" for c in constraints)
+    caution_layers = sum(1 for c in constraints if c.get("status") in ("caution", "flagged"))
+
+    if roi < 0 or em < 1.0:
+        rating = "pass"
+        label = "Pass — does not clear minimum return thresholds"
+        summary = (
+            f"Indicative project ROI {roi:.1f}% and equity multiple {em:.2f}× do not support "
+            "capital deployment at current land and exit assumptions."
+        )
+    elif flagged or em < 1.15 or roi < 5:
+        rating = "caution"
+        label = "Caution — marginal economics or regulatory friction"
+        summary = (
+            f"Overlay path shows {em:.2f}× equity multiple and {irr:.1f}% annualized equity IRR "
+            f"at {int(inv.get('ltc_pct', 0.70) * 100)}% LTC — validate land basis, exit comps, "
+            "and entitlement path before IC."
+        )
+    elif em >= hurdle_em and irr >= hurdle_irr and roi >= hurdle_roi and caution_layers == 0:
+        rating = "pursue"
+        label = "Pursue — indicative returns clear investor hurdles"
+        summary = (
+            f"Recommended regime {primary.get('name')} clears hurdles "
+            f"({em:.2f}× equity, {irr:.1f}% IRR, {roi:.1f}% project ROI) with a clean constraint stack."
+        )
+    else:
+        rating = "caution"
+        label = "Caution — returns below target hurdle or open constraint layers"
+        summary = (
+            f"Indicative {em:.2f}× equity / {irr:.1f}% IRR vs hurdles "
+            f"{hurdle_em:.2f}× / {hurdle_irr:.0f}% — re-trade land or confirm overlay election."
+        )
+
+    return {"rating": rating, "label": label, "summary": summary}
+
+
+def _investor_exhibit(
+    data: BriefData,
+    primary: dict[str, Any] | None,
+    exit_pricing: dict[str, Any],
+    land_source: str,
+    verdict: dict[str, Any],
+    overlay_delta: dict[str, Any] | None,
+    constraints: list[dict[str, str]],
+) -> dict[str, Any]:
+    equity = (primary or {}).get("equity_returns") or {}
+    key_risks = [
+        f"{c['label']}: {c['detail']}"
+        for c in constraints
+        if c.get("status") in ("caution", "flagged")
+    ][:4]
+    if not key_risks:
+        key_risks = ["No historic, flood, wetland, or non-compliance flags in TownEye Gold."]
+
+    return {
+        "report_title": "Investor Feasibility Exhibit",
+        "address": data.parcel.address,
+        "parcel_id": data.parcel.parcel_id,
+        "prepared_on": (data.inputs.prepared_on or date.today()).isoformat(),
+        "investor_verdict": verdict.get("rating"),
+        "investor_verdict_label": verdict.get("label"),
+        "investor_thesis": verdict.get("summary"),
+        "recommended_regime": primary.get("name") if primary else None,
+        "units": primary.get("units") if primary else None,
+        "total_gfa": primary.get("total_gfa") if primary else None,
+        "equity_required": equity.get("equity_required"),
+        "equity_profit": equity.get("equity_profit"),
+        "equity_multiple": equity.get("equity_multiple"),
+        "equity_irr_pct": equity.get("equity_irr_pct"),
+        "project_roi_pct": primary.get("roi_pct") if primary else None,
+        "sale_proceeds": primary.get("sale_price") if primary else None,
+        "total_project_cost": primary.get("total_cost") if primary else None,
+        "exit_sale_psf": exit_pricing.get("sale_psf_used"),
+        "exit_pricing_method": exit_pricing.get("method"),
+        "land_basis": primary.get("land_basis") if primary else None,
+        "land_basis_source": land_source,
+        "overlay_profit_uplift": overlay_delta.get("profit_delta") if overlay_delta else None,
+        "overlay_equity_uplift": overlay_delta.get("equity_multiple_delta") if overlay_delta else None,
+        "key_risks": key_risks,
+    }
+
+
+def _load_proforma_context(
+    data: BriefData,
+    pf_cfg: dict[str, Any],
+    overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    town_cfg = _load_town_config(data.inputs.town_slug)
+    zipcode = _zip_from_address(data.parcel.address)
+    market = _load_market_metrics(data.inputs.town_slug, zipcode)
+    comps = _analyze_sale_comps(data, town_cfg)
+    exit_pricing = _resolve_exit_pricing(pf_cfg, market, comps, overrides)
+    land_basis, land_source = _resolve_land_basis(data, overrides)
+    return {
+        "market": market,
+        "comps": comps,
+        "exit_pricing": exit_pricing,
+        "land_basis": land_basis,
+        "land_source": land_source,
+        "zipcode": zipcode,
+    }
+
+
+def _build_scenarios(
+    data: BriefData,
+    pf_cfg: dict[str, Any],
+    ctx: dict[str, Any],
+) -> list[dict[str, Any]]:
+    land_basis = float(ctx["land_basis"])
+    sale_psf = float(ctx["exit_pricing"]["sale_psf_used"])
+    envelopes = data.envelopes[:3] if data.envelopes else []
+    scenarios: list[dict[str, Any]] = []
+    for envelope in envelopes:
+        scenario = _scenario_from_envelope(
+            envelope,
+            data,
+            pf_cfg,
+            land_basis=land_basis,
+            sale_psf=sale_psf,
+        )
+        scenario["equity_returns"] = _scenario_equity_returns(scenario, pf_cfg)
+        scenarios.append(scenario)
+
+    if not scenarios:
+        lot = data.parcel.area_sqft or 0.0
+        fake = BuildableEnvelope(
+            zone_code=data.primary_zone_code or "—",
+            is_overlay=False,
+            label="Base (parcel area)",
+            rationale="Derived from parcel area — refine with full envelope",
+            lot_sqft=lot,
+        )
+        scenario = _scenario_from_envelope(
+            fake,
+            data,
+            pf_cfg,
+            land_basis=land_basis,
+            sale_psf=sale_psf,
+        )
+        scenario["equity_returns"] = _scenario_equity_returns(scenario, pf_cfg)
+        scenarios.append(scenario)
+    return scenarios
 
 
 def _assessed_value(data: BriefData) -> float | None:
     if data.property_info is not None and data.property_info.assessed_value is not None:
         return float(data.property_info.assessed_value)
     return None
-
-
-def _land_basis(data: BriefData) -> float:
-    assessed = _assessed_value(data)
-    if assessed is not None and assessed > 0:
-        return assessed
-    lot = data.parcel.area_sqft or 0.0
-    return lot * 55.0
 
 
 def _indicative_gfa(envelope: BuildableEnvelope, data: BriefData) -> float:
@@ -83,9 +380,15 @@ def _pf_cfg(data: BriefData, overrides: dict[str, Any] | None = None) -> dict[st
         return base
     
     merged = dict(base)
-    for k in ["hard_cost_psf", "soft_cost_pct", "sale_psf", "avg_unit_sf"]:
+    for k in ["hard_cost_psf", "soft_cost_pct", "sale_psf", "avg_unit_sf", "contingency_pct"]:
         if k in overrides and overrides[k] is not None:
             merged[k] = overrides[k]
+
+    if "investor_financing" in overrides and isinstance(overrides["investor_financing"], dict):
+        merged["investor_financing"] = {
+            **(merged.get("investor_financing") or {}),
+            **overrides["investor_financing"],
+        }
             
     if "financing" in overrides and isinstance(overrides["financing"], dict):
         merged["financing"] = {**(merged.get("financing") or {}), **overrides["financing"]}
@@ -108,22 +411,27 @@ def _scenario_from_envelope(
     envelope: BuildableEnvelope,
     data: BriefData,
     pf_cfg: dict[str, Any],
+    *,
+    land_basis: float | None = None,
+    sale_psf: float | None = None,
 ) -> dict[str, Any]:
     hard_psf = float(pf_cfg["hard_cost_psf"])
     soft_pct = float(pf_cfg["soft_cost_pct"])
-    sale_psf = float(pf_cfg["sale_psf"])
+    sale_psf_val = float(sale_psf if sale_psf is not None else pf_cfg["sale_psf"])
     avg_unit_sf = float(pf_cfg["avg_unit_sf"])
+    contingency_pct = float(pf_cfg.get("contingency_pct", 0.05))
 
     gfa = _indicative_gfa(envelope, data)
     units = _units_from_gfa(gfa, avg_unit_sf)
     hard = gfa * hard_psf
     soft = hard * soft_pct
-    land = _land_basis(data)
+    land = land_basis if land_basis is not None else _resolve_land_basis(data, None)[0]
     permit_total, permit_lines = compute_permit_fees(gfa, pf_cfg.get("permit_fees") or [])
-    subtotal = hard + soft + land + permit_total
+    contingency = hard * contingency_pct
+    subtotal = hard + soft + land + permit_total + contingency
     carry = _carry_cost(subtotal, pf_cfg)
     total_cost = subtotal + carry
-    sale = gfa * sale_psf
+    sale = gfa * sale_psf_val
     profit = sale - total_cost
     roi = ((sale - total_cost) / total_cost * 100.0) if total_cost > 0 else 0.0
     avg_unit_sf_val = gfa / units if units else gfa
@@ -139,6 +447,7 @@ def _scenario_from_envelope(
         "land_basis": int(round(land)),
         "permit_fees": permit_total,
         "permit_fee_lines": permit_lines,
+        "contingency": int(round(contingency)),
         "carry_cost": int(round(carry)),
         "total_cost": int(round(total_cost)),
         "sale_price": int(round(sale)),
@@ -148,7 +457,7 @@ def _scenario_from_envelope(
         "sale_per_sf": int(round(sale / gfa)) if gfa > 0 else None,
         "sale_per_unit": int(round(sale / units)) if units else None,
         "cost_per_unit": int(round(total_cost / units)) if units else None,
-        "roi_pct": round(max(-15.0, min(35.0, roi)), 1),
+        "roi_pct": round(max(-99.0, min(99.0, roi)), 1),
         "qualifies": envelope.qualifies,
         "max_far": envelope.max_far,
         "notes": envelope.rationale or "Envelope from live zoning stack",
@@ -196,16 +505,22 @@ def _constraints_summary(data: BriefData) -> list[dict[str, str]]:
     return rows
 
 
-def _market_section(data: BriefData, pf_cfg: dict[str, Any]) -> dict[str, Any]:
-    ctx = _town_market_context(data.inputs.town_slug)
+def _market_section(
+    data: BriefData,
+    pf_cfg: dict[str, Any],
+    ctx: dict[str, Any],
+) -> dict[str, Any]:
+    market = ctx.get("market") or {}
+    exit_pricing = ctx.get("exit_pricing") or {}
     assessed = _assessed_value(data)
     return {
-        "median_sale_price": ctx.get("median_sale_price"),
-        "median_dom": ctx.get("median_dom"),
-        "months_of_inventory": ctx.get("months_of_inventory"),
+        **market,
+        "zipcode": ctx.get("zipcode"),
+        "months_of_inventory": market.get("months_supply"),
         "assessed_value": assessed,
-        "indicative_sale_psf": float(pf_cfg["sale_psf"]),
+        "indicative_sale_psf": exit_pricing.get("sale_psf_used") or float(pf_cfg["sale_psf"]),
         "indicative_hard_cost_psf": float(pf_cfg["hard_cost_psf"]),
+        "exit_pricing": exit_pricing,
     }
 
 
@@ -240,15 +555,16 @@ def _hard_mult_label(mult: float) -> str:
 
 
 def _irr_grid(scenario: dict[str, Any], pf_cfg: dict[str, Any]) -> dict[str, Any]:
-    """3 land × 2 hard ROI matrix for the primary scenario (PDF Report 03)."""
+    """3 land × 2 hard project ROI matrix for the primary scenario."""
     gfa = float(scenario.get("total_gfa") or 0)
     base_land = float(scenario.get("land_basis") or 0)
     if gfa <= 0:
         return {"columns": [], "rows": []}
 
     hard_psf = float(pf_cfg["hard_cost_psf"])
-    sale_psf = float(pf_cfg["sale_psf"])
+    sale_psf = float(scenario.get("sale_per_sf") or pf_cfg["sale_psf"])
     soft_pct = float(pf_cfg["soft_cost_pct"])
+    contingency_pct = float(pf_cfg.get("contingency_pct", 0.05))
     grid = pf_cfg.get("irr_grid") or {}
     land_mults = list(grid.get("land_price_multiples") or [0.90, 1.00, 1.10])
     hard_mults = list(grid.get("hard_cost_multiples") or [0.90, 1.10])
@@ -262,7 +578,8 @@ def _irr_grid(scenario: dict[str, Any], pf_cfg: dict[str, Any]) -> dict[str, Any
             land = base_land * lm
             hard = gfa * hard_psf * hm
             soft = hard * soft_pct
-            subtotal = hard + soft + land + permit_total
+            contingency = hard * contingency_pct
+            subtotal = hard + soft + land + permit_total + contingency
             carry = _carry_cost(subtotal, pf_cfg)
             total = subtotal + carry
             sale = gfa * sale_psf
@@ -289,87 +606,141 @@ def _pick_primary_scenario(scenarios: list[dict[str, Any]]) -> dict[str, Any] | 
         return None
     overlay = [s for s in scenarios if s.get("is_overlay")]
     pool = overlay or scenarios
-    return max(pool, key=lambda s: float(s.get("roi_pct") or -999))
+
+    def _score(item: dict[str, Any]) -> float:
+        equity = item.get("equity_returns") or {}
+        em = equity.get("equity_multiple")
+        if em is not None:
+            return float(em)
+        return float(item.get("roi_pct") or -999)
+
+    return max(pool, key=_score)
 
 
 def _executive_summary(
     data: BriefData,
     primary: dict[str, Any] | None,
     pf_cfg: dict[str, Any],
+    exit_pricing: dict[str, Any],
+    verdict: dict[str, Any],
+    overlay_delta: dict[str, Any] | None,
 ) -> str:
     if primary is None:
         return "Indicative economics could not be anchored to a buildable envelope."
     units = primary.get("units", "—")
     gfa = _fmt_int(primary.get("total_gfa"))
-    roi = primary.get("roi_pct", "—")
     name = primary.get("name", "Primary scenario")
-    profit = _fmt_money(primary.get("profit"))
-    hard_psf = float(pf_cfg["hard_cost_psf"])
-    sale_psf = float(pf_cfg["sale_psf"])
+    equity = primary.get("equity_returns") or {}
+    em = equity.get("equity_multiple", "—")
+    irr = equity.get("equity_irr_pct", "—")
+    sale_psf = exit_pricing.get("sale_psf_used", pf_cfg["sale_psf"])
+    uplift = ""
+    if overlay_delta and overlay_delta.get("profit_delta") is not None:
+        uplift = (
+            f" Overlay election adds {_fmt_money(overlay_delta['profit_delta'])} profit vs "
+            f"{overlay_delta.get('base_scenario')} base case."
+        )
     return (
-        f"Recommended path: {name}. Indicative yield ~{units} units / {gfa} sf GFA, "
-        f"{profit} profit at pilot assumptions (${hard_psf:,.0f}/sf hard, "
-        f"${sale_psf:,.0f}/sf sale), ~{roi}% ROI. "
-        f"Entitlement and envelope math are in the Buildability Brief."
+        f"{verdict.get('label', 'Indicative screening')}. Recommended regime: {name} "
+        f"(~{units} units / {gfa} sf GFA). Exit modeled at ${int(float(sale_psf)):,}/sf "
+        f"({exit_pricing.get('method', 'town config')}). "
+        f"Indicative {em}× equity multiple, {irr}% annualized equity IRR "
+        f"at {int(float((pf_cfg.get('investor_financing') or {}).get('ltc_pct', 0.70)) * 100)}% LTC."
+        f"{uplift} Validate land basis and comps before investment committee."
     )
 
 
 def _enrich_payload(data: BriefData, payload: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     pf_cfg = _pf_cfg(data, overrides)
     o = overrides or {}
-    scenarios = payload.get("scenarios") or []
+    pctx = _load_proforma_context(data, pf_cfg, overrides)
+    scenarios = payload.get("scenarios") or _build_scenarios(data, pf_cfg, pctx)
+    for scenario in scenarios:
+        if not scenario.get("equity_returns"):
+            scenario["equity_returns"] = _scenario_equity_returns(scenario, pf_cfg)
     primary = _pick_primary_scenario(scenarios)
-    ctx = _town_market_context(data.inputs.town_slug)
-    assessed = _assessed_value(data)
+    constraints = _constraints_summary(data)
+    overlay_delta = _overlay_economics_delta(scenarios, primary)
+    verdict = _investor_verdict(primary, constraints, pf_cfg)
+    exit_pricing = pctx["exit_pricing"]
+    land_source = pctx["land_source"]
     fin = pf_cfg.get("financing") or {}
+    inv = pf_cfg.get("investor_financing") or {}
     permit_lines = primary.get("permit_fee_lines") if primary else []
+    comps = pctx["comps"]
+    market = _market_section(data, pf_cfg, pctx)
+    sensitivity_grid = _irr_grid(primary, pf_cfg) if primary else {"columns": [], "rows": []}
+
     return {
         **payload,
+        "report_kind": "investor_feasibility",
         "prepared_on": (data.inputs.prepared_on or date.today()).isoformat(),
         "site_snapshot": _site_snapshot(data),
-        "market": _market_section(data, pf_cfg),
-        "constraints": _constraints_summary(data),
+        "market": market,
+        "comps": comps,
+        "exit_pricing": exit_pricing,
+        "constraints": constraints,
         "envelopes": _envelope_rows(data),
+        "scenarios": scenarios,
         "primary_scenario": primary.get("name") if primary else None,
-        "executive_summary": _executive_summary(data, primary, pf_cfg),
-        "irr_grid": _irr_grid(primary, pf_cfg) if primary else {"columns": [], "rows": []},
+        "overlay_economics": overlay_delta,
+        "investor_verdict": verdict,
+        "investor_exhibit": _investor_exhibit(
+            data, primary, exit_pricing, land_source, verdict, overlay_delta, constraints,
+        ),
+        "executive_summary": _executive_summary(
+            data, primary, pf_cfg, exit_pricing, verdict, overlay_delta,
+        ),
+        "irr_grid": sensitivity_grid,
+        "return_sensitivity": sensitivity_grid,
         "sensitivity_detail": _sensitivity_rows(primary, pf_cfg) if primary else [],
         "assumptions": payload.get("assumptions") or [
-            f"Hard cost ${float(pf_cfg['hard_cost_psf']):,.0f}/sf" + (' <strong style="color:#0b2545">(User override)</strong>' if "hard_cost_psf" in o else " (RSMeans MA indicative, from town config)"),
-            f"Soft costs {int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard construction" + (' <strong style="color:#0b2545">(User override)</strong>' if "soft_cost_pct" in o else ""),
-            f"Land basis {_fmt_money(assessed) if assessed else 'lot × $55/sf assessor proxy'}",
-            f"Indicative new-construction sale ${float(pf_cfg['sale_psf']):,.0f}/sf GFA" + (' <strong style="color:#0b2545">(User override)</strong>' if "sale_psf" in o else " — not MLS-calibrated"),
-            f"Unit count derived from GFA ÷ {int(pf_cfg['avg_unit_sf'])} sf average unit size" + (' <strong style="color:#0b2545">(User override)</strong>' if "avg_unit_sf" in o else ""),
+            f"Hard cost ${float(pf_cfg['hard_cost_psf']):,.0f}/sf"
+            + (" <strong>(User override)</strong>" if "hard_cost_psf" in o else " (town config)"),
+            f"Soft costs {int(float(pf_cfg['soft_cost_pct']) * 100)}% of hard"
+            + (" <strong>(User override)</strong>" if "soft_cost_pct" in o else ""),
+            f"Construction contingency {int(float(pf_cfg.get('contingency_pct', 0.05)) * 100)}% of hard",
+            f"Land basis {_fmt_money(pctx['land_basis'])} — {land_source}"
+            + (" <strong>(User override)</strong>" if o.get("acquisition_price") or o.get("land_basis_mode") else ""),
+            f"Exit pricing ${float(exit_pricing['sale_psf_used']):,.0f}/sf GFA — {exit_pricing['method']}"
+            + (" <strong>(User override)</strong>" if "sale_psf" in o else ""),
+            f"New-construction premium {int(float(pf_cfg.get('new_construction_premium_pct', 0.40)) * 100)}% applied to resale comps",
+            f"Equity model: {int(float(inv.get('ltc_pct', 0.70)) * 100)}% LTC on construction, "
+            f"{int(fin.get('construction_months', 14))} mo build + {int(inv.get('sellout_months', 6))} mo sellout",
+            f"Unit count derived from GFA ÷ {int(pf_cfg['avg_unit_sf'])} sf average unit size"
+            + (" <strong>(User override)</strong>" if "avg_unit_sf" in o else ""),
             *([f"Permit fees (town schedule): {', '.join(l['label'] for l in permit_lines)}"]
               if permit_lines else []),
             f"Financing carry {float(fin.get('annual_carry_pct', 0)) * 100:.1f}% × "
-            f"{fin.get('construction_months', 14)} mo construction" + (' <strong style="color:#0b2545">(User override)</strong>' if "financing" in o else " (indicative)"),
-            "Zoning envelopes sourced from same stack as Buildability Brief",
+            f"{fin.get('construction_months', 14)} mo construction"
+            + (" <strong>(User override)</strong>" if "financing" in o else ""),
             *(
-                [f"Town median sale (Gold): {_fmt_money(ctx.get('median_sale_price'))}"]
-                if ctx.get("median_sale_price")
+                [f"Town median sale (Gold zip {pctx.get('zipcode') or 'town'}): "
+                 f"{_fmt_money(market.get('median_sale_price'))}"]
+                if market.get("median_sale_price")
                 else []
             ),
+            *(
+                [f"Comparable sales median (CAMA, {comps.get('radius_mi')} mi): "
+                 f"{_fmt_money(comps.get('median_ppsf'))}/sf resale"]
+                if comps.get("median_ppsf")
+                else []
+            ),
+            "Zoning envelopes sourced from same stack as Buildability Brief",
+        ],
+        "data_sources": payload.get("data_sources") or [
+            "TownEye Gold parcel + property.parquet",
+            "Buildability envelope math (Buildability Brief stack)",
+            "market-trends.parquet (zip MLS aggregates)",
+            "Assessor/CAMA comparable sales (property.parquet)",
         ],
     }
 
 
 def _proforma_fallback(data: BriefData, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     pf_cfg = _pf_cfg(data, overrides)
-    envelopes = data.envelopes[:3] if data.envelopes else []
-    scenarios = [_scenario_from_envelope(e, data, pf_cfg) for e in envelopes]
-    if not scenarios:
-        lot = data.parcel.area_sqft or 0.0
-        gfa = lot * 0.5
-        fake = BuildableEnvelope(
-            zone_code=data.primary_zone_code or "—",
-            is_overlay=False,
-            label="Base (parcel area)",
-            rationale="Derived from parcel area — refine with full envelope",
-            lot_sqft=lot,
-        )
-        scenarios.append(_scenario_from_envelope(fake, data, pf_cfg))
-
+    pctx = _load_proforma_context(data, pf_cfg, overrides)
+    scenarios = _build_scenarios(data, pf_cfg, pctx)
     primary = _pick_primary_scenario(scenarios)
     rois = [float(s["roi_pct"]) for s in scenarios]
     mid = rois[len(rois) // 2] if rois else 12.0
@@ -382,15 +753,10 @@ def _proforma_fallback(data: BriefData, overrides: dict[str, Any] | None = None)
         "assessed_value": _assessed_value(data),
         "scenarios": scenarios,
         "sensitivity": {
-            "low": round(max(-15.0, mid - 6.0), 1),
+            "low": round(max(-99.0, mid - 6.0), 1),
             "mid": round(mid, 1),
-            "high": round(min(35.0, mid + 8.0), 1),
+            "high": round(min(99.0, mid + 8.0), 1),
         },
-        "data_sources": [
-            "TownEye Gold parcel + property.parquet",
-            "Buildability envelope math (Buildability Brief stack)",
-            "market-trends.parquet (town context)",
-        ],
         "fallback": True,
     }
     return _enrich_payload(data, payload, overrides)
@@ -407,7 +773,8 @@ def _brief_context(data: BriefData) -> str:
             f"qualifies={e.qualifies}, rationale={e.rationale}",
         )
     assessed = _assessed_value(data)
-    ctx = _town_market_context(data.inputs.town_slug)
+    zipcode = _zip_from_address(data.parcel.address)
+    ctx = _load_market_metrics(data.inputs.town_slug, zipcode)
     return f"""Parcel: {data.parcel.address} ({data.parcel.parcel_id})
 Lot size: {_fmt_int(data.parcel.area_sqft)} sf
 Base zone(s): {zones}
@@ -427,6 +794,10 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData, overrides: di
     if not isinstance(raw, list) or not raw:
         return _proforma_fallback(data, overrides)["scenarios"]
 
+    pf_cfg = _pf_cfg(data, overrides)
+    pctx = _load_proforma_context(data, pf_cfg, overrides)
+    land_basis = float(pctx["land_basis"])
+    sale_psf = float(pctx["exit_pricing"]["sale_psf_used"])
     envelopes = data.envelopes or []
     normalized: list[dict[str, Any]] = []
     for i, item in enumerate(raw[:3]):
@@ -435,7 +806,6 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData, overrides: di
         anchor = envelopes[i] if i < len(envelopes) else (envelopes[0] if envelopes else None)
         if anchor is not None:
             cap_gfa = _indicative_gfa(anchor, data)
-            pf_cfg = _pf_cfg(data, overrides)
             gfa = item.get("total_gfa")
             try:
                 gfa = float(gfa) if gfa is not None else cap_gfa
@@ -450,7 +820,9 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData, overrides: di
             except (TypeError, ValueError):
                 units = _units_from_gfa(gfa, float(pf_cfg["avg_unit_sf"]))
             units = min(units, max(1, _units_from_gfa(gfa, float(pf_cfg["avg_unit_sf"])) + 1))
-            rebuilt = _scenario_from_envelope(anchor, data, pf_cfg)
+            rebuilt = _scenario_from_envelope(
+                anchor, data, pf_cfg, land_basis=land_basis, sale_psf=sale_psf,
+            )
             item = {
                 **rebuilt,
                 **item,
@@ -458,6 +830,7 @@ def _normalize_scenarios(payload: dict[str, Any], data: BriefData, overrides: di
                 "units": units,
                 "name": item.get("name") or rebuilt["name"],
             }
+            item["equity_returns"] = _scenario_equity_returns(item, pf_cfg)
         normalized.append(item)
     return normalized or _proforma_fallback(data, overrides)["scenarios"]
 
@@ -569,6 +942,41 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
     sources = payload.get("data_sources") or []
     primary_name = payload.get("primary_scenario")
     prepared = payload.get("prepared_on") or date.today().isoformat()
+
+    exhibit = payload.get("investor_exhibit") or {}
+    verdict = payload.get("investor_verdict") or {}
+    comps = payload.get("comps") or {}
+    exit_pricing = payload.get("exit_pricing") or market.get("exit_pricing") or {}
+
+    comp_rows = ""
+    for c in comps.get("rows") or []:
+        comp_rows += f"""<tr>
+          <td>{c.get('address', '—')}</td>
+          <td class="num">{int(c.get('distance_ft', 0)):,} ft</td>
+          <td class="num">{_fmt_money(c.get('sale_price'))}</td>
+          <td>{c.get('sale_date', '—')}</td>
+          <td class="num">{_fmt_int(c.get('finished_sf'))} sf</td>
+          <td class="num">{_fmt_money(c.get('price_per_sf'))}/sf</td>
+        </tr>"""
+
+    verdict_css = {"pursue": "v-green", "caution": "v-yellow", "pass": "v-red"}.get(
+        verdict.get("rating", ""), "v-yellow",
+    )
+    exhibit_block = f"""
+<h2>Investor Feasibility Exhibit</h2>
+<div class="verdict {verdict_css}"><strong>{verdict.get('label', 'Indicative screening')}</strong></div>
+<p class="exec">{exhibit.get('investor_thesis') or payload.get('executive_summary', '')}</p>
+<table class="kv">
+<tr><td>Recommended regime</td><td><strong>{exhibit.get('recommended_regime') or '—'}</strong></td></tr>
+<tr><td>Scale</td><td class="num">{exhibit.get('units') or '—'} units · {_fmt_int(exhibit.get('total_gfa'))} sf GFA</td></tr>
+<tr><td>Equity required</td><td class="num">{_fmt_money(exhibit.get('equity_required'))}</td></tr>
+<tr><td>Equity profit (indicative)</td><td class="num">{_fmt_money(exhibit.get('equity_profit'))}</td></tr>
+<tr><td>Equity multiple</td><td class="num"><strong>{exhibit.get('equity_multiple', '—')}×</strong></td></tr>
+<tr><td>Equity IRR (annualized)</td><td class="num"><strong>{exhibit.get('equity_irr_pct', '—')}%</strong></td></tr>
+<tr><td>Project ROI</td><td class="num">{exhibit.get('project_roi_pct', '—')}%</td></tr>
+<tr><td>Exit pricing</td><td class="num">{_fmt_money(exhibit.get('exit_sale_psf'))}/sf — {exit_pricing.get('method', '—')}</td></tr>
+<tr><td>Land basis</td><td class="num">{_fmt_money(exhibit.get('land_basis'))} ({exhibit.get('land_basis_source', '—')})</td></tr>
+</table>"""
 
     csv_text = proforma_to_csv(payload)
     csv_b64 = base64.b64encode(csv_text.encode("utf-8")).decode("ascii")
@@ -690,12 +1098,14 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 
 <div class="hd" style="position: relative;">
   <img src="https://demo.towneye.ai/logo.png" alt="TownEye Logo" class="logo-header" />
-  <h1>Development Pro Forma</h1>
+  <h1>Investor Feasibility Report</h1>
   <div style="font-size:15px;color:#0b2545;font-weight:bold">{address}</div>
   <div class="meta">Prepared on {prepared} &nbsp;·&nbsp; Parcel ID {snap.get('parcel_id', payload.get('parcel_id', '—'))}</div>
 </div>
 
-<h2>1 · Executive Summary</h2>
+{exhibit_block}
+
+<h2>1 · Investment Thesis</h2>
 {_verdict_block(snap) if snap.get('verdict_text') else ''}
 <p class="exec">{payload.get('executive_summary', payload.get('headline', ''))}</p>
 <a class="btn" href="{csv_href}" download="proforma-{snap.get('parcel_id', 'parcel')}.csv">Download Scenario Math (CSV)</a>
@@ -713,14 +1123,19 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 <tr><td>Zoning stack</td><td><strong>{snap.get('primary_zone') or '—'}</strong>{overlay_bit}</td></tr>
 </table>
 
-<h2>3 · Market Context</h2>
+<h2>3 · Exit Pricing &amp; Market Context</h2>
 <table class="kv">
+<tr><td>Modeled exit $/sf</td><td class="num"><strong>{_fmt_money(exit_pricing.get('sale_psf_used') or market.get('indicative_sale_psf'))}/sf</strong></td></tr>
+<tr><td>Exit pricing method</td><td>{exit_pricing.get('method', '—')}</td></tr>
+<tr><td>CAMA comp median (resale)</td><td class="num">{_fmt_money(exit_pricing.get('comp_median_resale_psf'))}/sf</td></tr>
+<tr><td>CAMA comp adjusted (new construction)</td><td class="num">{_fmt_money(exit_pricing.get('comp_adjusted_new_psf'))}/sf</td></tr>
+<tr><td>Zip trend $/sf (Gold)</td><td class="num">{_fmt_money(exit_pricing.get('zip_price_per_sqft'))}/sf</td></tr>
 <tr><td>Town median sale (Gold)</td><td class="num">{_fmt_money(market.get('median_sale_price'))}</td></tr>
 <tr><td>Median days on market</td><td class="num">{market.get('median_dom') if market.get('median_dom') is not None else '—'}</td></tr>
-<tr><td>Months of inventory</td><td class="num">{market.get('months_of_inventory') if market.get('months_of_inventory') is not None else '—'}</td></tr>
+<tr><td>Months of inventory</td><td class="num">{market.get('months_of_inventory') if market.get('months_of_inventory') is not None else market.get('months_supply') or '—'}</td></tr>
 <tr><td>Pilot hard cost assumption</td><td class="num">{_fmt_money(market.get('indicative_hard_cost_psf'))}/sf</td></tr>
-<tr><td>Pilot sale assumption</td><td class="num">{_fmt_money(market.get('indicative_sale_psf'))}/sf GFA</td></tr>
 </table>
+{f'<h3>Comparable sales (CAMA, {comps.get("radius_mi", "—")} mi)</h3><p class="small">{comps.get("note", "")}</p><table><tr><th>Address</th><th>Distance</th><th>Sale</th><th>Date</th><th>Size</th><th>$/sf</th></tr>{comp_rows}</table><p class="small">Median comp: <strong>{_fmt_money(comps.get("median_ppsf"))}/sf</strong></p>' if comp_rows else '<p class="small">No CAMA comparable sales in radius — exit pricing uses zip trend and town config.</p>'}
 
 <h2>4 · Zoning Envelopes (from Buildability stack)</h2>
 <table>
@@ -746,8 +1161,8 @@ def render_proforma_html(payload: dict[str, Any], address: str) -> str:
 {constraint_rows}
 </table>
 
-<h2>8 · IRR Matrix — Primary Scenario ({primary_name or '—'})</h2>
-<p class="small">3 land-basis × 2 hard-cost scenarios (ROI %). Sale held at config sale $/sf.</p>
+<h2>8 · Return Sensitivity — Primary Scenario ({primary_name or '—'})</h2>
+<p class="small">3 land-basis × 2 hard-cost scenarios (project ROI %). Exit $/sf held at modeled value.</p>
 <table>
 <tr><th>Hard cost →</th>{irr_header or '<th>—</th>'}</tr>
 {irr_body or "<tr><td colspan='4'>IRR matrix not computed</td></tr>"}

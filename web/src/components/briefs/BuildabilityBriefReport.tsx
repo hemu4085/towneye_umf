@@ -422,13 +422,18 @@ export default function BuildabilityBriefReport({ data, generatedSeconds }: Prop
         {/* §7 Process Pathway */}
         <section>
           <SectionTitle num="7" title="Process Pathway — Indicative Timeline" />
+          <p className="text-xs text-gray-500 mb-3 print:text-gray-600">
+            Site Plan (overlay election) vs ZBA vs ISD. Durations are estimates unless marked Gold.
+          </p>
           <div className="overflow-hidden rounded-lg border border-gray-800 print:border-gray-300">
             <table className="w-full text-sm">
               <thead className="text-xs text-gray-400 bg-gray-950 print:bg-gray-100">
                 <tr>
                   <th className="px-3 py-2 text-left">Stage</th>
                   <th className="px-3 py-2 text-left">Body</th>
+                  <th className="px-3 py-2 text-left">Path</th>
                   <th className="px-3 py-2 text-left">Est. duration</th>
+                  <th className="px-3 py-2 text-left">Basis</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800 print:divide-gray-200">
@@ -436,12 +441,25 @@ export default function BuildabilityBriefReport({ data, generatedSeconds }: Prop
                   <tr key={row.stage} className="bg-gray-900/50 print:bg-white">
                     <td className="px-3 py-2 font-medium text-gray-300 print:text-gray-700">{row.stage}</td>
                     <td className="px-3 py-2 text-gray-400">{row.body}</td>
+                    <td className="px-3 py-2 text-gray-500 text-xs font-mono">{row.path_type || "—"}</td>
                     <td className="px-3 py-2 text-gray-400">{row.duration}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {row.duration_basis === "gold" ? (
+                        <span className="text-green-400">Gold fact</span>
+                      ) : (
+                        <span className="text-amber-400">Estimate</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {data.process_pathway_footnote && (
+            <p className="text-xs text-gray-500 mt-3 leading-relaxed print:text-gray-600">
+              {data.process_pathway_footnote}
+            </p>
+          )}
         </section>
 
         {/* §8 Open Items */}

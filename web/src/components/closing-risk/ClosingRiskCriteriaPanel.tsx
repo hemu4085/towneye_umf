@@ -81,6 +81,9 @@ type Props = {
   townSlug: string;
   appliedCriteria: Record<string, unknown> | null;
   loading: boolean;
+  /** When true, panel fills parent height and scrolls internally. */
+  fillHeight?: boolean;
+  onOpenChange?: (open: boolean) => void;
   onApply: (criteria: Record<string, unknown>) => void;
   onReset: () => void;
 };
@@ -89,10 +92,18 @@ export default function ClosingRiskCriteriaPanel({
   townSlug,
   appliedCriteria,
   loading,
+  fillHeight = false,
+  onOpenChange,
   onApply,
   onReset,
 }: Props) {
   const [open, setOpen] = useState(true);
+
+  function toggleOpen() {
+    const next = !open;
+    setOpen(next);
+    onOpenChange?.(next);
+  }
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [configError, setConfigError] = useState("");
   const [form, setForm] = useState(() => formFromCriteria(null));
@@ -143,27 +154,35 @@ export default function ClosingRiskCriteriaPanel({
     limits[key] || fallback;
 
   return (
-    <div className="border-b border-gray-800 bg-gray-900/95 shrink-0">
+    <div
+      className={`bg-gray-900/95 flex flex-col min-h-0 ${
+        fillHeight ? "h-full" : "border-b border-gray-800 shrink-0"
+      }`}
+    >
       <button
         type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-800/50 transition-colors"
+        onClick={toggleOpen}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-800/50 transition-colors shrink-0"
       >
-        <div>
-          <span className="text-sm font-semibold text-white block">Closing-risk filters</span>
+        <div className="min-w-0">
+          <span className="text-sm font-semibold text-white block">Parameters</span>
           {matchSummary && (
-            <span className="text-xs text-gray-500">{matchSummary}</span>
+            <span className="text-xs text-gray-500 truncate block">{matchSummary}</span>
           )}
         </div>
-        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+        {open ? <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />}
       </button>
 
       {configError && (
-        <p className="px-4 pb-2 text-xs text-red-400">Could not load config: {configError}</p>
+        <p className="px-3 pb-2 text-xs text-red-400 shrink-0">Could not load config: {configError}</p>
       )}
 
       {open && (
-        <div className="px-4 pb-4 space-y-4 border-t border-gray-800/80 max-h-[55vh] overflow-y-auto">
+        <div
+          className={`px-3 pb-3 space-y-3 border-t border-gray-800/80 overflow-y-auto overscroll-contain ${
+            fillHeight ? "flex-1 min-h-0" : "max-h-[40vh]"
+          }`}
+        >
           {presets.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-3">
               {presets.map((name) => (
@@ -184,7 +203,7 @@ export default function ClosingRiskCriteriaPanel({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-2.5 pt-2">
             <RangeField
               label="Min risk signals"
               hint="How many flag types must match"
@@ -291,25 +310,28 @@ export default function ClosingRiskCriteriaPanel({
             </div>
           )}
 
-          <div className="flex gap-2 pt-1 sticky bottom-0 bg-gray-900/95 pb-1">
-            <button
-              type="button"
-              disabled={loading || !config}
-              onClick={() => onApply(buildClosingRiskCriteriaPayload(form))}
-              className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg"
-            >
-              {loading ? "Scanning…" : "Apply & regenerate"}
-            </button>
-            <button
-              type="button"
-              onClick={onReset}
-              disabled={loading}
-              className="px-3 py-2 border border-gray-700 rounded-lg text-gray-400 hover:text-white"
-              title="Reset filters"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="flex gap-2 px-3 py-2 border-t border-gray-800 shrink-0 bg-gray-900">
+          <button
+            type="button"
+            disabled={loading || !config}
+            onClick={() => onApply(buildClosingRiskCriteriaPayload(form))}
+            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-medium py-2 rounded-lg"
+          >
+            {loading ? "Scanning…" : "Apply"}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={loading}
+            className="px-2.5 py-2 border border-gray-700 rounded-lg text-gray-400 hover:text-white"
+            title="Reset filters"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
         </div>
       )}
     </div>

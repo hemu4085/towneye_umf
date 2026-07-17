@@ -9,11 +9,27 @@ const SHELL_CSS = `
     width: 100%;
     max-width: none;
     box-sizing: border-box;
+    color: #0b1f3a;
+    background: #fff;
+    font-family: "DM Sans", Georgia, "Times New Roman", serif;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 28px 32px 36px;
   }
   .towneye-report-shell * {
     box-sizing: border-box;
   }
+  .towneye-report-shell a {
+    color: #1d4ed8;
+  }
 `;
+
+/** Rewrite document-level selectors so extracted <body> CSS applies inside the shell. */
+function remapReportStyles(css: string): string {
+  return css
+    .replace(/(^|[,}\s])html(?=\s*[{,:])/g, "$1.towneye-report-shell")
+    .replace(/(^|[,}\s])body(?=\s*[{,:])/g, "$1.towneye-report-shell");
+}
 
 type ReportViewerProps = {
   html: string;
@@ -29,7 +45,7 @@ export default function ReportViewer({
   fullWidth = false,
 }: ReportViewerProps) {
   const pdfHref = reportDownloadUrl(downloadUrl);
-  const reportStyles = extractReportStyles(html);
+  const reportStyles = remapReportStyles(extractReportStyles(html));
   const reportBody = extractReportBody(html);
 
   const handlePrint = () => window.print();

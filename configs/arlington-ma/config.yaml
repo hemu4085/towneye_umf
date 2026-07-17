@@ -1498,7 +1498,17 @@ lender_report:
     cache_ttl_hours: 24
     request_timeout_s: 25
   registry_search_url: "https://www.masslandrecords.com/MiddlesexSouth/D/Default.aspx"
+  # Department landing page (general ISD info) — not a permit record deep link.
   isd_portal_url: "https://www.arlingtonma.gov/departments/inspectional-services"
+  # Town-published Excel permit activity (address/permit # searchable offline).
+  permits_activity_url: "https://www.arlingtonma.gov/departments/inspectional-services/building-permit-activity"
+  # Arlington Online Permitting (OpenGov / ViewPoint).
+  # Working deep links require numeric IDs: /records/{id} or /locations/{id}.
+  # Portal home does NOT accept paste of permit # / address for public lookup.
+  # Do NOT use /search?q= (ignored) or /search/locations?searchKey= (Loading loop / Turnstile).
+  permits_portal_url: "https://arlingtonma.portal.opengov.com/"
+  permits_record_url_template: "https://arlingtonma.portal.opengov.com/records/{record_id}"
+  permits_location_url_template: "https://arlingtonma.portal.opengov.com/locations/{location_id}"
   property_tax_records:
     - parcel_id: "128.0-0003-0012.0"
       fiscal_year: 2026
@@ -1663,6 +1673,24 @@ str_dynamics_mock_data:
     best returns are in East Arlington two-families targeting Boston-weekend
     visitors and remote-work travellers.
 
+# Permit Timeline — board-path estimates (not in ISD TePermit ledger).
+# ISD filed→issued velocity is computed from Gold permits.parquet.
+permit_timeline:
+  board_estimates:
+    SITE_PLAN_REVIEW:
+      estimated_days_low: 56
+      estimated_days_mid: 70
+      estimated_days_high: 84
+    ZBA_SPECIAL_PERMIT:
+      estimated_days_low: 60
+      estimated_days_mid: 85
+      estimated_days_high: 120
+      approval_rate_pct: 82.0
+    CONSERVATION:
+      estimated_days_low: 45
+      estimated_days_mid: 75
+      estimated_days_high: 120
+
 # Developer Pro Forma — pilot assumptions (Report 03 / Phase A).
 # All economics constants for portal pro forma load from here (zero-hardcoding).
 developer_proforma:
@@ -1670,9 +1698,17 @@ developer_proforma:
   sale_psf: 875
   soft_cost_pct: 0.18
   avg_unit_sf: 900
+  contingency_pct: 0.05
+  new_construction_premium_pct: 0.40
   financing:
     annual_carry_pct: 0.075
     construction_months: 14
+  investor_financing:
+    ltc_pct: 0.70
+    sellout_months: 6
+    hurdle_equity_multiple: 1.35
+    hurdle_equity_irr_pct: 18.0
+    hurdle_project_roi_pct: 12.0
   irr_grid:
     land_price_multiples: [0.90, 1.00, 1.10]
     hard_cost_multiples: [0.90, 1.10]
@@ -1771,4 +1807,205 @@ closing_risk_radar:
     - "Registry of Deeds chain of title, easements, and liens — not connected in pilot."
     - "MassDEP BWSC / 21E contamination sites — not connected in pilot."
     - "Probate court filings and estate proceedings — not connected in pilot."
+
+# Precedent Search — attorney research pack ($499 Zoning Attorney bundle).
+# Corpus entries are curated from publicly posted town agendas / hearing lists.
+# They are NOT certified holdings — cite_ready stays false until full decisions are in Gold.
+precedent_search:
+  disclaimer: >
+    These rows are research aids drawn from publicly posted Arlington ZBA agendas
+    and (when available) Gold civic-minutes extracts. Pull the signed decision PDF
+    from the Town Clerk / board document folder before citing in a filing.
+  official_sources:
+    - label: "ZBA agendas & minutes"
+      url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      note: "Primary public index for hearings and decisions"
+    - label: "Zoning Board of Appeals"
+      url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals"
+      note: "Hearing schedule, application deadlines, contact"
+    - label: "Town agendas & minutes hub"
+      url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/agendas-minutes"
+      note: "Central postings after Jan 2026"
+    - label: "Redevelopment Board"
+      url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/redevelopment-board"
+      note: "Site plan / ARB matters"
+    - label: "Conservation Commission"
+      url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/conservation-commission"
+      note: "NOI / wetlands"
+    - label: "Zoning Bylaw"
+      url: "https://www.arlingtonma.gov/town-governance/laws-and-regulations/zoning-bylaws"
+      note: "Cite sections in variance / SP memos"
+  research_tips:
+    - "Filter by relief type (Variance, Special Permit, Appeal) before narrowing by street."
+    - "Same-street hits near your parcel are usually the strongest neighborhood precedent."
+    - "Agenda status ≠ final holding — open the decision PDF before you cite outcome language."
+    - "Cross-check Entitlements & Risk for on-parcel dockets once civic_minutes Gold is live."
+  corpus:
+    - docket: "3817"
+      address: "15 Janet Road, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["VARIANCE", "SPECIAL_PERMIT"]
+      decision: "HEARING_LISTED"
+      hearing_date: "2024-09-24"
+      summary: "Variance and Special Permit — listed on the ZBA agenda for 9/24/2024."
+      zbl_sections: ["Variance (ZBA)", "Special Permit (ZBA)"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), Sept 24 2024 hearing list"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "Arlington Heights"
+      memo_tip: "Useful comparator when seeking combined lot/yard relief + use special permit."
+    - docket: "3818"
+      address: "15 Fountain Road, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["DECISION"]
+      decision: "DECISION_ON_FILE"
+      hearing_date: "2024-09-24"
+      summary: "Member vote on Decision #3818 listed on ZBA agenda — signed decision text not ingested."
+      zbl_sections: ["ZBA Decision"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), Decision #3818 on 9/24/2024 docket"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "East Arlington"
+      memo_tip: "Pull Decision #3818 PDF before relying on conditions or findings."
+    - docket: "3815"
+      address: "Princeton Road, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["DECISION"]
+      decision: "DECISION_ON_FILE"
+      hearing_date: "2024-09-24"
+      summary: "Member vote on Decision #3815 (Princeton Road) listed on ZBA agenda."
+      zbl_sections: ["ZBA Decision"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), Decision #3815 on 9/24/2024 docket"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "Arlington Center"
+      memo_tip: "Confirm exact street number and relief type from the decision PDF."
+    - docket: "3812"
+      address: "15 Marrigan Street, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["DECISION"]
+      decision: "DECISION_ON_FILE"
+      hearing_date: "2024-09-24"
+      summary: "Member vote on Decision #3812 listed on ZBA agenda."
+      zbl_sections: ["ZBA Decision"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), Decision #3812 on 9/24/2024 docket"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "Arlington"
+      memo_tip: "Use for procedural timing comparators once conditions are confirmed."
+    - docket: "3814"
+      address: "200 Broadway, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["SPECIAL_PERMIT", "CONTINUANCE"]
+      decision: "CONTINUED"
+      hearing_date: "2024-09-24"
+      summary: "ZBA matter #3814 at 200 Broadway — continued on the 9/24/2024 agenda."
+      zbl_sections: ["Special Permit (ZBA)"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), continued item 9/24/2024"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "Broadway corridor"
+      memo_tip: "Continuances signal incomplete submissions or board requests — note for timeline risk."
+    - docket: "3813"
+      address: "928 Massachusetts Ave, Arlington MA"
+      board: "Zoning Board of Appeals"
+      relief_types: ["APPEAL"]
+      decision: "HEARING_LISTED"
+      hearing_date: "2024-09-24"
+      summary: "Appeal of Building Permit — listed as ZBA #3813 on the 9/24/2024 agenda."
+      zbl_sections: ["Appeal of Building Commissioner", "M.G.L. c. 40A"]
+      source_kind: "agenda_index"
+      provenance: "Public ZBA agenda index (arlingtonma.gov), appeal item 9/24/2024"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals/agendas-minutes"
+      cite_ready: false
+      neighborhood: "Mass Ave"
+      memo_tip: "Strong comparator for ISD appeal strategy and abutter notice timing."
+    - docket: "3816"
+      address: "5-7 Belknap St, Arlington MA"
+      board: "Arlington Redevelopment Board"
+      relief_types: ["SITE_PLAN_REVIEW"]
+      decision: "VERIFY_OUTCOME"
+      hearing_date: null
+      summary: "Site Plan Review matter associated with 5-7 Belknap St in pilot research pack — confirm on ARB agendas/minutes before citing outcome."
+      zbl_sections: ["Site Plan Review", "§5.8 / NMF if elected"]
+      source_kind: "pilot_research"
+      provenance: "Pilot research pack keyed to Towneye demo parcel; verify on Redevelopment Board agendas"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/redevelopment-board"
+      cite_ready: false
+      parcel_id: "008.0-0001-0010.0"
+      neighborhood: "Belknap / East Arlington"
+      memo_tip: "Pair with Zoning Intelligence overlay-election memo for Belknap NMF analysis."
+    - docket: "NOI-research-Walnut"
+      address: "29 Walnut St, Arlington MA"
+      board: "Conservation Commission"
+      relief_types: ["NOTICE_OF_INTENT"]
+      decision: "VERIFY_OUTCOME"
+      hearing_date: null
+      summary: "Wetlands / NOI research placeholder for Walnut St pilot parcel — pull Conservation agendas for actual NOI numbers and OOC status."
+      zbl_sections: ["Wetlands Protection Act", "Arlington Wetlands Bylaw"]
+      source_kind: "pilot_research"
+      provenance: "Pilot research pack — not a certified Conservation docket"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/conservation-commission"
+      cite_ready: false
+      parcel_id: "128.0-0003-0012.0"
+      neighborhood: "Walnut / Mystic"
+      memo_tip: "Flag buffer / flood adjacency early; Conservation timing often drives critical path."
+    - docket: "HIST-research-Mystic"
+      address: "166 Mystic St, Arlington MA"
+      board: "Historical Commission"
+      relief_types: ["DEMOLITION_DELAY"]
+      decision: "VERIFY_OUTCOME"
+      hearing_date: null
+      summary: "Demolition-delay research note for Mystic St — confirm Historical Commission determinations before assuming delay length."
+      zbl_sections: ["Demolition Delay Bylaw"]
+      source_kind: "pilot_research"
+      provenance: "Pilot research pack — verify on Historical Commission minutes"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees"
+      cite_ready: false
+      neighborhood: "Mystic St"
+      memo_tip: "12-month delay risk should appear in open-items / closing diligence checklists."
+    - docket: "ZBA-playbook-lot-area"
+      address: "Town-wide research note"
+      board: "Zoning Board of Appeals"
+      relief_types: ["VARIANCE"]
+      decision: "RESEARCH_NOTE"
+      hearing_date: null
+      summary: "Lot-area / frontage variance playbook — Arlington ZBA typically requires hardship findings under M.G.L. c. 40A §10; pair with recent same-street variance dockets above."
+      zbl_sections: ["M.G.L. c. 40A §10", "Variance"]
+      source_kind: "research_note"
+      provenance: "Attorney research aid (not a case)"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals"
+      cite_ready: false
+      memo_tip: "Do not cite this row — use it to structure findings, then attach real Decision PDFs."
+    - docket: "ZBA-playbook-special-permit"
+      address: "Town-wide research note"
+      board: "Zoning Board of Appeals"
+      relief_types: ["SPECIAL_PERMIT"]
+      decision: "RESEARCH_NOTE"
+      hearing_date: null
+      summary: "Special permit playbook — document use/intensity criteria in the Zoning Bylaw section that authorizes the SP; attach neighborhood precedents with similar intensity."
+      zbl_sections: ["Special Permit", "Zoning Bylaw"]
+      source_kind: "research_note"
+      provenance: "Attorney research aid (not a case)"
+      source_url: "https://www.arlingtonma.gov/town-governance/laws-and-regulations/zoning-bylaws"
+      cite_ready: false
+      memo_tip: "Cross-link Permit Timeline board-estimate rows only as calendar guidance, not approval odds."
+    - docket: "ZBA-playbook-building-appeal"
+      address: "Town-wide research note"
+      board: "Zoning Board of Appeals"
+      relief_types: ["APPEAL"]
+      decision: "RESEARCH_NOTE"
+      hearing_date: null
+      summary: "Appeal of Building Commissioner playbook — preserve deadlines; use #3813 (928 Mass Ave) agenda entry as a procedural locator, then file the decision."
+      zbl_sections: ["M.G.L. c. 40A", "Appeal"]
+      source_kind: "research_note"
+      provenance: "Attorney research aid (not a case)"
+      source_url: "https://www.arlingtonma.gov/town-governance/boards-and-committees/zoning-board-of-appeals"
+      cite_ready: false
+      memo_tip: "Appeals are deadline-driven — calendar ISD denial/issuance dates immediately."
 

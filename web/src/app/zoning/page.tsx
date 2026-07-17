@@ -143,9 +143,10 @@ export default function ZoningReportPage() {
               <h1 className="text-2xl font-bold text-white">Zoning Intelligence</h1>
             </div>
             <p className="text-gray-400 text-sm max-w-2xl">
-              Parcel-level zoning intelligence — overlay election analysis, dual-regime envelope
-              math, development paths, regulatory signals, and entitlement pathway. Not a zone
-              code lookup.
+              Attorney-grade parcel zoning — overlay election (regimes do not stack), dual-regime
+              dimensional math, entitlement pathway with estimate vs Gold labels, and cited
+              constraints. Use for client memos; not a zone-code lookup or investor economics
+              wrap.
             </p>
           </div>
           {parcel?.address && (

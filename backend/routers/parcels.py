@@ -83,6 +83,12 @@ async def parcel_dossier(town_slug: str, parcel_id: str, address: str = ""):
         except Exception:
             pass
 
+    town_cfg: dict = {}
+    try:
+        town_cfg = _load_town_config(town_slug) or {}
+    except Exception:
+        town_cfg = {}
+
     permits = summarize_parcel_permits(town_slug, parcel_id, address)
     violations: dict = {
         "status": "clear",
@@ -94,10 +100,32 @@ async def parcel_dossier(town_slug: str, parcel_id: str, address: str = ""):
     }
     try:
         data = collect_brief_data(town_slug, parcel_id, None)
-        town_cfg = _load_town_config(town_slug)
         violations = _analyze_violations(data, town_cfg)
     except Exception:
         pass
+
+    lender_cfg = town_cfg.get("lender_report") or town_cfg.get("lender") or {}
+    isd_url = (
+        (violations.get("isd_url") if isinstance(violations, dict) else None)
+        or lender_cfg.get("isd_portal_url")
+        or ""
+    )
+    if isinstance(violations, dict) and not violations.get("isd_url"):
+        violations["isd_url"] = isd_url
+
+    permits_portal_url = (
+        (permits.get("permits_portal_url") if isinstance(permits, dict) else None)
+        or lender_cfg.get("permits_portal_url")
+        or ""
+    )
+    permits_activity_url = (
+        (permits.get("permits_activity_url") if isinstance(permits, dict) else None)
+        or lender_cfg.get("permits_activity_url")
+        or ""
+    )
+
+    # Do NOT invent OpenGov searchKey / ?q= / portal-home links — those hang or
+    # do not accept paste lookup. Violation deep links only when Gold has IDs.
 
     return {
         "town_slug": town_slug,
@@ -105,4 +133,7 @@ async def parcel_dossier(town_slug: str, parcel_id: str, address: str = ""):
         "address": address,
         "permits": permits,
         "violations": violations,
+        "isd_url": isd_url,
+        "permits_portal_url": permits_portal_url,
+        "permits_activity_url": permits_activity_url,
     }

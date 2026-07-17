@@ -45,7 +45,7 @@ const menuGroups = [
       { name: "Deal Radar", href: "/radar", icon: MapIcon },
       { name: "Buildability Brief", href: "/briefs", icon: FileText },
       { name: "Zoning Report", href: "/zoning", icon: Building2 },
-      { name: "Proforma Analysis", href: "/proforma", icon: DollarSign },
+      { name: "Investor Feasibility", href: "/proforma", icon: DollarSign },
       { name: "Permit Timeline", href: "/permit-timeline", icon: Clock },
     ]
   },

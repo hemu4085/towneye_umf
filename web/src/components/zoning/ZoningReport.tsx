@@ -136,7 +136,9 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className="text-sm text-gray-400 print:text-gray-600 mb-1">Zoning opportunity</div>
+          <div className="text-sm text-gray-400 print:text-gray-600 mb-1">
+            Zoning capacity score
+          </div>
           <div className="text-3xl font-bold text-purple-400 print:text-purple-700">
             {data.zoning_opportunity_score ?? "—"}
             <span className="text-lg text-gray-500">/10</span>
@@ -144,7 +146,7 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
           <div className="text-sm font-medium text-blue-400 mt-2 print:text-blue-700">{district}</div>
           {data.has_mbta_communities_overlay && (
             <div className="text-xs text-purple-400 mt-1 border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 rounded inline-block">
-              MBTA §3A overlay
+              MBTA §3A / NMF overlay
             </div>
           )}
         </div>
@@ -162,23 +164,36 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
 
         {data.overlay_election && (
           <section>
-            <SectionTitle title="Overlay election recommendation" />
-            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-950/20">
-              <p className="text-sm text-gray-300 mb-2">
-                <span className="font-medium text-purple-300">Recommended regime:</span>{" "}
+            <SectionTitle title="Overlay election (base vs overlay — do not stack)" />
+            <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-950/20 space-y-3">
+              <p className="text-sm text-gray-300">
+                <span className="font-medium text-purple-300">Recommended regime for memo:</span>{" "}
                 {data.overlay_election.recommended_regime}
                 {data.overlay_election.alternative_regime && (
                   <span className="text-gray-500">
                     {" "}
-                    (alternative: {data.overlay_election.alternative_regime})
+                    (alternative: {data.overlay_election.alternative_regime} base)
                   </span>
                 )}
               </p>
+              {(data.overlay_election.does_not_stack || data.overlay_election.election_type) && (
+                <p className="text-sm text-amber-200/90 leading-relaxed border border-amber-500/20 bg-amber-950/20 rounded-lg px-3 py-2">
+                  {data.overlay_election.election_type ||
+                    "Project-by-project election — base and overlay regimes do not stack."}
+                </p>
+              )}
               <p className="text-sm text-gray-400 leading-relaxed">
                 {data.overlay_election.rationale}
               </p>
-              {data.overlay_election.election_type && (
-                <p className="text-xs text-gray-600 mt-2 italic">{data.overlay_election.election_type}</p>
+              {data.overlay_election.legal_basis && (
+                <p className="text-xs text-gray-500 font-mono leading-relaxed">
+                  Citation: {data.overlay_election.legal_basis}
+                </p>
+              )}
+              {data.overlay_election.memo_text && (
+                <p className="text-xs text-gray-500 leading-relaxed border-t border-gray-800 pt-3 italic print:text-gray-600">
+                  {data.overlay_election.memo_text}
+                </p>
               )}
             </div>
           </section>
@@ -438,20 +453,27 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
               {data.zoning_constraints.map((c) => (
                 <div
                   key={c.label}
-                  className={`flex justify-between items-start gap-4 p-3 rounded-lg border text-sm ${
+                  className={`flex flex-col gap-1 p-3 rounded-lg border text-sm ${
                     c.status === "clear"
                       ? "border-gray-800 bg-gray-950/40"
                       : "border-amber-500/30 bg-amber-500/5"
                   }`}
                 >
-                  <span className="font-medium text-gray-300">{c.label}</span>
-                  <span
-                    className={`text-xs text-right max-w-[60%] ${
-                      c.status === "clear" ? "text-green-400" : "text-amber-400"
-                    }`}
-                  >
-                    {c.detail}
-                  </span>
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="font-medium text-gray-300">{c.label}</span>
+                    <span
+                      className={`text-xs text-right max-w-[60%] ${
+                        c.status === "clear" ? "text-green-400" : "text-amber-400"
+                      }`}
+                    >
+                      {c.detail}
+                    </span>
+                  </div>
+                  {c.source && (
+                    <p className="text-[11px] text-gray-600 font-mono print:text-gray-500">
+                      Cite: {c.source}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -461,13 +483,19 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
         {!!data.process_pathway?.length && (
           <section>
             <SectionTitle title="Entitlement process pathway" />
+            <p className="text-xs text-gray-500 mb-3">
+              Distinguishes Site Plan (overlay election), ZBA (variance / special permit), and ISD
+              building permit. Durations labeled estimate unless marked Gold.
+            </p>
             <div className="overflow-x-auto rounded-lg border border-gray-800 print:border-gray-300">
               <table className="w-full text-sm">
                 <thead className="text-xs text-gray-400 bg-gray-950 print:bg-gray-100">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Stage</th>
                     <th className="px-3 py-2 text-left font-medium">Body</th>
+                    <th className="px-3 py-2 text-left font-medium">Path</th>
                     <th className="px-3 py-2 text-left font-medium">Duration</th>
+                    <th className="px-3 py-2 text-left font-medium">Basis</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800 print:divide-gray-200">
@@ -475,18 +503,49 @@ export default function ZoningReport({ data, generatedSeconds }: Props) {
                     <tr key={stage.stage} className="bg-gray-900/50 print:bg-white">
                       <td className="px-3 py-2 text-gray-300 text-xs">{stage.stage}</td>
                       <td className="px-3 py-2 text-gray-400 text-xs">{stage.body}</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs font-mono">
+                        {stage.path_type || "—"}
+                      </td>
                       <td className="px-3 py-2 text-gray-400 text-xs">{stage.duration}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {stage.duration_basis === "gold" ? (
+                          <span className="text-green-400">Gold fact</span>
+                        ) : (
+                          <span className="text-amber-400">Estimate</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            {(data.process_pathway_footnote || data.board_dockets_status?.detail) && (
+              <p className="text-xs text-gray-500 mt-3 leading-relaxed">
+                {data.process_pathway_footnote || data.board_dockets_status?.detail}
+              </p>
+            )}
+          </section>
+        )}
+
+        {data.board_dockets_status?.status === "missing" && (
+          <section>
+            <div className="flex gap-3 p-4 rounded-xl border border-amber-500/30 bg-amber-950/20">
+              <AlertTriangle className="text-amber-500 w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-200 mb-1">
+                  Board dockets not in Gold
+                </p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  {data.board_dockets_status.detail}
+                </p>
+              </div>
             </div>
           </section>
         )}
 
         {!!data.open_items?.length && (
           <section>
-            <SectionTitle title="Open items before commitment" />
+            <SectionTitle title="Open items before commitment (attorney checklist)" />
             <ul className="space-y-2 text-sm text-gray-400 list-disc list-inside print:text-gray-700">
               {data.open_items.map((item) => (
                 <li key={item} className="leading-relaxed">

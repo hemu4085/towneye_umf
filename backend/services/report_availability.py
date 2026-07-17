@@ -8,8 +8,17 @@ import pandas as pd
 
 from backend.config import get_settings
 
-LLM_REPORTS = frozenset({"market", "proforma", "neighborhood"})
-BRIEF_REPORTS = frozenset({"buildability", "zoning", "risk", "lender"})
+LLM_REPORTS = frozenset({"proforma"})
+BRIEF_REPORTS = frozenset({
+    "buildability",
+    "zoning",
+    "risk",
+    "lender",
+    "listing-brief",
+    "market",
+    "neighborhood",
+    "homeowner",
+})
 TOWN_REPORTS = frozenset({"deal-radar", "closing-risk-radar"})
 PORTAL_REPORTS = frozenset({"homeowner-full"})
 ALL_REPORTS = BRIEF_REPORTS | LLM_REPORTS | PORTAL_REPORTS | TOWN_REPORTS

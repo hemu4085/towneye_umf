@@ -544,7 +544,13 @@ class BuildabilityBriefGenerator:
         max_gfa = (lot_sqft * rule.max_far) if rule.max_far else None
         expansion_room = (max_gfa - existing_gfa) if (max_gfa is not None and existing_gfa is not None) else None
         pct = (existing_gfa / max_gfa) if (max_gfa and existing_gfa) else None
-        qualifies = (lot_sqft >= rule.min_lot_sqft) if rule.min_lot_sqft else None
+        if rule.min_lot_sqft is not None:
+            qualifies = lot_sqft >= rule.min_lot_sqft
+        elif is_overlay:
+            # §3A / NMF overlays often waive min-lot — lot qualifies under overlay regime
+            qualifies = True
+        else:
+            qualifies = None
 
         rationale_bits: List[str] = []
         if rule.max_far:

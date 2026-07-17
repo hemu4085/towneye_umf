@@ -255,22 +255,27 @@ def _dimensional_controls(data: BriefData) -> list[dict[str, str]]:
 
 def _overlay_narrative(data: BriefData) -> str:
     if data.has_overlay_election:
+        overlay_codes = ", ".join(
+            sorted({h.code for h in data.overlay_zoning_hits if h.code})
+        ) or "overlay"
         mbta = (
-            " It qualifies for by-right multi-family development under the "
-            "MBTA Communities Act (§3A) overlay."
+            f" Overlay code(s) {overlay_codes} implement the MBTA Communities Act "
+            f"(M.G.L. c. 40A §3A); Arlington ZBL §5.8 governs NMF election, Site Plan "
+            f"Review, and non-residential exclusions."
             if data.has_mbta_communities_overlay
-            else ""
+            else f" Overlay code(s): {overlay_codes}."
         )
         return (
             f"This parcel sits under {len(data.base_zoning_hits)} base district(s) "
             f"and {len(data.overlay_zoning_hits)} overlay district(s).{mbta} "
-            "The buildable envelope under the overlay is materially larger than under the base "
-            "zone — see §3 and §4 for the side-by-side analysis."
+            "Base zoning and the overlay are alternate regimes: the owner elects one "
+            "regime for a given project; they do not stack. See the dimensional "
+            "comparison and envelope tables for side-by-side standards."
         )
     return (
-        "This parcel sits under base zoning only — no §3A multi-family overlay applies. "
-        "The buildable envelope is governed entirely by the base district's dimensional "
-        "controls; see §3 and §4."
+        "This parcel sits under base zoning only — no MBTA §3A multi-family overlay "
+        "intersects the parcel centroid. The buildable envelope is governed entirely "
+        "by the base district's dimensional controls."
     )
 
 
@@ -281,36 +286,44 @@ def _dimensional_comparison(data: BriefData) -> dict[str, Any]:
     def _zone_cell(env, field: str) -> str:
         rule = data.zoning_rules.get(env.zone_code)
         if field == "min_lot_sqft":
-            if env.is_overlay and env.zone_code not in data.zoning_rules:
-                return "None required"
+            if env.is_overlay and (rule is None or rule.min_lot_sqft is None):
+                return "None required (overlay)"
             if rule and rule.min_lot_sqft is not None:
                 return f"{_fmt_num(rule.min_lot_sqft)} sf"
             return "—"
         if field == "min_frontage_ft":
-            if env.is_overlay and env.zone_code not in data.zoning_rules:
-                return "None required"
+            if env.is_overlay and (rule is None or rule.min_frontage_ft is None):
+                return "None required (overlay)"
             if rule and rule.min_frontage_ft:
                 return f"{rule.min_frontage_ft} ft"
             return "—"
         if field == "max_height":
             if env.height_max_ft is not None:
                 return f"{_fmt_num(env.height_max_ft, '.0f')} ft"
+            if rule and rule.max_height_ft is not None:
+                return f"{_fmt_num(rule.max_height_ft, '.0f')} ft"
             return "see overlay text"
         if field == "max_far":
-            if env.is_overlay and env.max_far is None:
+            if env.is_overlay and env.max_far is None and (rule is None or rule.max_far is None):
                 return "None required"
             if env.max_far is not None:
                 return f"{_fmt_num(env.max_far, '.2f')}"
+            if rule and rule.max_far is not None:
+                return f"{_fmt_num(rule.max_far, '.2f')}"
             return "—"
         if field == "setback_front":
             if env.setback_front_ft is not None:
                 return f"{_fmt_num(env.setback_front_ft, '.0f')} ft"
+            if rule and rule.setback_front_ft is not None:
+                return f"{_fmt_num(rule.setback_front_ft, '.0f')} ft"
             return "—"
         if field == "qualifies":
             if env.qualifies is True:
                 return "qualifies"
             if env.qualifies is False:
                 return "non-conforming"
+            if env.is_overlay and (rule is None or rule.min_lot_sqft is None):
+                return "qualifies"  # overlay waives min-lot — lot qualifies for overlay regime
             return "not specified"
         return "—"
 
@@ -765,57 +778,143 @@ def _development_options_footnote(data: BriefData) -> str | None:
 
 
 def _process_pathway(data: BriefData) -> list[dict[str, str]]:
+    """Indicative entitlement pathway. Durations are attorney-labeled estimates
+    unless marked ``gold`` (ISD filed→issued from permits.parquet).
+    """
+    def stage(
+        label: str,
+        body: str,
+        duration: str,
+        *,
+        basis: str = "estimate",
+        path_type: str = "process",
+    ) -> dict[str, str]:
+        return {
+            "stage": label,
+            "body": body,
+            "duration": duration,
+            "duration_basis": basis,  # "estimate" | "gold"
+            "path_type": path_type,   # by-right | site-plan | zba | process | isd
+        }
+
     stages = [
-        {"stage": "1. DPCD pre-application meeting", "body": "Planning & Community Development", "duration": "2–3 weeks"},
-        {"stage": "2. Civil + architect schematic design", "body": "(consultant team)", "duration": "4–6 weeks"},
+        stage("1. DPCD pre-application meeting", "Planning & Community Development", "2–3 weeks"),
+        stage("2. Civil + architect schematic design", "(consultant team)", "4–6 weeks"),
     ]
     n = 3
     if data.has_overlay_election:
         stages.extend([
-            {"stage": "3. Site Plan Review submission", "body": "Town review board (e.g. ARB)", "duration": "file day"},
-            {"stage": "4. Public hearing(s)", "body": "Review board", "duration": "8–12 weeks"},
-            {"stage": "5. Decision + appeal period", "body": "Review board", "duration": "4 weeks"},
+            stage(
+                "3. Site Plan Review submission (overlay election)",
+                "Arlington Redevelopment Board (ARB) / Design Review",
+                "file day",
+                path_type="site-plan",
+            ),
+            stage(
+                "4. Public hearing(s) — Site Plan Review",
+                "ARB / review board",
+                "8–12 weeks",
+                path_type="site-plan",
+            ),
+            stage(
+                "5. Decision + appeal period (M.G.L. c. 40A)",
+                "Review board",
+                "4 weeks (statutory appeal window — confirm)",
+                path_type="site-plan",
+            ),
         ])
         n = 6
+    else:
+        # Flag possible ZBA if base lot is non-conforming for new construction
+        base_env = next((e for e in data.envelopes if not e.is_overlay), None)
+        if base_env and base_env.qualifies is False:
+            stages.extend([
+                stage(
+                    "3. Zoning variance / Special Permit (if tear-down/rebuild)",
+                    "Zoning Board of Appeals",
+                    "8–16 weeks",
+                    path_type="zba",
+                ),
+            ])
+            n = 4
     stages.extend([
-        {"stage": f"{n}. Building permit application", "body": "ISD", "duration": "4–8 weeks"},
-        {"stage": f"{n + 1}. Construction", "body": "contractor", "duration": "10–14 months"},
-        {"stage": f"{n + 2}. Certificate of Occupancy", "body": "ISD", "duration": "2 weeks"},
+        stage(
+            f"{n}. Building permit application",
+            "Inspectional Services (ISD)",
+            "4–8 weeks (Gold when Permit Timeline has ISD sample)",
+            basis="estimate",
+            path_type="isd",
+        ),
+        stage(f"{n + 1}. Construction", "contractor", "10–14 months", path_type="process"),
+        stage(
+            f"{n + 2}. Certificate of Occupancy",
+            "ISD",
+            "2 weeks",
+            path_type="isd",
+        ),
     ])
     return stages
 
 
+def _process_pathway_footnote(data: BriefData) -> str:
+    parts = [
+        "Timeline durations are estimates for client scheduling — not Gold board-docket facts.",
+        "TownEye Gold currently covers ISD building permits (permits.parquet); "
+        "in-flight ZBA, Planning Board, and Conservation dockets are not ingested.",
+    ]
+    if data.has_overlay_election:
+        parts.append(
+            "NMF/§3A multi-family under Arlington ZBL §5.8 proceeds via Site Plan Review "
+            "(not a density variance), subject to ARB conditions."
+        )
+    return " ".join(parts)
+
+
 def _open_items(data: BriefData) -> list[str]:
+    """Attorney checklist — open diligence before client commitment / LOI."""
     items: list[str] = []
     for env in data.envelopes:
         if env.is_overlay and env.zone_code not in data.zoning_rules:
             items.append(
-                f"{env.zone_code} dimensional rules — confirm bylaw text. Overlay rule was not "
-                f"found in zoning.parquet. Confirm height, stories, setbacks, parking, and "
-                f"inclusionary thresholds at the Town Clerk's office or DPCD's published bylaw.",
+                f"[CONFIRM] {env.zone_code} dimensional controls — no machine-readable rule in "
+                f"zoning.parquet or town config fallback. Pull Arlington ZBL §5.8 (or overlay "
+                f"text) for height, stories, setbacks, parking, and inclusionary thresholds "
+                f"before drafting the bylaw memo."
+            )
+        elif env.is_overlay and env.zone_code in data.zoning_rules:
+            rule = data.zoning_rules[env.zone_code]
+            src = "config bylaw fixture" if rule.notes and "§3A" in (rule.notes or "") else "zoning rules"
+            items.append(
+                f"[VERIFY] {env.zone_code} dimensional figures loaded from {src} "
+                f"(FAR {rule.max_far if rule.max_far is not None else 'n/a'}; "
+                f"height {rule.max_height_ft or 'n/a'} ft). Confirm against the "
+                f"consolidated Zoning Bylaw PDF before citing in a client memo."
             )
     prop = data.property_info
     if prop and prop.year_built and prop.year_built < 1978:
         items.append(
-            f"Lead paint disclosure (M.G.L. c. 111 §§189A–199B). Building was constructed in "
-            f"{prop.year_built} (pre-1978) — mandatory lead-paint disclosure on sale.",
+            f"[DISCLOSE] Lead paint (M.G.L. c. 111 §§189A–199B). Constructed {prop.year_built} "
+            f"(pre-1978) — mandatory disclosure on conveyance."
         )
     items.extend([
-        "Existing structure setbacks. Computed from GIS parcel polygon edges, not from a stamped "
-        "survey. A Class I survey is recommended before architectural SD.",
-        "Title / easements / open MLC. Run a current Municipal Lien Certificate and a title rundown "
-        "before any LOI. Out of scope for this brief.",
+        "[SURVEY] Existing setbacks are approximate from GIS polygon edges, not a stamped "
+        "Class I survey. Commission a survey before schematic design reliance.",
+        "[TITLE] Run a current Municipal Lien Certificate and title/easement rundown before "
+        "any LOI or option agreement. Out of scope for this brief.",
     ])
     if data.has_overlay_election:
+        overlay = data.primary_overlay_code or "overlay"
+        base = data.primary_zone_code or "base"
         items.append(
-            "Base vs. overlay election. The property owner must elect either base zoning or the "
-            "overlay for any given project; the regimes do not stack. Election is project-by-project, "
-            "not parcel-perpetual.",
+            f"[ELECTION] Record the client's election: {base} (base) OR {overlay} (overlay) "
+            f"for this project. Regimes do not stack (Arlington ZBL §5.8 / §3A). Election is "
+            f"project-by-project, not a perpetual parcel designation."
         )
     items.append(
-        "Active Board Dockets & Entitlements. TownEye tracks finalized building permits but does "
-        "not currently track in-flight Planning Board or ZBA dockets. Verify with the Town Clerk "
-        "if this parcel has recent or active Site Plan Review, Variances, or Special Permits.",
+        "[DOCKETS] Board docket gap — TownEye Gold tracks finalized ISD building permits, "
+        "not in-flight Planning Board, ZBA, ARB, or Conservation filings. Confirm with the "
+        "Town Clerk / DPCD whether this parcel has active or recent Site Plan Review, "
+        "variances, special permits, or NOI matters before opining on clear path."
     )
     return items
 
@@ -924,6 +1023,7 @@ def generate_buildability_json(data: BriefData) -> dict[str, Any]:
         "wraparound_section_title": _wraparound_section_title(detailed_wrap),
         "wraparound_summary": _wraparound_summary_detailed(data, detailed_wrap),
         "process_pathway": _process_pathway(data),
+        "process_pathway_footnote": _process_pathway_footnote(data),
         "open_items": _open_items(data),
         "allowable_uses": _allowable_uses(data),
         "dimensional_controls": _dimensional_controls(data),

@@ -10,8 +10,22 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import get_settings
-from backend.services import buildability, closing_risk_radar, deal_radar, homeowner_full, lender, neighborhood, proforma, risk, zoning, permit_timeline
-from reports.civic_entitlements_brief import CivicEntitlementsBriefGenerator, CivicBriefInputs
+from backend.services import (
+    buildability,
+    civic_entitlements,
+    closing_risk_radar,
+    deal_radar,
+    homeowner,
+    homeowner_full,
+    lender,
+    listing_brief,
+    market,
+    neighborhood,
+    proforma,
+    risk,
+    zoning,
+    permit_timeline,
+)
 from backend.services.buildability import collect_brief_data
 from backend.services.closing_risk_radar_config import get_portal_closing_risk_radar_config
 from backend.services.demo_reports import (
@@ -43,6 +57,8 @@ ReportType = Literal[
     "closing-risk-radar",
     "permit-timeline",
     "civic-entitlements",
+    "listing-brief",
+    "homeowner",
 ]
 
 
@@ -315,15 +331,25 @@ def report_market(req: ReportRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/listing-brief")
+def report_listing_brief(req: ReportRequest, request: Request):
+    try:
+        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+        payload = listing_brief.generate_listing_brief(data)
+        html = listing_brief.render_listing_brief_html(payload, req.address)
+        return _report_response("listing-brief", html, payload, req, request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/proforma")
 def report_proforma(req: ReportRequest, request: Request):
     try:
+        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+        payload = proforma.generate_proforma(data, req.overrides)
         html = None if req.overrides else get_demo_report_html(req.town_slug, req.parcel_id, "proforma")
         from_cache = html is not None
-        payload = None
         if html is None:
-            data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
-            payload = proforma.generate_proforma(data, req.overrides)
             html = proforma.render_proforma_html(payload, req.address)
         return _report_response("proforma", html, payload, req, request, skip_pdf=from_cache)
     except Exception as exc:
@@ -351,6 +377,17 @@ def report_lender(req: ReportRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/homeowner")
+def report_homeowner(req: ReportRequest, request: Request):
+    try:
+        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+        payload = homeowner.generate_homeowner_report(data)
+        html = homeowner.render_homeowner_html(payload, req.address)
+        return _report_response("homeowner", html, payload, req, request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/homeowner-full")
 def report_homeowner_full(req: ReportRequest, request: Request):
     try:
@@ -367,13 +404,10 @@ def report_homeowner_full(req: ReportRequest, request: Request):
 @router.post("/civic-entitlements")
 def report_civic_entitlements(req: ReportRequest, request: Request):
     try:
-        html = get_demo_report_html(req.town_slug, req.parcel_id, "civic-entitlements")
-        from_cache = html is not None
-        if html is None:
-            generator = CivicEntitlementsBriefGenerator(req.town_slug)
-            inputs = CivicBriefInputs(town_slug=req.town_slug, parcel_id=req.parcel_id)
-            html = generator.generate(inputs)
-        return _report_response("civic-entitlements", html, None, req, request, skip_pdf=from_cache)
+        data = collect_brief_data(req.town_slug, req.parcel_id, req.prepared_for)
+        payload = civic_entitlements.generate_civic_entitlements_json(data)
+        html = civic_entitlements.render_civic_entitlements_html(data)
+        return _report_response("civic-entitlements", html, payload, req, request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -427,7 +461,11 @@ def report_deal_radar(req: DealRadarRequest, request: Request):
 @router.post("/permit-timeline")
 def report_permit_timeline(req: ReportRequest, request: Request):
     try:
-        payload = permit_timeline.generate_permit_timeline(req.town_slug)
+        payload = permit_timeline.generate_permit_timeline(
+            req.town_slug,
+            parcel_id=req.parcel_id,
+            address=req.address,
+        )
         html = permit_timeline.render_permit_timeline_html(payload)
         return _report_response("permit-timeline", html, payload, req, request)
     except Exception as exc:
