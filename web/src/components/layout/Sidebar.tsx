@@ -79,7 +79,28 @@ const menuGroups = [
 
 import { useState, useRef, useEffect } from "react";
 import { useSharedParcel } from "@/hooks/useSharedParcel";
-import { suggestAddresses, type AddressSuggestion } from "@/lib/api";
+import { getApiHealth, suggestAddresses, type AddressSuggestion } from "@/lib/api";
+
+const DEMO_ADDRESSES: AddressSuggestion[] = [
+  {
+    address: "5-7 BELKNAP ST, Arlington MA",
+    town_slug: "arlington-ma",
+    town_name: "Arlington",
+    parcel_id: "008.0-0001-0010.0",
+  },
+  {
+    address: "34 ACTON ST, Arlington MA",
+    town_slug: "arlington-ma",
+    town_name: "Arlington",
+    parcel_id: "164.0-0004-0004.0",
+  },
+  {
+    address: "29 WALNUT ST, Arlington MA",
+    town_slug: "arlington-ma",
+    town_name: "Arlington",
+    parcel_id: "128.0-0003-0012.0",
+  },
+];
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -87,11 +108,14 @@ export function Sidebar() {
   const [query, setQuery] = useState(parcel?.address || "");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [suggestError, setSuggestError] = useState("");
   const [selectedTown, setSelectedTown] = useState("arlington-ma");
   const [showTownDropdown, setShowTownDropdown] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   const townDropdownRef = useRef<HTMLDivElement>(null);
+  const suggestSeq = useRef(0);
 
   const towns = [
     { id: "arlington-ma", name: "Arlington, MA" },
@@ -99,21 +123,58 @@ export function Sidebar() {
     { id: "cambridge-ma", name: "Cambridge, MA", disabled: true }
   ];
 
+  const pickSuggestion = (suggestion: AddressSuggestion) => {
+    setParcel({
+      address: suggestion.address,
+      parcel_id: suggestion.parcel_id,
+      town_slug: suggestion.town_slug,
+      town_name: suggestion.town_name,
+    });
+    setQuery(suggestion.address);
+    setShowSuggestions(false);
+    setSuggestError("");
+  };
+
+  // Wake the Render API on first load (free tier cold start).
+  useEffect(() => {
+    void getApiHealth();
+  }, []);
+
   useEffect(() => {
     if (parcel?.address) setQuery(parcel.address);
   }, [parcel?.address, parcel?.parcel_id]);
 
   useEffect(() => {
-    if (!query.trim()) {
+    const q = query.trim();
+    if (!q) {
       setSuggestions([]);
+      setSuggestLoading(false);
+      setSuggestError("");
       return;
     }
 
+    const seq = ++suggestSeq.current;
+    setSuggestLoading(true);
+    setSuggestError("");
+
     const timeoutId = setTimeout(() => {
-      suggestAddresses(query, selectedTown, 5)
-        .then(setSuggestions)
-        .catch((err) => console.error("Autocomplete failed:", err));
-    }, 150);
+      suggestAddresses(q, selectedTown, 8)
+        .then((rows) => {
+          if (seq !== suggestSeq.current) return;
+          setSuggestions(rows);
+          if (!rows.length) {
+            setSuggestError("No matching Arlington addresses. Try Belknap or Walnut.");
+          }
+        })
+        .catch((err) => {
+          if (seq !== suggestSeq.current) return;
+          setSuggestions([]);
+          setSuggestError(err instanceof Error ? err.message : "Address search failed");
+        })
+        .finally(() => {
+          if (seq === suggestSeq.current) setSuggestLoading(false);
+        });
+    }, 200);
 
     return () => clearTimeout(timeoutId);
   }, [query, selectedTown]);
@@ -199,8 +260,18 @@ export function Sidebar() {
           />
           
           {/* Autofill Dropdown */}
-          {showSuggestions && suggestions.length > 0 && (
+          {showSuggestions && (suggestLoading || suggestError || suggestions.length > 0) && (
             <div className="absolute top-full left-0 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-[100] overflow-hidden">
+              {suggestLoading && (
+                <div className="px-3 py-2 text-[11px] text-blue-300 border-b border-gray-700">
+                  Searching Arlington addresses… (API may take ~15s on first wake)
+                </div>
+              )}
+              {suggestError && !suggestLoading && (
+                <div className="px-3 py-2 text-[11px] text-amber-300 border-b border-gray-700">
+                  {suggestError}
+                </div>
+              )}
               {suggestions.map((suggestion, idx) => {
                 const label = suggestion.address;
                 const matchIndex = query.length > 0 ? label.toLowerCase().indexOf(query.toLowerCase()) : -1;
@@ -208,16 +279,7 @@ export function Sidebar() {
                   <div 
                     key={`${suggestion.parcel_id}-${idx}`}
                     className="px-3 py-2 hover:bg-gray-700 cursor-pointer text-xs text-gray-300 hover:text-white flex items-center transition-colors border-b border-gray-700 last:border-0"
-                    onClick={() => {
-                      setParcel({
-                        address: suggestion.address,
-                        parcel_id: suggestion.parcel_id,
-                        town_slug: suggestion.town_slug,
-                        town_name: suggestion.town_name,
-                      });
-                      setQuery(suggestion.address);
-                      setShowSuggestions(false);
-                    }}
+                    onClick={() => pickSuggestion(suggestion)}
                   >
                     <MapPin className="h-3 w-3 mr-2 text-blue-400 shrink-0" />
                     <span className="truncate">
@@ -236,6 +298,18 @@ export function Sidebar() {
               })}
             </div>
           )}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {DEMO_ADDRESSES.map((demo) => (
+            <button
+              key={demo.parcel_id}
+              type="button"
+              onClick={() => pickSuggestion(demo)}
+              className="text-[10px] px-2 py-1 rounded border border-gray-700 bg-gray-950 text-gray-300 hover:border-blue-500/50 hover:text-white transition-colors"
+            >
+              {demo.address.split(",")[0]}
+            </button>
+          ))}
         </div>
       </div>
       
