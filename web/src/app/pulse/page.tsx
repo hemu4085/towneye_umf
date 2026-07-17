@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { AlertTriangle, TrendingUp, CheckCircle2, Clock } from "lucide-react";
 import { format, subDays } from "date-fns";
+import { API_ROOT } from "@/lib/api";
 
 // Mock Data
 const generateMockData = () => {
@@ -32,7 +33,7 @@ export default function PulseDashboard() {
   const [pulseData, setPulseData] = useState<any>(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/pulse/311")
+    fetch(`${API_ROOT}/pulse/311`)
       .then(res => res.json())
       .then(data => setPulseData(data))
       .catch(err => console.error("Failed to fetch pulse data:", err));

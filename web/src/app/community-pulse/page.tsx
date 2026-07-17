@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Activity, Users, Calendar, Map as MapIcon, ChevronRight } from "lucide-react";
+import { API_ROOT } from "@/lib/api";
 
 
 export default function CommunityPulsePage() {
   const [liveActivities, setLiveActivities] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/pulse/community")
+    fetch(`${API_ROOT}/pulse/community`)
       .then(res => res.json())
       .then(data => setLiveActivities(data.live_activities))
       .catch(err => console.error("Failed to fetch community pulse data:", err));
